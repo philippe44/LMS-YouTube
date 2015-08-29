@@ -168,6 +168,9 @@ sub urlHandler {
 
 	my $url = 'youtube://' . $args->{'search'};
 
+	#because search replaces '.' by ' '
+	$url =~ s/ /./g;
+	
 	$log->debug("urlHandler: $args->{'search'}");
 	# use metadata handler to get track info
 	Plugins::YouTube::ProtocolHandler->getMetadataFor(undef, $url, undef, undef,
