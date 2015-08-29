@@ -415,13 +415,14 @@ sub _id {
 	$url .= '&';
 	## also youtube://http://www youtube com/watch?v=tU0_rKD8qjw
 		
-	#if ($url =~ /^youtube:\/\/https?:\/\/www\.youtube\.com\/watch\?v=(.*)&/ || $url =~ /^youtube:\/\/(.*)&/) {
-	if ($url =~ /^youtube:\/\/www\.youtube\.com\/v\/(.*)&/) {
+	if ($url =~ /^youtube:\/\/https?:\/\/www\.youtube\.com\/watch\?v=(.*)&/ || 
+		$url =~ /^youtube:\/\/www\.youtube\.com\/v\/(.*)&/ ||
+		$url =~ /^youtube:\/\/(.*)&/) {
+	#if ($url =~ /^youtube:\/\/www\.youtube\.com\/v\/(.*)&/) {
 		$log->debug("parsed id: $url");
 		return $1;
 	}
 	
-
 	return undef;
 }
 
