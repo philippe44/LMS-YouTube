@@ -713,7 +713,7 @@ sub getMetadataFor {
 			
 			### it now in json form
 			
-			my $json = eval { from_json($http->content) };
+			my $json = eval { decode_json($http->content) };
 				
 			###$log->warn("json::" . $http->content);
 
