@@ -1,0 +1,69 @@
+PLUGIN_YOUTUBE
+	EN	YouTube
+
+PLUGIN_YOUTUBE_DESC
+	EN	Play audio from YouTube videos.  WARNING: this plugin will use more network bandwidth than other streaming services as the entire video is being streamed even though only the audio is played.	Updated to API v3
+
+PLUGIN_YOUTUBE_TOP
+	EN	Top Rated Music
+
+PLUGIN_YOUTUBE_POP
+	EN	Most Popular Music
+
+PLUGIN_YOUTUBE_RECENT
+	EN	Most Recent Music
+
+PLUGIN_YOUTUBE_FAV
+	EN	Favorite Music
+
+PLUGIN_YOUTUBE_SEARCH
+	EN	YouTube Search
+
+PLUGIN_YOUTUBE_MUSICSEARCH
+	EN	Music Search
+
+PLUGIN_YOUTUBE_CHANNELSEARCH
+	EN	Channel Search
+
+PLUGIN_YOUTUBE_PLAYLISTSEARCH
+	EN	Playlist Search
+
+PLUGIN_YOUTUBE_RECENTLYPLAYED
+	EN	Recently Played
+
+PLUGIN_YOUTUBE_URL
+	EN	YouTube URL
+
+PLUGIN_YOUTUBE_BADURL
+	EN	Bad YouTube URL
+
+PLUGIN_YOUTUBE_ON_YOUTUBE
+	EN	On YouTube
+
+PLUGIN_YOUTUBE_WEBLINK
+	EN	Watch YouTube Video
+
+PLUGIN_YOUTUBE_PLAYLINK
+	EN	Play Video
+
+PLUGIN_YOUTUBE_BANNER
+	EN	WARNING
+
+PLUGIN_YOUTUBE_BANNER_TEXT
+	EN	Please note that this plugin streams the entire YouTube video file to playback the audio stream.  This will use use significantly more network bandwidth than audio only streaming.  Please consider this if your internet connection has a usage charge.
+
+PLUGIN_YOUTUBE_PREFER_LOWBITRATE
+	EN	Preferred Streams
+
+PLUGIN_YOUTUBE_LOWRES
+	EN	Prefer Low Resolution
+
+PLUGIN_YOUTUBE_PREFER_LOWBITRATE_DESC
+	EN	Select to prefer lower quality audio from low resolution YouTube videos to use less network bandwidth.
+
+PLUGIN_YOUTUBE_APIKEY
+	EN	YouTube API access key.
+
+PLUGIN_YOUTUBE_APIKEY_DESC
+	EN	YouTube API v3 needs a key to access. Goto https://console.developers.google.com/start
+

@@ -1,0 +1,21 @@
+[% PROCESS settings/header.html %]
+
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_BANNER" %]
+		<div>[% "PLUGIN_YOUTUBE_BANNER_TEXT" | string %]</div>
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_PREFER_LOWBITRATE" desc="PLUGIN_YOUTUBE_PREFER_LOWBITRATE_DESC" %]
+
+		<div class="prefDesc">[% "PLUGIN_YOUTUBE_LOWRES" | string %]
+			<input name="pref_prefer_lowbitrate" type="checkbox" [% IF prefs.pref_prefer_lowbitrate %] checked [% END %]>
+		</div>
+
+	[% END %]
+	
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_APIKEY" desc="PLUGIN_YOUTUBE_APIKEY_DESC" %]
+
+		<input type="text" class="stdedit" name="APIkey" id="APIkey" value="[% APIkey %]" size="40">
+
+	[% END %]
+
+[% PROCESS settings/footer.html %]
