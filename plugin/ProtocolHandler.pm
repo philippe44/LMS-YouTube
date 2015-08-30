@@ -716,30 +716,23 @@ sub getMetadataFor {
 			
 			my $json = eval { decode_json($http->content) };
 				
-			###$log->warn("json::" . $http->content);
-
-			
-			
 			if ($@) {
 				$log->warn($@);
 			}
 			
-
 			delete $fetching{$id};
-
-			
 
 			my $cover; my $icon;
 			
 			### all are in 'items'->[0]
 			
 			my $vdetail = $json->{items}->[0] or return;
+			#$log->debug('details: ', Dumper($vdetail));
 			
 			my $snippet=$vdetail->{snippet} or return;
-			
+					
 			$icon = $snippet->{thumbnails}->{default}->{url};
 			$cover = $snippet->{thumbnails}->{high}->{url};
-
 
 			my $title  = $snippet->{'title'};
 			my $artist = "";###$xml->{'author'}->{'name'};
@@ -751,6 +744,12 @@ sub getMetadataFor {
 				$title  = $2;
 			}
 			my $duration=$vdetail->{contentDetails}->{duration};
+			#$log->debug("duration: $duration");
+			$duration =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
+			my ($misc, $hour, $min, $sec) = ($1, $2, $3, $4);
+			#$log->debug($hour, $min, $sec);
+			$duration = (($sec) ? $sec : 0) + (($min) ? $min*60 : 0) + (($hour) ? $hour*3600 : 0);
+									
 			if ($duration && $title) {
 				my $meta = {
 					title    =>	$title,
