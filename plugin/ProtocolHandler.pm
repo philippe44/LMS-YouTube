@@ -62,7 +62,7 @@ sub open {
 		return;
 	}
 
-	my $timeout = 15;
+	my $timeout = 30;
 	
 	$log->info("Opening connection to $url: [$server on port $port with path $path with timeout $timeout]");
 
