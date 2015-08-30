@@ -12,6 +12,7 @@ use URI::Escape;
 use JSON::XS::VersionOneAndTwo;
 use File::Spec::Functions qw(:ALL);
 use List::Util qw(min max);
+use Data::Dumper;
 
 use Slim::Utils::Strings qw(string);
 use Slim::Utils::Prefs;
@@ -216,12 +217,16 @@ sub searchHandler {
 	my ($client, $callback, $args, $feed, $parser, $term) = @_;
 
 	# use paging on interfaces which allow otherwise fetch 200 entries for button mode
-	my $index    = ($args->{'index'} || 0) + 1;
+	my $index    = $args->{'index'} || 0;
 	my $quantity = $args->{'quantity'} || 200;
 	my $search   = $args->{'search'} ? "$args->{search}" : '';
+	my $next;
+	my $count = 0;
 	##$search=~ s/([^a-zA-Z0-9])/sprintf("%%%2X",ord($1))/sge;
 	$search=URI::Escape::uri_escape_utf8($search);
+	$log->debug("search: $feed", ":", $parser, ":", $term, ":", Dumper($args));
 	
+	#FIXME
 	$search="q=$search";
 	$term ||= '';
 
@@ -240,85 +245,75 @@ sub searchHandler {
 		my $queryUrl;
 
 		if ($feed =~ /^http/) {
-			$queryUrl = "$feed&start-index=$i&maxResults=$max&v=2&alt=json";
+			$queryUrl = "$feed&pageToken=$next&maxResults=$max&v=2&alt=json";
 		} else {
 		
 			##$queryUrl = "http://gdata.youtube.com/feeds/api/$feed?$term&$search&start-index=$i&max-results=$max&v=2&alt=json";
-			my $apiurl = $prefs->get('APIurl') . "/search/?";
-			if($feed =~ /(rated|favorites|popular)/){
-				$apiurl = $prefs->get('APIurl') . "/guideCategories/?";
-			}elsif($feed =~ /(channel|playlist)/){
-				$apiurl .="type=$1&"; 
+			$queryUrl = $prefs->get('APIurl') . "/search/?";
+			
+			if ($feed =~ /(rated|favorites|popular)/)	{
+				$queryUrl = $prefs->get('APIurl') . "/guideCategories/?";
+			} elsif ($feed =~ /(channel|playlist)/) {
+				$queryUrl .="type=$1&"; 
+			} elsif ($feed =~ /(videos)/) {
+				# nothing now
 			}
 			
-			$queryUrl="$apiurl";
-			if($term){
-				$queryUrl.="$term&";
+			if ($term) {
+				$queryUrl .= "$term&";
 			}
-			$queryUrl.="$search&start-index=$i&maxResults=$max&v=2&alt=json&part=id,snippet&key=" . $prefs->get('APIkey');
 			
-			
+			$queryUrl .= "$search&pageToken=$next&maxResults=$max&v=2&alt=json&part=id,snippet&key=" . $prefs->get('APIkey');
 			
 		}
 
 		$log->info("fetching: $queryUrl");
-		#$log->debug(" debug fetching: $queryUrl");
-		##print STDERR "\nqueryUrl fetching: $queryUrl \n";
-		#$log->warn(" warn fetching: $queryUrl");
-		###'REMOTE_PORT' => '57643',
-        ##  'HTTP_USER_AGENT' => 'iTunes/4.7.1 (Linux; N; Debian; x86_64-linux; EN; utf8) SqueezeCenter, Squeezebox Server, Logitech Media Server/7.9.0/1440053825',
-
 		_debug('queryUrl',$feed,$queryUrl);
 		
-
 		Slim::Networking::SimpleAsyncHTTP->new(
 
 			sub {
 				my $http = shift;
 				
-				##$log->warn("result: " . $http->content);
-				###return {};
 				my $json = eval { from_json($http->content) };
-				
-				###$log->warn("json::" . $http->content);
-
 				
 				if ($@) {
 					$log->warn($@);
 				}
 
-				my $before = scalar @$menu;
-
-				# parse json response into menu entries
-				##$parser->($json->{'feed'}, $menu);
-				$parser->($json, $menu);
-				##_debug('Parsed json',$json);
-				##_debug('Parsed results',$menu);
-
 				# Restrict responses to requested searchmax or 500
-				# Youtube API appears to be limited to 1000, but does not always return 1000 results so restrict to 500
-				my $total = min($json->{'feed'}->{'openSearch$totalResults'}->{'$t'}, $args->{'searchmax'} || 500, 500);
+				my $total = min($json->{'pageInfo'}->{'totalResults'}, $args->{'searchmax'} || 500, 500);
+				my $n = $json->{'pageInfo'}->{'resultsPerPage'};
+				#FIXME
+				#$total = 69;
+				
+				# parse json response into menu entries but only if in 'quantity' window
+				if ($count >= $index) {
+					$parser->($json, $menu);
+				}
+				
+				$next = $json->{'nextPageToken'};
+				$count += $n;
 
-				$log->debug("this page: " . scalar @$menu . " total: $total");
+				$log->debug("this page: " . scalar @$menu . " index: $index" . " quantity: $quantity" . " count: $count" . " total: $total" . " next: $next");
 
-				if (scalar @$menu < $quantity && $total > $index + scalar @$menu && scalar @$menu > $before) {
-
+				#if (scalar @$menu < $quantity && $total > $index + scalar ) {
+				if ((($count < $index + 1 || scalar @$menu < $quantity)) && ($count < $total)) {
 					# get some more if we have yet to build the required page for client
+					$log->debug("fetching recursive");
 					$fetch->();
 
 				} else {
 
 					$callback->({
 						items  => $menu,
-						offset => $index - 1,
+						offset => $index,
 						total  => $total,
 					});
 				}
 			},
 
 			sub {
-				###use Data::Dumper;
-				###$log->warn("error: $_[1] " . Dumper([@_]));
 				$log->warn("error: $_[1] ");
 				$callback->([ { name => $_[1], type => 'text' } ]);
 			},
@@ -350,6 +345,7 @@ sub _parseVideos {
 	for my $entry (@{$json->{'items'} || []}) {
 		my $mg = $entry->{'snippet'};
 		my $vurl = "www.youtube.com/v/$entry->{id}->{videoId}";
+		#$log->debug("parse video (url: $vurl) ==> " , Dumper($entry));
 		push @$menu, {
 			name => $mg->{'title'},
 			type => 'audio',
@@ -360,30 +356,26 @@ sub _parseVideos {
 			icon => $mg->{'thumbnails'}->{'default'}->{'url'},
 		};
 	}
-	
-	
 }
 
 sub _debug{
-	
-	use Data::Dumper;
-	
-	print STDERR Dumper([caller,@_]);
-
+	$log->debug(Dumper([caller,@_]));
 }
+
 sub _parseChannels {
 	my ($json, $menu) = @_;
-	###_debug('_parseChannels',$json);
-	
+		
 	for my $entry (@{$json->{'items'} || []}) {
 		my $title = $entry->{'snippet'}->{'title'} || $entry->{'snippet'}->{'description'} || 'No Title';
 		$title = Slim::Formats::XML::unescapeAndTrim($title);
-		my $id=$entry->{id}->{videoId};
+		my $id=$entry->{id}->{channelId};
+		#$log->debug("parse channel (id: $id) ==>", Dumper($entry));
+		$log->debug("parse channel (id: $id) ==>");
 		push @$menu, {
 			name => $title,
 			type => 'link',
 			url  => \&searchHandler,
-			passthrough => [ $prefs->{APIurl} . "/channels/?parts=snippet&id=$id&key=" . $prefs->{APIkey}, \&_parseVideos ],
+			passthrough => [ $prefs->get('APIurl') . "/search/?part=snippet&channelId=$id&key=" . $prefs->get('APIkey'), \&_parseVideos ],
 		};
 	}
 	
