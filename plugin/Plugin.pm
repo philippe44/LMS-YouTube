@@ -222,26 +222,39 @@ sub searchHandler {
 	my $search   = $args->{'search'} ? "$args->{search}" : '';
 	my $next;
 	my $count = 0;
-	##$search=~ s/([^a-zA-Z0-9])/sprintf("%%%2X",ord($1))/sge;
-	$search=URI::Escape::uri_escape_utf8($search);
-	$log->debug("search: $feed", ":", $parser, ":", $term, ":", Dumper($args));
-	
-	#FIXME
-	$search="q=$search";
-	$term ||= '';
-
 	my $menu = [];
+	my $one;
+	
+	$term ||= '';	
+	$search = URI::Escape::uri_escape_utf8($search);
+	$search = "q=$search";
+	
+	$log->debug("search: $feed", ":", $parser, ":", $term, ":", Dumper($args));
+		
+	#FIXME. why does LMS re-request the index with a quantity of 1 ???
+	if ($quantity == 1 && $index != 0) {
+		$one = 'true';
+		$quantity = $index + 1;
+		$args->{'searchmax'} = $quantity;
+	}
 
 	# fetch in stages as api only allows 50 items per response, cli clients require $quantity responses which can be more than 50
 	my $fetch;
 
 	# FIXME: this could be sped up by performing parallel requests once the number of responses is known??
-
 	$fetch = sub {
 
-		my $i = $index + scalar @$menu;
-		my $max = min($quantity - scalar @$menu, 50); # api allows max of 50 items per response
-
+		
+		my $max;
+		#my $max = min($quantity - scalar @$menu, 50); # api allows max of 50 items per response
+		#FIXME. why does LMS re-request the index with a quantity of 1 ???
+		if (!$one) {
+			$max = min($quantity - scalar @$menu, 50); # api allows max of 50 items per response
+		}
+		else {
+			$max = min($quantity - $count, 50); # api allows max of 50 items per response
+		}
+		
 		my $queryUrl;
 
 		if ($feed =~ /^http/) {
@@ -284,11 +297,21 @@ sub searchHandler {
 				# Restrict responses to requested searchmax or 500
 				my $total = min($json->{'pageInfo'}->{'totalResults'}, $args->{'searchmax'} || 500, 500);
 				my $n = $json->{'pageInfo'}->{'resultsPerPage'};
-				#FIXME
-				#$total = 69;
-				
-				# parse json response into menu entries but only if in 'quantity' window
-				if ($count >= $index) {
+								
+				#FIXME. why does LMS re-request the index with a quantity of 1 ???
+				$log->debug("one: $one");
+				if ($one) {
+					if ($count + $n - 1 == $index) {
+						my $n = scalar @{$json->{'items'}};
+						my @item = $json->{'items'}[$n-1];
+						delete $json->{'items'};
+						$json->{'items'} = \@item;
+						$log->debug("n: $n", Dumper($json));
+						$parser->($json, $menu);
+					}
+				}
+				elsif ($count >= $index) {
+					# parse json response into menu entries but only if in 'quantity' window
 					$parser->($json, $menu);
 				}
 				
@@ -308,7 +331,8 @@ sub searchHandler {
 					$callback->({
 						items  => $menu,
 						offset => $index,
-						total  => $total,
+						#FIXME. why does LMS re-request the index with a quantity of 1 ???
+						total  => ($one) ? 1 : $total,
 					});
 				}
 			},
