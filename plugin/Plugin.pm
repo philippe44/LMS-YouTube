@@ -221,40 +221,22 @@ sub searchHandler {
 	my $quantity = $args->{'quantity'} || 200;
 	my $search   = $args->{'search'} ? "$args->{search}" : '';
 	my $next;
-	my $count = 0;
+	my $offset = 0;
 	my $menu = [];
-	my $one;
-	
+		
 	$term ||= '';	
 	$search = URI::Escape::uri_escape_utf8($search);
 	$search = "q=$search";
 	
 	$log->debug("search: $feed", ":", $parser, ":", $term, ":", Dumper($args));
 		
-	#FIXME. why does LMS re-request the index with a quantity of 1 ???
-	if ($quantity == 1 && $index != 0) {
-		$one = 'true';
-		$quantity = $index + 1;
-		$args->{'searchmax'} = $quantity;
-	}
-
 	# fetch in stages as api only allows 50 items per response, cli clients require $quantity responses which can be more than 50
 	my $fetch;
 
 	# FIXME: this could be sped up by performing parallel requests once the number of responses is known??
 	$fetch = sub {
 
-		
-		my $max;
-		#my $max = min($quantity - scalar @$menu, 50); # api allows max of 50 items per response
-		#FIXME. why does LMS re-request the index with a quantity of 1 ???
-		if (!$one) {
-			$max = min($quantity - scalar @$menu, 50); # api allows max of 50 items per response
-		}
-		else {
-			$max = min($quantity - $count, 50); # api allows max of 50 items per response
-		}
-		
+		my $max = 50;
 		my $queryUrl;
 
 		if ($feed =~ /^http/) {
@@ -297,31 +279,27 @@ sub searchHandler {
 				# Restrict responses to requested searchmax or 500
 				my $total = min($json->{'pageInfo'}->{'totalResults'}, $args->{'searchmax'} || 500, 500);
 				my $n = $json->{'pageInfo'}->{'resultsPerPage'};
-								
-				#FIXME. why does LMS re-request the index with a quantity of 1 ???
-				$log->debug("one: $one");
-				if ($one) {
-					if ($count + $n - 1 == $index) {
-						my $n = scalar @{$json->{'items'}};
-						my @item = $json->{'items'}[$n-1];
-						delete $json->{'items'};
-						$json->{'items'} = \@item;
-						$log->debug("n: $n", Dumper($json));
-						$parser->($json, $menu);
-					}
-				}
-				elsif ($count >= $index) {
-					# parse json response into menu entries but only if in 'quantity' window
+												
+				if ($offset + $n - 1 >= $index) {
+					# start at the beginning of the buffer if we are past the index
+					my $beg = $index - min($offset, $index);
+					# remaining items are quantity - already read
+					my $count = $quantity - scalar @$menu;
+					# but of course limited to the size of the buffer
+					$count = min($offset + $n - $index, $total - $index, $count);
+					my @item = @{$json->{'items'}}[$beg...$beg+$count-1];
+					delete $json->{'items'};
+					$json->{'items'} = \@item;
+					$log->debug("n: $n, quantity: $quantity, offset: $offset, beg: $beg, count: $count");
 					$parser->($json, $menu);
 				}
-				
-				$next = $json->{'nextPageToken'};
-				$count += $n;
+								
+				$log->debug("this page: " . scalar @$menu . " index: $index" . " quantity: $quantity" . " offset: $offset" . " total: $total" . " next: $next");
 
-				$log->debug("this page: " . scalar @$menu . " index: $index" . " quantity: $quantity" . " count: $count" . " total: $total" . " next: $next");
-
-				#if (scalar @$menu < $quantity && $total > $index + scalar ) {
-				if ((($count < $index + 1 || scalar @$menu < $quantity)) && ($count < $total)) {
+				# should be $offset - $n - 1 but we just added 
+				if ((scalar @$menu < $quantity) && ($offset + $n - 1 < $total)) {
+					$offset += $n;
+					$next = $json->{'nextPageToken'};
 					# get some more if we have yet to build the required page for client
 					$log->debug("fetching recursive");
 					$fetch->();
@@ -331,8 +309,7 @@ sub searchHandler {
 					$callback->({
 						items  => $menu,
 						offset => $index,
-						#FIXME. why does LMS re-request the index with a quantity of 1 ???
-						total  => ($one) ? 1 : $total,
+						total  => $total,
 					});
 				}
 			},
@@ -348,21 +325,6 @@ sub searchHandler {
 	$fetch->();
 }
 
-sub _parseVideosV2 {
-	my ($json, $menu) = @_;
-	for my $entry (@{$json->{'entry'} || []}) {
-		my $mg = $entry->{'media$group'};
-		push @$menu, {
-			name => $mg->{'media$title'}->{'$t'},
-			type => 'audio',
-			on_select => 'play',
-			playall => 0,
-			url  => 'youtube://' . $mg->{'yt$videoid'}->{'$t'},
-			play => 'youtube://' . $mg->{'yt$videoid'}->{'$t'},
-			icon => $mg->{'media$thumbnail'}->[0]->{'url'},
-		};
-	}
-}
 
 sub _parseVideos {
 	my ($json, $menu) = @_;
@@ -370,6 +332,26 @@ sub _parseVideos {
 		my $mg = $entry->{'snippet'};
 		my $vurl = "www.youtube.com/v/$entry->{id}->{videoId}";
 		#$log->debug("parse video (url: $vurl) ==> " , Dumper($entry));
+		$log->debug("parse video (url: $vurl)");
+		push @$menu, {
+			name => $mg->{'title'},
+			type => 'audio',
+			on_select => 'play',
+			playall => 0,
+			url  => 'youtube://' . $vurl,
+			play => 'youtube://' . $vurl,
+			icon => $mg->{'thumbnails'}->{'default'}->{'url'},
+		};
+	}
+}
+
+sub _parseVideosAlternate {
+	my ($json, $menu) = @_;
+	for my $entry (@{$json->{'items'} || []}) {
+		my $mg = $entry->{'snippet'};
+		my $vurl = "www.youtube.com/v/$mg->{resourceId}->{videoId}";
+		#$log->debug("parse videoT (url: $vurl) ==> " , Dumper($entry));
+		$log->debug("parse videoT (url: $vurl)");
 		push @$menu, {
 			name => $mg->{'title'},
 			type => 'audio',
@@ -386,59 +368,53 @@ sub _debug{
 	$log->debug(Dumper([caller,@_]));
 }
 
+
 sub _parseChannels {
 	my ($json, $menu) = @_;
 		
 	for my $entry (@{$json->{'items'} || []}) {
 		my $title = $entry->{'snippet'}->{'title'} || $entry->{'snippet'}->{'description'} || 'No Title';
 		$title = Slim::Formats::XML::unescapeAndTrim($title);
-		my $id=$entry->{id}->{channelId};
+		my $id = $entry->{id}->{channelId};
+		#my $url = $prefs->get('APIurl') . "/channels?part=snippet&id=$id&key=" . $prefs->get('APIkey');
+		my $url = $prefs->get('APIurl') . "/search/?part=snippet&channelId=$id&key=" . $prefs->get('APIkey');
+		
 		#$log->debug("parse channel (id: $id) ==>", Dumper($entry));
-		$log->debug("parse channel (id: $id) ==>");
+		$log->debug("parse channel (id: $id)");
 		push @$menu, {
 			name => $title,
 			type => 'link',
 			url  => \&searchHandler,
-			passthrough => [ $prefs->get('APIurl') . "/search/?part=snippet&channelId=$id&key=" . $prefs->get('APIkey'), \&_parseVideos ],
+			passthrough => [ $url, \&_parseVideos ],
 		};
 	}
 	
 	###_debug('_parseChannels results',$menu);
 }
-sub _parseChannelsV2 {
-	my ($json, $menu) = @_;
-	###_debug('_parseChannels',$json);
-	
-	for my $entry (@{$json->{'entry'} || []}) {
-		my $title = $entry->{'title'}->{'$t'} || $entry->{'summary'}->{'$t'} || 'No Title';
-		$title = Slim::Formats::XML::unescapeAndTrim($title);
-		push @$menu, {
-			name => $title,
-			type => 'link',
-			url  => \&searchHandler,
-			passthrough => [ $entry->{'gd$feedLink'}->[0]->{'href'}, \&_parseVideos ],
-		};
-	}
-}
 
 
 sub _parsePlaylists {
 	my ($json, $menu) = @_;	
-	## for my laziness
-	return _parseChannels($json, $menu);
 	
-	
-	for my $entry (@{$json->{'entry'} || []}) {
-		my $title = $entry->{'title'}->{'$t'} || $entry->{'summary'}->{'$t'} || 'No Title';
+	for my $entry (@{$json->{'items'} || []}) {
+		my $mg = $entry->{'snippet'};
+		my $id = $entry->{id}->{playlistId};
+		my $title = $mg->{title};
 		$title = Slim::Formats::XML::unescapeAndTrim($title);
+		#my $url = $prefs->get('APIurl') . "/search/?part=snippet&playlistId=$id&key=" . $prefs->get('APIkey');
+		my $url = $prefs->get('APIurl') . "/playlistItems?part=snippet&playlistId=$id&key=" . $prefs->get('APIkey');
+		
+		#$log->debug("parse playlist (id: $id) ==>", Dumper($entry));
+		$log->debug("parse playlist (id: $id)");
 		push @$menu, {
 			name => $title,
 			type => 'link',
 			url  => \&searchHandler,
-			passthrough => [ $entry->{'content'}->{'src'}, \&_parseVideos ],
+			passthrough => [ $url, \&_parseVideosAlternate ],
 		};
 	}
 }
+
 
 sub trackInfoMenu {
 	my ($client, $url, $track, $remoteMeta) = @_;
