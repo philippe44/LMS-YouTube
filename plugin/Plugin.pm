@@ -150,7 +150,7 @@ sub toplevel {
 		  url  => \&searchHandler, passthrough => [ 'videos', \&_parseVideos ] },
 
 		{ name => string('PLUGIN_YOUTUBE_MUSICSEARCH'), type => 'search',
-		  url  => \&searchHandler, passthrough => [ 'videos', \&_parseVideos, 'category=music' ] },
+		  url  => \&searchHandler, passthrough => [ 'videos', \&_parseVideos, 'type=video&videoCategoryId=10' ] },
 
 		{ name => string('PLUGIN_YOUTUBE_CHANNELSEARCH'), type => 'search',
 		  url  => \&searchHandler, passthrough => [ 'channels', \&_parseChannels ] },
