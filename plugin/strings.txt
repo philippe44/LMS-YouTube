@@ -67,3 +67,8 @@ PLUGIN_YOUTUBE_APIKEY
 PLUGIN_YOUTUBE_APIKEY_DESC
 	EN	YouTube API v3 needs a key to access. Goto https://console.developers.google.com/start
 
+PLUGIN_YOUTUBE_MAXITEMS
+	EN	Items per search
+
+PLUGIN_YOUTUBE_MAXITEMS_DESC
+	EN	Maximum number of items a search can return

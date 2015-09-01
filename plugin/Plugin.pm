@@ -45,7 +45,7 @@ BEGIN {
 
 my $prefs = preferences('plugin.youtube');
 
-$prefs->init({ prefer_lowbitrate => 0, recent => [], APIkey => '', APIurl => 'https://www.googleapis.com/youtube/v3' });
+$prefs->init({ prefer_lowbitrate => 0, recent => [], APIkey => '', max_items => 500, APIurl => 'https://www.googleapis.com/youtube/v3' });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 20;
 
@@ -277,7 +277,7 @@ sub searchHandler {
 				}
 
 				# Restrict responses to requested searchmax or 500
-				my $total = min($json->{'pageInfo'}->{'totalResults'}, $args->{'searchmax'} || 500, 500);
+				my $total = min($json->{'pageInfo'}->{'totalResults'}, $args->{'searchmax'} || $prefs->get('max_items'), $prefs->get('max_items'));
 				my $n = $json->{'pageInfo'}->{'resultsPerPage'};
 												
 				if ($offset + $n - 1 >= $index) {
@@ -329,37 +329,36 @@ sub searchHandler {
 sub _parseVideos {
 	my ($json, $menu) = @_;
 	for my $entry (@{$json->{'items'} || []}) {
-		my $mg = $entry->{'snippet'};
 		my $vurl = "www.youtube.com/v/$entry->{id}->{videoId}";
 		#$log->debug("parse video (url: $vurl) ==> " , Dumper($entry));
 		$log->debug("parse video (url: $vurl)");
 		push @$menu, {
-			name => $mg->{'title'},
+			name => $entry->{'snippet'}->{'title'},
 			type => 'audio',
 			on_select => 'play',
 			playall => 0,
 			url  => 'youtube://' . $vurl,
 			play => 'youtube://' . $vurl,
-			icon => $mg->{'thumbnails'}->{'default'}->{'url'},
+			icon => $entry->{'snippet'}->{'thumbnails'}->{'default'}->{'url'},
 		};
 	}
 }
 
+
 sub _parseVideosAlternate {
 	my ($json, $menu) = @_;
 	for my $entry (@{$json->{'items'} || []}) {
-		my $mg = $entry->{'snippet'};
-		my $vurl = "www.youtube.com/v/$mg->{resourceId}->{videoId}";
+		my $vurl = "www.youtube.com/v/$entry->{'snippet'}->{resourceId}->{videoId}";
 		#$log->debug("parse videoT (url: $vurl) ==> " , Dumper($entry));
 		$log->debug("parse videoT (url: $vurl)");
 		push @$menu, {
-			name => $mg->{'title'},
+			name => $entry->{'snippet'}->{'title'},
 			type => 'audio',
 			on_select => 'play',
 			playall => 0,
 			url  => 'youtube://' . $vurl,
 			play => 'youtube://' . $vurl,
-			icon => $mg->{'thumbnails'}->{'default'}->{'url'},
+			icon => $entry->{'snippet'}->{'thumbnails'}->{'default'}->{'url'},
 		};
 	}
 }
@@ -373,7 +372,7 @@ sub _parseChannels {
 	my ($json, $menu) = @_;
 		
 	for my $entry (@{$json->{'items'} || []}) {
-		my $title = $entry->{'snippet'}->{'title'} || $entry->{'snippet'}->{'description'} || 'No Title';
+		my $title = $entry->{'snippet'}->{'title'} || 'No Title';
 		$title = Slim::Formats::XML::unescapeAndTrim($title);
 		my $id = $entry->{id}->{channelId};
 		#my $url = $prefs->get('APIurl') . "/channels?part=snippet&id=$id&key=" . $prefs->get('APIkey');
@@ -397,10 +396,9 @@ sub _parsePlaylists {
 	my ($json, $menu) = @_;	
 	
 	for my $entry (@{$json->{'items'} || []}) {
-		my $mg = $entry->{'snippet'};
-		my $id = $entry->{id}->{playlistId};
-		my $title = $mg->{title};
+		my $title = $entry->{'snippet'}->{title} || 'No Title';;
 		$title = Slim::Formats::XML::unescapeAndTrim($title);
+		my $id = $entry->{id}->{playlistId};
 		#my $url = $prefs->get('APIurl') . "/search/?part=snippet&playlistId=$id&key=" . $prefs->get('APIkey');
 		my $url = $prefs->get('APIurl') . "/playlistItems?part=snippet&playlistId=$id&key=" . $prefs->get('APIkey');
 		

@@ -17,6 +17,12 @@
 		<input type="text" class="stdedit" name="pref_APIkey" id="pref_APIkey" value="[% prefs.pref_APIkey %]" size="40">
 
 	[% END %]
+	
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_MAXITEMS" desc="PLUGIN_YOUTUBE_MAXITEMS_DESC" %]
+
+		<input type="text" class="stdedit" name="pref_max_items" id="pref_max_items" value="[% prefs.pref_max_items %]" size="5">
+
+	[% END %]
 	</div>
 
 [% PROCESS settings/footer.html %]
