@@ -138,8 +138,8 @@ sub toplevel {
 		{ name => string('PLUGIN_YOUTUBE_VIDEOCATEGORIES'), type => 'url',
 		  url  => \&searchHandler, passthrough => [ 'videoCategories', \&_parseVideoCategories ] },
 			  	  
-		{ name => string('PLUGIN_YOUTUBE_GUIDECATEGORIES'), type => 'url',
-		  url  => \&searchHandler, passthrough => [ 'guideCategories', \&_parseGuideCategories ] },
+		#{ name => string('PLUGIN_YOUTUBE_GUIDECATEGORIES'), type => 'url',
+		#  url  => \&searchHandler, passthrough => [ 'guideCategories', \&_parseGuideCategories ] },
 
 		{ name => string('PLUGIN_YOUTUBE_SEARCH'),  type => 'search',
 		  url  => \&searchHandler, passthrough => [ 'videos', \&_parseVideos ] },
@@ -348,8 +348,8 @@ sub _parseVideosAlternate {
 	my ($json, $menu) = @_;
 	for my $entry (@{$json->{'items'} || []}) {
 		my $vurl = "www.youtube.com/v/$entry->{'snippet'}->{resourceId}->{videoId}";
-		#$log->debug("parse videoT (url: $vurl) ==> " , Dumper($entry));
-		$log->debug("parse videoT (url: $vurl)");
+		#$log->debug("parse video alternate (url: $vurl) ==> " , Dumper($entry));
+		$log->debug("parse video alternate (url: $vurl)");
 		push @$menu, {
 			name => $entry->{'snippet'}->{'title'},
 			type => 'audio',
@@ -383,6 +383,7 @@ sub _parseChannels {
 			name => $title,
 			type => 'link',
 			url  => \&searchHandler,
+			#passthrough => [ 'videos', \&_parseVideos, "channelId=" . $id ],
 			passthrough => [ $url, \&_parseVideos ],
 		};
 	}
