@@ -27,6 +27,9 @@ PLUGIN_YOUTUBE_CHANNELSEARCH
 
 PLUGIN_YOUTUBE_PLAYLISTSEARCH
 	EN	Playlist Search
+	
+PLUGIN_YOUTUBE_CATEGORY
+	EN	Category
 
 PLUGIN_YOUTUBE_RECENTLYPLAYED
 	EN	Recently Played
@@ -72,3 +75,9 @@ PLUGIN_YOUTUBE_MAXITEMS
 
 PLUGIN_YOUTUBE_MAXITEMS_DESC
 	EN	Maximum number of items a search can return
+	
+PLUGIN_YOUTUBE_COUNTRY
+	EN	Country for categories
+
+PLUGIN_YOUTUBE_COUNTRY_DESC
+	EN	Set the 2-letters country use to search available categories

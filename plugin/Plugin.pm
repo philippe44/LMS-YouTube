@@ -45,7 +45,7 @@ BEGIN {
 
 my $prefs = preferences('plugin.youtube');
 
-$prefs->init({ prefer_lowbitrate => 0, recent => [], APIkey => '', max_items => 500, APIurl => 'https://www.googleapis.com/youtube/v3' });
+$prefs->init({ prefer_lowbitrate => 0, recent => [], APIkey => '', max_items => 500, country => 'us', APIurl => 'https://www.googleapis.com/youtube/v3' });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 20;
 
@@ -145,6 +145,10 @@ sub toplevel {
 
 		{ name => string('PLUGIN_YOUTUBE_FAV'),  type => 'link',
 		  url  => \&searchHandler,	passthrough => [ 'standardfeeds/top_favorites_Music', \&_parseVideos ], },
+		  	  
+		#FIXME: set a searchmax
+		{ name => string('PLUGIN_YOUTUBE_CATEGORY'), type => 'url',
+		  url  => \&searchHandler, passthrough => [ 'category', \&_parseCategory ] },
 
 		{ name => string('PLUGIN_YOUTUBE_SEARCH'),  type => 'search',
 		  url  => \&searchHandler, passthrough => [ 'videos', \&_parseVideos ] },
@@ -157,7 +161,7 @@ sub toplevel {
 
 		{ name => string('PLUGIN_YOUTUBE_PLAYLISTSEARCH'), type => 'search',
 		  url  => \&searchHandler, passthrough => [ 'playlists/snippets', \&_parsePlaylists ] },
-
+	
 		{ name => string('PLUGIN_YOUTUBE_RECENTLYPLAYED'), url  => \&recentHandler, },
 
 		{ name => string('PLUGIN_YOUTUBE_URL'), type => 'search', url  => \&urlHandler, },
@@ -244,21 +248,24 @@ sub searchHandler {
 		} else {
 		
 			##$queryUrl = "http://gdata.youtube.com/feeds/api/$feed?$term&$search&start-index=$i&max-results=$max&v=2&alt=json";
-			$queryUrl = $prefs->get('APIurl') . "/search/?";
+			$queryUrl = $prefs->get('APIurl') . "/search/?$search";
 			
 			if ($feed =~ /(rated|favorites|popular)/)	{
 				$queryUrl = $prefs->get('APIurl') . "/guideCategories/?";
 			} elsif ($feed =~ /(channel|playlist)/) {
-				$queryUrl .="type=$1&"; 
+				$queryUrl .="&type=$1"; 
 			} elsif ($feed =~ /(videos)/) {
+				# nothing now
+			} elsif ($feed =~ /(category)/) {
+			   $queryUrl = $prefs->get('APIurl') . "/videoCategories/?regionCode=". $prefs->get('country');
 				# nothing now
 			}
 			
 			if ($term) {
-				$queryUrl .= "$term&";
+				$queryUrl .= "&$term";
 			}
 			
-			$queryUrl .= "$search&pageToken=$next&maxResults=$max&v=2&alt=json&part=id,snippet&key=" . $prefs->get('APIkey');
+			$queryUrl .= "&pageToken=$next&maxResults=$max&v=2&alt=json&part=id,snippet&key=" . $prefs->get('APIkey');
 			
 		}
 
@@ -279,6 +286,9 @@ sub searchHandler {
 				# Restrict responses to requested searchmax or 500
 				my $total = min($json->{'pageInfo'}->{'totalResults'}, $args->{'searchmax'} || $prefs->get('max_items'), $prefs->get('max_items'));
 				my $n = $json->{'pageInfo'}->{'resultsPerPage'};
+				if (!$total) {
+					$n = $total = scalar @{$json->{'items'}} || 0;
+				}
 												
 				if ($offset + $n - 1 >= $index) {
 					# start at the beginning of the buffer if we are past the index
@@ -297,7 +307,7 @@ sub searchHandler {
 				$log->debug("this page: " . scalar @$menu . " index: $index" . " quantity: $quantity" . " offset: $offset" . " total: $total" . " next: $next");
 
 				# should be $offset - $n - 1 but we just added 
-				if ((scalar @$menu < $quantity) && ($offset + $n - 1 < $total)) {
+				if ($total && (scalar @$menu < $quantity) && ($offset + $n - 1 < $total)) {
 					$offset += $n;
 					$next = $json->{'nextPageToken'};
 					# get some more if we have yet to build the required page for client
@@ -385,6 +395,28 @@ sub _parseChannels {
 			type => 'link',
 			url  => \&searchHandler,
 			passthrough => [ $url, \&_parseVideos ],
+		};
+	}
+	
+	###_debug('_parseChannels results',$menu);
+}
+
+
+sub _parseCategory {
+	my ($json, $menu) = @_;
+		
+	for my $entry (@{$json->{'items'} || []}) {
+		my $title = $entry->{'snippet'}->{'title'} || 'No Title';
+		$title = Slim::Formats::XML::unescapeAndTrim($title);
+		my $id = $entry->{id};
+				
+		#$log->debug("parse category (id: $id) ==>", Dumper($entry));
+		$log->debug("parse category (id: $id)");
+		push @$menu, {
+			name => $title,
+			type => 'search',
+			url  => \&searchHandler,
+			passthrough => [  'videos', \&_parseVideos, '&type=video&videoCategoryId=' . $id ],
 		};
 	}
 	

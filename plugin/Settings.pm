@@ -14,7 +14,7 @@ sub page {
 }
 
 sub prefs {
-	return (preferences('plugin.youtube'), qw(max_items APIkey prefer_lowbitrate));
+	return (preferences('plugin.youtube'), qw(country max_items APIkey prefer_lowbitrate));
 }
 
 1;

@@ -14,13 +14,19 @@
 	
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_APIKEY" desc="PLUGIN_YOUTUBE_APIKEY_DESC" %]
 
-		<input type="text" class="stdedit" name="pref_APIkey" id="pref_APIkey" value="[% prefs.pref_APIkey %]" size="40">
+		<input type="text" class="stdedit" name="pref_APIkey" id="pref_APIkey" value="[% prefs.pref_APIkey %]" size="45">
 
 	[% END %]
 	
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_MAXITEMS" desc="PLUGIN_YOUTUBE_MAXITEMS_DESC" %]
 
 		<input type="text" class="stdedit" name="pref_max_items" id="pref_max_items" value="[% prefs.pref_max_items %]" size="5">
+
+	[% END %]
+	
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_COUNTRY" desc="PLUGIN_YOUTUBE_COUNTRY_DESC" %]
+
+		<input type="text" class="stdedit" name="pref_country" id="pref_country" value="[% prefs.pref_country %]" size="2">
 
 	[% END %]
 	</div>
