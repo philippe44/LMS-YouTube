@@ -418,8 +418,7 @@ sub _id {
 	if ($url =~ /^youtube:\/\/https?:\/\/www\.youtube\.com\/watch\?v=(.*)&/ || 
 		$url =~ /^youtube:\/\/www\.youtube\.com\/v\/(.*)&/ ||
 		$url =~ /^youtube:\/\/(.*)&/) {
-	#if ($url =~ /^youtube:\/\/www\.youtube\.com\/v\/(.*)&/) {
-		$log->debug("parsed id: $url");
+	
 		return $1;
 	}
 	
@@ -448,14 +447,11 @@ sub getNextTrack {
 	}
 
 	my $masterUrl = $song->track()->url;
-	$log->info("master fetching: $masterUrl");
 	my $client    = $song->master();
-
 	my $id = $class->_id($masterUrl);
-
 	my $url = "http://www.youtube.com/watch?v=$id";
 
-	$log->info("fetching: $id $url");
+	$log->info("next track id: $id url: $url master: $masterUrl");
 
 	Slim::Networking::SimpleAsyncHTTP->new(
 
@@ -536,8 +532,7 @@ sub getNextTrack {
 		},
 
 	)->get($url);
-	
-	$log->debug("getNextTrack url: $url");
+
 }
 
 sub suppressPlayersMessage {
@@ -552,133 +547,16 @@ sub suppressPlayersMessage {
 }
 
 
-sub getMetadataForV2 {
-	my ($class, undef, $url, undef, $song, $cb) = @_;
-
-	my $id = $class->_id($url) || return {};
-	
-	
-	my $cache = Slim::Utils::Cache->new;
-	
-
-	if (my $meta = $cache->get("yt:meta-$id")) {
-		if ($song) {
-			$song->track->title($meta->{'title'});
-			$song->track->secs($meta->{'duration'});
-			Plugins::YouTube::Plugin->updateRecentlyPlayed({
-				url => $url, name => $meta->{_fulltitle} || $meta->{title}, icon => $meta->{icon}
-			});
-		}
-		if ($cb) {
-			$cb->($meta);
-			return undef;
-		}
-		return $meta;
-	}
-
-	if ($fetching{$id} && !defined $cb) {
-		$log->debug("already fetching metadata for $id");
-		return {}
-	}
-
-	
-	
-	
-	$log->info("fetching metadata for $id");
-	
-	
-
-	Slim::Networking::SimpleAsyncHTTP->new(
-
-		sub {
-			my $http = shift;
-
-			
-			### it now in json form
-			
-			my $xml  = eval { XMLin($http->content) };
-
-			delete $fetching{$id};
-
-			if ($@) {
-				$log->warn($@);
-			}
-
-			my $cover; my $icon;
-
-			for my $image (@{$xml->{'media:group'}->{'media:thumbnail'}}) {
-				$icon  = $image->{'url'} if $image->{'yt:name'} eq 'default';
-				$cover = $image->{'url'} if $image->{'yt:name'} eq 'hqdefault';
-			}
-
-			my $title  = $xml->{'title'};
-			my $artist = $xml->{'author'}->{'name'};
-			my $fulltitle;
-
-			if ($title =~ /(.*) - (.*)/) {
-				$fulltitle = $title;
-				$artist = $1;
-				$title  = $2;
-			}
-
-			if ($xml) {
-				my $meta = {
-					title    =>	$title,
-					artist   => $artist,
-					duration => $xml->{'media:group'}->{'yt:duration'}->{'seconds'},
-					icon     => $icon,
-					cover    => $cover || $icon,
-					type     => 'YouTube',
-				};
-
-				$meta->{_fulltitle} = $fulltitle if $fulltitle;
-
-				if ($song) {
-					$song->track->title($meta->{'title'});
-					$song->track->secs($meta->{'duration'});
-					Plugins::YouTube::Plugin->updateRecentlyPlayed({ url => $url, name => $fulltitle || $title, icon => $icon });
-				}
-
-				$cache->set("yt:meta-$id", $meta, 86400);
-
-				if ($cb) {
-					$cb->($meta);
-					return;
-				}
-			}
-		},
-
-		sub {
-			$log->warn("error: $_[1]");
-			delete $fetching{$id};
-			if ($cb) {
-				$cb->({});
-			}
-		},
-
-
-	)->get("http://gdata.youtube.com/feeds/api/videos/$id?v=2");
-	
-	$fetching{$id} = 1;
-
-	return undef if ($cb);
-
-	return {};
-}
-
-
 sub getMetadataFor {
 	my ($class, undef, $url, undef, $song, $cb) = @_;
 
 	$log->debug("getmetadata: $url");
-	#return {};
 	
 	my $id = $class->_id($url) || return {};
-	
+	my $cache = Slim::Utils::Cache->new;
+		
 	###Plugins::YouTube::Plugin::_debug(['vurl',$id,$url]);return {};
 
-	my $cache = Slim::Utils::Cache->new;
-	##Plugins::YouTube::Plugin::_debug(['vurl',$id,$cache->get("yt:meta-$id")]); return {};
 	if (my $meta = $cache->get("yt:meta-$id")) {
 		if ($song) {
 			$song->track->title($meta->{'title'});
@@ -691,49 +569,47 @@ sub getMetadataFor {
 			$cb->($meta);
 			return undef;
 		}
+		
+		$log->debug("cache hit: $id");
 		return $meta;
 	}
 
 	if ($fetching{$id} && !defined $cb) {
-		$log->debug("already fetching metadata for $id");
+		$log->debug("already fetching metadata: $id");
 		return {}
 	}
 	
-	###part=contentDetails&id=$vId&key=dldfsd981asGhkxHxFf6JqyNrTqIeJ9sjMKFcX4");
-
 	my $vurl = $prefs->get('APIurl') . "/videos/?part=snippet,contentDetails&id=$id&key=" .$prefs->get('APIkey');
 
-	$log->info("fetching metadata for $id");
-	
+	$log->info("fetching metadata id: $id, vurl :$vurl");
+		
 	###Plugins::YouTube::Plugin::_debug(['vurl',$id,$vurl]);return {};
 
 	Slim::Networking::SimpleAsyncHTTP->new(
 
 		sub {
 			my $http = shift;
-			
-			### it now in json form
-			
 			my $json = eval { decode_json($http->content) };
-				
+			
+			delete $fetching{$id};			
+
 			if ($@) {
 				$log->warn($@);
 			}
-			
-			delete $fetching{$id};
-
-			my $cover; my $icon;
-			
+						
 			### all are in 'items'->[0]
 			
-			my $vdetail = $json->{items}->[0] or return;
-			#$log->debug('details: ', Dumper($vdetail));
-			
-			my $snippet=$vdetail->{snippet} or return;
+			my $vdetail = $json->{items}->[0];
+			if (!$vdetail) {
+				if ($cb) {
+					$cb->({});
+				}
+				return;
+			}
 					
-			$icon = $snippet->{thumbnails}->{default}->{url};
-			$cover = $snippet->{thumbnails}->{high}->{url};
-
+			my $snippet=$vdetail->{snippet};
+			my $cover = $snippet->{thumbnails}->{high}->{url};
+			my $icon = $snippet->{thumbnails}->{default}->{url};
 			my $title  = $snippet->{'title'};
 			my $artist = "";###$xml->{'author'}->{'name'};
 			my $fulltitle;
@@ -744,10 +620,9 @@ sub getMetadataFor {
 				$title  = $2;
 			}
 			my $duration=$vdetail->{contentDetails}->{duration};
-			#$log->debug("duration: $duration");
+			$log->debug("duration: $duration");
 			$duration =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
 			my ($misc, $hour, $min, $sec) = ($1, $2, $3, $4);
-			#$log->debug($hour, $min, $sec);
 			$duration = (($sec) ? $sec : 0) + (($min) ? $min*60 : 0) + (($hour) ? $hour*3600 : 0);
 									
 			if ($duration && $title) {
@@ -787,12 +662,8 @@ sub getMetadataFor {
 
 	)->get($vurl);
 
-	## v2
-	##http://gdata.youtube.com/feeds/api/videos/$id?v=2
-	###$prefs->get('APIkey')
 	$fetching{$id} = 1;
 
-	$log->debug("getMetaDataFor vurl: $vurl");
 	return undef if ($cb);
 
 	return {};

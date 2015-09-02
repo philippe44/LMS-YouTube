@@ -3,19 +3,7 @@ PLUGIN_YOUTUBE
 
 PLUGIN_YOUTUBE_DESC
 	EN	Play audio from YouTube videos.  WARNING: this plugin will use more network bandwidth than other streaming services as the entire video is being streamed even though only the audio is played.	Updated to API v3
-
-PLUGIN_YOUTUBE_TOP
-	EN	Top Rated Music
-
-PLUGIN_YOUTUBE_POP
-	EN	Most Popular Music
-
-PLUGIN_YOUTUBE_RECENT
-	EN	Most Recent Music
-
-PLUGIN_YOUTUBE_FAV
-	EN	Favorite Music
-
+	
 PLUGIN_YOUTUBE_SEARCH
 	EN	YouTube Search
 
@@ -28,8 +16,11 @@ PLUGIN_YOUTUBE_CHANNELSEARCH
 PLUGIN_YOUTUBE_PLAYLISTSEARCH
 	EN	Playlist Search
 	
-PLUGIN_YOUTUBE_CATEGORY
-	EN	Category
+PLUGIN_YOUTUBE_VIDEOCATEGORIES
+	EN	Video Categories
+	
+PLUGIN_YOUTUBE_GUIDECATEGORIES
+	EN	Guide Categories
 
 PLUGIN_YOUTUBE_RECENTLYPLAYED
 	EN	Recently Played

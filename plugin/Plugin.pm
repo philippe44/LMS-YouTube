@@ -134,21 +134,12 @@ sub toplevel {
 	my ($client, $callback, $args) = @_;
 
 	$callback->([
-		{ name => string('PLUGIN_YOUTUBE_TOP'), type => 'link',
-		  url  => \&searchHandler, passthrough => [ 'standardfeeds/top_rated_Music', \&_parseVideos ], },
-
-		{ name => string('PLUGIN_YOUTUBE_POP'), type => 'link',
-		  url  => \&searchHandler, passthrough => [ 'standardfeeds/most_popular_Music', \&_parseVideos ], },
-
-		#{ name => string('PLUGIN_YOUTUBE_RECENT'), type => 'link',
-		#  url  => \&searchHandler,	passthrough => [ 'standardfeeds/most_recent_Music', \&_parseVideos ], },
-
-		{ name => string('PLUGIN_YOUTUBE_FAV'),  type => 'link',
-		  url  => \&searchHandler,	passthrough => [ 'standardfeeds/top_favorites_Music', \&_parseVideos ], },
-		  	  
-		#FIXME: set a searchmax
-		{ name => string('PLUGIN_YOUTUBE_CATEGORY'), type => 'url',
-		  url  => \&searchHandler, passthrough => [ 'category', \&_parseCategory ] },
+	  
+		{ name => string('PLUGIN_YOUTUBE_VIDEOCATEGORIES'), type => 'url',
+		  url  => \&searchHandler, passthrough => [ 'videoCategories', \&_parseVideoCategories ] },
+			  	  
+		{ name => string('PLUGIN_YOUTUBE_GUIDECATEGORIES'), type => 'url',
+		  url  => \&searchHandler, passthrough => [ 'guideCategories', \&_parseGuideCategories ] },
 
 		{ name => string('PLUGIN_YOUTUBE_SEARCH'),  type => 'search',
 		  url  => \&searchHandler, passthrough => [ 'videos', \&_parseVideos ] },
@@ -178,6 +169,7 @@ sub urlHandler {
 	
 	$log->debug("urlHandler: $args->{'search'}");
 	# use metadata handler to get track info
+				
 	Plugins::YouTube::ProtocolHandler->getMetadataFor(undef, $url, undef, undef,
 		sub {
 			my $meta = shift;
@@ -250,15 +242,12 @@ sub searchHandler {
 			##$queryUrl = "http://gdata.youtube.com/feeds/api/$feed?$term&$search&start-index=$i&max-results=$max&v=2&alt=json";
 			$queryUrl = $prefs->get('APIurl') . "/search/?$search";
 			
-			if ($feed =~ /(rated|favorites|popular)/)	{
-				$queryUrl = $prefs->get('APIurl') . "/guideCategories/?";
-			} elsif ($feed =~ /(channel|playlist)/) {
+			if ($feed =~ /(channel|playlist)/) {
 				$queryUrl .="&type=$1"; 
 			} elsif ($feed =~ /(videos)/) {
 				# nothing now
-			} elsif ($feed =~ /(category)/) {
-			   $queryUrl = $prefs->get('APIurl') . "/videoCategories/?regionCode=". $prefs->get('country');
-				# nothing now
+			} elsif ($feed =~ /(videoCategories|guideCategories)/) {
+			   $queryUrl = $prefs->get('APIurl') . "/$1?regionCode=". $prefs->get('country');
 			}
 			
 			if ($term) {
@@ -402,7 +391,7 @@ sub _parseChannels {
 }
 
 
-sub _parseCategory {
+sub _parseVideoCategories {
 	my ($json, $menu) = @_;
 		
 	for my $entry (@{$json->{'items'} || []}) {
@@ -410,13 +399,34 @@ sub _parseCategory {
 		$title = Slim::Formats::XML::unescapeAndTrim($title);
 		my $id = $entry->{id};
 				
-		#$log->debug("parse category (id: $id) ==>", Dumper($entry));
-		$log->debug("parse category (id: $id)");
+		#$log->debug("parse video category (id: $id) ==>", Dumper($entry));
+		$log->debug("parse video category (id: $id)");
 		push @$menu, {
 			name => $title,
 			type => 'search',
 			url  => \&searchHandler,
-			passthrough => [  'videos', \&_parseVideos, '&type=video&videoCategoryId=' . $id ],
+			passthrough => [  'videos', \&_parseVideos, 'type=video&videoCategoryId=' . $id ],
+		};
+	}
+	
+	###_debug('_parseChannels results',$menu);
+}
+
+sub _parseGuideCategories {
+	my ($json, $menu) = @_;
+		
+	for my $entry (@{$json->{'items'} || []}) {
+		my $title = $entry->{'snippet'}->{'title'} || 'No Title';
+		$title = Slim::Formats::XML::unescapeAndTrim($title);
+		my $id = $entry->{id};
+				
+		#$log->debug("parse guide category (id: $id) ==>", Dumper($entry));
+		$log->debug("parse guide category (id: $id)");
+		push @$menu, {
+			name => $title,
+			type => 'search',
+			url  => \&searchHandler,
+			passthrough => [  'videos', \&_parseVideos, 'type=video&guideCategoryId=' . $id ],
 		};
 	}
 	
@@ -499,10 +509,7 @@ sub artistInfoMenu {
 sub webVideoLink {
 	my ($client, $url) = @_;
 
-	
-
 #	_debug('webVideoLink',$url);
-
 	
 	if (my $id = Plugins::YouTube::ProtocolHandler->_id($url)) {
 
