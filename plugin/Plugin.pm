@@ -5,11 +5,10 @@ package Plugins::YouTube::Plugin;
 # Released under GPLv2
 
 use strict;
-
-use vars qw(@ISA);
+use base qw(Slim::Plugin::OPMLBased);
 
 use URI::Escape;
-use JSON::XS::VersionOneAndTwo;
+use JSON::XS;
 use File::Spec::Functions qw(:ALL);
 use List::Util qw(min max);
 use Data::Dumper;
@@ -20,28 +19,11 @@ use Slim::Utils::Log;
 
 use Plugins::YouTube::ProtocolHandler;
 
-my $log;
-my $compat;
-
-BEGIN {
-	$log = Slim::Utils::Log->addLogCategory({
+my	$log = Slim::Utils::Log->addLogCategory({
 		'category'     => 'plugin.youtube',
 		'defaultLevel' => 'WARN',
 		'description'  => string('PLUGIN_YOUTUBE'),
 	});
-
-	# Always use OneBrowser version of XMLBrowser by using server or packaged version included with plugin
-	if (exists &Slim::Control::XMLBrowser::findAction) {
-		$log->info("using server XMLBrowser");
-		require Slim::Plugin::OPMLBased;
-		push @ISA, 'Slim::Plugin::OPMLBased';
-	} else {
-		$log->info("using packaged XMLBrowser: Slim76Compat");
-		require Slim76Compat::Plugin::OPMLBased;
-		push @ISA, 'Slim76Compat::Plugin::OPMLBased';
-		$compat = 1;
-	}
-}
 
 my $prefs = preferences('plugin.youtube');
 
@@ -56,7 +38,7 @@ sub initPlugin {
 		feed   => \&toplevel,
 		tag    => 'youtube',
 		menu   => 'radios',
-		is_app => $class->can('nonSNApps') ? 1 : undef,
+		is_app => 1,
 		weight => 10,
 	);
 
@@ -81,7 +63,7 @@ sub initPlugin {
 		func  => \&searchInfoMenu,
 	) );
 
-	if (!$::noweb) {
+	if ( main::WEBUI ) {
 		require Plugins::YouTube::Settings;
 		Plugins::YouTube::Settings->new;
 	}
@@ -100,8 +82,6 @@ sub shutdownPlugin {
 }
 
 sub getDisplayName { 'PLUGIN_YOUTUBE' }
-
-sub playerMenu { shift->can('nonSNApps') ? undef : 'RADIO' }
 
 sub updateRecentlyPlayed {
 	my ($class, $info) = @_;
@@ -152,6 +132,7 @@ sub toplevel {
 		  url  => \&searchHandler, passthrough => [ 'videos', \&_parseVideos ] },
 
 		{ name => string('PLUGIN_YOUTUBE_MUSICSEARCH'), type => 'search',
+		  #FIXME: is this always 10 ?
 		  url  => \&searchHandler, passthrough => [ 'videos', \&_parseVideos, 'type=video&videoCategoryId=10' ] },
 
 		{ name => string('PLUGIN_YOUTUBE_CHANNELSEARCH'), type => 'search',
@@ -273,7 +254,7 @@ sub searchHandler {
 			sub {
 				my $http = shift;
 				
-				my $json = eval { from_json($http->content) };
+				my $json = eval { decode_json($http->content) };
 				
 				if ($@) {
 					$log->warn($@);
@@ -418,6 +399,8 @@ sub _parseVideoCategories {
 	}
 	
 	###_debug('_parseChannels results',$menu);
+	
+	
 }
 
 sub _parseGuideCategories {
@@ -479,8 +462,7 @@ sub trackInfoMenu {
 				my ($client, $callback, $args) = @_;
 				$args->{'search'} = $artist;
 				$args->{'searchmax'} = 200; # only get 200 entries within context menu
-				my $cb = !$compat ? $callback : sub { $callback->(shift->{'items'}) };
-				searchHandler($client, $cb, $args, 'videos', \&_parseVideos);
+				searchHandler($client, $callback, $args, 'videos', \&_parseVideos);
 			},
 			favorites => 0,
 		};
@@ -504,8 +486,7 @@ sub artistInfoMenu {
 				my ($client, $callback, $args) = @_;
 				$args->{'search'} = $artist;
 				$args->{'searchmax'} = 200; # only get 200 entries within context menu
-				my $cb = !$compat ? $callback : sub { $callback->(shift->{'items'}) };
-				searchHandler($client, $cb, $args, 'videos', \&_parseVideos);
+				searchHandler($client, $callback, $args, 'videos', \&_parseVideos);
 			},
 			favorites => 0,
 		};
@@ -574,8 +555,7 @@ sub searchInfoMenu {
 				url  => sub {
 					my ($client, $callback, $args) = @_;
 					$args->{'search'} = $query;
-					my $cb = !$compat ? $callback : sub { $callback->(shift->{'items'}) };
-					searchHandler($client, $cb, $args, 'videos', \&_parseVideos);
+					searchHandler($client, $callback, $args, 'videos', \&_parseVideos);
 				},
 				favorites => 0,
 			},
@@ -585,8 +565,8 @@ sub searchInfoMenu {
 				url  => sub {
 					my ($client, $callback, $args) = @_;
 					$args->{'search'} = $query;
-					my $cb = !$compat ? $callback : sub { $callback->(shift->{'items'}) };
-					searchHandler($client, $cb, $args, 'videos', \&_parseVideos, 'category=music');
+					#FIXME: is this always 10 ?
+					searchHandler($client, $callback, $args, 'videos', \&_parseVideos, 'type=video&videoCategoryId=10');
 				},
 				favorites => 0,
 			},

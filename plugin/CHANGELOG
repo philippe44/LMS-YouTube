@@ -1,0 +1,5 @@
+0.25
+ - Use JSON::XS so move from_json to json_decode
+ - Apply Michael's path to clean 7.6 legacy dependencies
+ - No topmenu if APIkey is missing
+ - Integrate signature management
