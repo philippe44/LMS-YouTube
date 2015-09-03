@@ -18,7 +18,7 @@ package Plugins::YouTube::JSInterp;
 
 use strict;
 use warnings;
-use JSON;
+use JSON::XS;
 
 my @_OPERATORS = (
     ['|', sub { my ($a, $b) = @_; return $a | $b }],
@@ -129,7 +129,7 @@ sub interpret_expression {
 		    if ($remaining_expr eq "") {
 			return $sub_result;
 		    } else {
-			$expr = to_json($sub_result, { allow_nonref => 1 }) . $remaining_expr;
+			$expr = JSON::XS->new->allow_nonref(1)->encode($sub_result) . $remaining_expr;
 			#$expr = $sub_result . $remaining_expr;
 			# XXXX json.dumps(sub_result)
 			#$expr = $sub_result . $remaining_expr;
@@ -196,7 +196,7 @@ sub interpret_expression {
 	return $local_vars->{$name};
     }
 
-    my $rv = eval { from_json($expr, { allow_nonref => 1 }) };
+    my $rv = eval { JSON::XS->new->allow_nonref(1)->decode($expr) };
     if ($@) {
 	$self->progress($depth, "--", "Decode error '$@'");
     } else {
@@ -281,9 +281,9 @@ sub interpret_expression {
 	}
 
 	my $func = $obj->{$member};
-	$self->progress($depth, ">>", "$member.$variable(" . join(",", map { to_json($_, {allow_nonref=>1}) } @{$argvals}) . ")");
+	$self->progress($depth, ">>", "$member.$variable(" . join(",", map { JSON::XS->new->allow_nonref(1)->encode($_) } @{$argvals}) . ")");
 	my $ret = &$func(@{$argvals});
-	$self->progress($depth, "<<", to_json($ret, {allow_nonref=>1}));
+	$self->progress($depth, "<<", JSON::XS->new->allow_nonref(1)->encode($ret));
 	return $ret;
     }
 
@@ -415,10 +415,10 @@ sub get_function {
 sub call_function {
     my ($self, $depth, $funcname, @args) = @_;
 
-    $self->progress($depth, ">>", "$funcname(" . join(",", map { to_json($_, {allow_nonref => 1 }) } @args) . ")");
+    $self->progress($depth, ">>", "$funcname(" . join(",", map { JSON::XS->new->allow_nonref(1)->encode($_) } @args) . ")");
     my $func = $self->get_function($depth, $funcname);
     my $ret = &$func(@args);
-    $self->progress($depth, "<<", to_json($ret, {allow_nonref => 1}));
+    $self->progress($depth, "<<", JSON::XS->new->allow_nonref(1)->encode($ret));
     return $ret;
 }
 
