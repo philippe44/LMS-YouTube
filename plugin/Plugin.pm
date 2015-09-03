@@ -132,7 +132,14 @@ sub saveRecentlyPlayed {
 
 sub toplevel {
 	my ($client, $callback, $args) = @_;
-
+	
+	if (!$prefs->get('APIkey')) {
+		$callback->([
+			{ name => string('PLUGIN_YOUTUBE_MISSINGKEY'), type => 'text' },
+		]);
+			return;
+	}
+	
 	$callback->([
 	  
 		{ name => string('PLUGIN_YOUTUBE_VIDEOCATEGORIES'), type => 'url',
@@ -211,6 +218,7 @@ sub recentHandler {
 
 sub searchHandler {
 	my ($client, $callback, $args, $feed, $parser, $term) = @_;
+	my $menu = [];
 
 	# use paging on interfaces which allow otherwise fetch 200 entries for button mode
 	my $index    = $args->{'index'} || 0;
@@ -218,8 +226,7 @@ sub searchHandler {
 	my $search   = $args->{'search'} ? "$args->{search}" : '';
 	my $next;
 	my $offset = 0;
-	my $menu = [];
-		
+			
 	$term ||= '';	
 	$search = URI::Escape::uri_escape_utf8($search);
 	$search = "q=$search";

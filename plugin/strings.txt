@@ -4,6 +4,9 @@ PLUGIN_YOUTUBE
 PLUGIN_YOUTUBE_DESC
 	EN	Play audio from YouTube videos.  WARNING: this plugin will use more network bandwidth than other streaming services as the entire video is being streamed even though only the audio is played.	Updated to API v3
 	
+PLUGIN_YOUTUBE_MISSINGKEY
+	EN	Missing YouTube API key (see settings)
+	
 PLUGIN_YOUTUBE_SEARCH
 	EN	YouTube Search
 
