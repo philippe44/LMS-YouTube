@@ -220,3 +220,7 @@ key.txt
 *.pl
 *.zip
 *.xml
+/_backup
+/*.pm
+*.diff
+/.gitignore
