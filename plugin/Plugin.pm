@@ -206,7 +206,7 @@ sub searchHandler {
 	my $quantity = $args->{'quantity'} || 200;
 	my $search   = $args->{'search'} ? "$args->{search}" : '';
 	my $next;
-	my $offset = 0;
+	my $count = 0;
 			
 	$term ||= '';	
 	$search = URI::Escape::uri_escape_utf8($search);
@@ -260,34 +260,22 @@ sub searchHandler {
 					$log->warn($@);
 				}
 
-				# Restrict responses to requested searchmax or 500
+				# Restrict responses to requested searchmax 
 				my $total = min($json->{'pageInfo'}->{'totalResults'}, $args->{'searchmax'} || $prefs->get('max_items'), $prefs->get('max_items'));
 				my $n = $json->{'pageInfo'}->{'resultsPerPage'};
+				
+				# The 'categories' search do not have a totalResults / resultsPerPage
 				if (!$total) {
 					$n = $total = scalar @{$json->{'items'}} || 0;
 				}
-												
-				if ($offset + $n - 1 >= $index) {
-					# start at the beginning of the buffer if we are past the index
-					my $beg = $index - min($offset, $index);
-					# remaining items are quantity - already read
-					my $count = $quantity - scalar @$menu;
-					# but of course limited to the size of the buffer
-					$count = min($offset + $n - $index, $total - $index, $count);
-					my @item = @{$json->{'items'}}[$beg...$beg+$count-1];
-					delete $json->{'items'};
-					$json->{'items'} = \@item;
-					$log->debug("n: $n, quantity: $quantity, offset: $offset, beg: $beg, count: $count");
-					$parser->($json, $menu);
-				}
-								
-				$log->debug("this page: " . scalar @$menu . " index: $index" . " quantity: $quantity" . " offset: $offset" . " total: $total" . " next: $next");
+				
+				$count += $n;
+				$parser->($json, $menu);
+				$log->debug("this page: " . scalar @$menu . " index: $index" . " quantity: $quantity" . " count: $count" . " total: $total" . " next: $next");
 
-				# should be $offset - $n - 1 but we just added 
-				if ($total && (scalar @$menu < $quantity) && ($offset + $n - 1 < $total)) {
-					$offset += $n;
+				# get some more if we have yet to build the required page for client				
+				if ($total && (scalar @$menu < $quantity + $index) && ($count < $total)) {
 					$next = $json->{'nextPageToken'};
-					# get some more if we have yet to build the required page for client
 					$log->debug("fetching recursive");
 					$fetch->();
 
@@ -295,7 +283,7 @@ sub searchHandler {
 
 					$callback->({
 						items  => $menu,
-						offset => $index,
+						offset => 0,
 						total  => $total,
 					});
 				}

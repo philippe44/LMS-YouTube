@@ -154,7 +154,21 @@ sub requestString {
 	Slim::Player::Protocols::HTTP->requestString(@_);
 }
 
-sub parseHeaders {}
+sub parseHeaders {
+	my ( $self,  @headers ) = @_;
+	
+	foreach my $header (@headers) {
+	
+		# Tidy up header to make no stray nulls or \n have been left by caller.
+		$header =~ s/[\0]*$//;
+		$header =~ s/\r/\n/g;
+		$header =~ s/\n\n/\n/g;
+
+		if ($header =~ /^Location:\s*(.*)/i) {
+				${*$self}{'redirect'} = $1;
+		}
+	}
+}
 
 sub songBytes {}
 

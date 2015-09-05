@@ -1,3 +1,9 @@
+0.27
+ - Handle HTTP redirect
+
+0.26.1
+ - Remove wrong SSL parameter on opening
+ 
 0.26
  - JSinterpret was using JSON and not JSON:XS which seems to not be available on some linux 
  
