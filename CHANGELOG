@@ -1,5 +1,6 @@
 0.27
  - Handle HTTP redirect
+ - Country taken from system
 
 0.26.1
  - Remove wrong SSL parameter on opening
