@@ -53,10 +53,9 @@ sub crackURL {
 sub open {
 	my $class = shift;
 	my $args  = shift;
-
 	my $url   = $args->{'url'};
-
 	my ($server, $port, $path, $user, $password) = crackURL($url);
+	my $timeout = 30;
 
 	if (!$server || !$port) {
 
@@ -64,8 +63,6 @@ sub open {
 		return;
 	}
 
-	my $timeout = 30;
-	
 	$log->info("Opening connection to $url: [$server on port $port with path $path with timeout $timeout]");
 
 	my $sock = $class->SUPER::new(
@@ -73,8 +70,6 @@ sub open {
 		PeerAddr => $server,
 		PeerPort => $port,
 		SSL_startHandshake => 1,
-		SSL_verify_mode => 'SSL_VERIFY_NONE',
-	
 	) or do {
 
 		$log->error("Couldn't create socket binding to $main::localStreamAddr with timeout: $timeout - $!");
@@ -85,7 +80,6 @@ sub open {
 	# used for non blocking I/O
 	${*$sock}{'_sel'} = IO::Select->new($sock);
 	${*$sock}{'song'} = $args->{'song'};
-	
 	
 	#$log->debug("in open ref sock: ", ref $sock, "(D)", Dumper($sock));
 	#$log->debug("in open ref class: ", ref $class, "(D)", Dumper($class));
@@ -108,18 +102,14 @@ sub open {
 sub new {
 	my $class = shift;
 	my $args  = shift;
-
 	my $song       = $args->{'song'};
 	$args->{'url'} = $song->pluginData('stream');
-	
 	my $seekdata   = $song->can('seekdata') ? $song->seekdata : $song->{'seekdata'};
 
 	if (my $newtime = $seekdata->{'timeOffset'}) {
 
 		$args->{'url'} .= "&begin=" . int($newtime * 1000);
-
 		$song->can('startOffset') ? $song->startOffset($newtime) : $song->{startOffset} = $newtime;
-
 		$args->{'client'}->master->remoteStreamStartTime(Time::HiRes::time() - $newtime);
 	}
 
@@ -164,8 +154,6 @@ sub requestString {
 	Slim::Player::Protocols::HTTP->requestString(@_);
 }
 
-#sub request { shift; Slim::Formats::RemoteStream->request(@_) }
-
 sub parseHeaders {}
 
 sub songBytes {}
@@ -197,8 +185,7 @@ sub sysread {
 	}	
 	
 	$v->{'streaming'} &&= $self->processFLV;
-	#$log->debug("in sysread class ref: ", ref $self, " (D) => ", Dumper($self));
-
+	
 	my $len = length($v->{'outBuf'});
 
 	if ($len > 0) {
@@ -239,7 +226,6 @@ sub processFLV {
 	use bytes;
 
 	my $self = shift;
-
 	my $v = $self->vars;
 
 	$log->debug('processing FLV');

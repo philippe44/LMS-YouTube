@@ -1,3 +1,6 @@
+0.26.1
+ - OpenSSL file mode error corrected
+ 
 0.26
  - JSinterpret was using JSON and not JSON:XS which seems to not be available on some linux 
  

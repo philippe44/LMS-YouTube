@@ -212,7 +212,7 @@ sub searchHandler {
 	$search = URI::Escape::uri_escape_utf8($search);
 	$search = "q=$search";
 	
-	$log->debug("search: $feed", ":", $parser, ":", $term, ":", Dumper($args));
+	$log->debug("search: $search, feed: $feed, parser :$parser, term: $term\n", Dumper($args));
 		
 	# fetch in stages as api only allows 50 items per response, cli clients require $quantity responses which can be more than 50
 	my $fetch;
