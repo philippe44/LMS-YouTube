@@ -27,7 +27,7 @@ my	$log = Slim::Utils::Log->addLogCategory({
 
 my $prefs = preferences('plugin.youtube');
 
-$prefs->init({ prefer_lowbitrate => 0, recent => [], APIkey => '', max_items => 500, country => => Slim::Utils::Strings::getLanguage(), APIurl => 'https://www.googleapis.com/youtube/v3' });
+$prefs->init({ prefer_lowbitrate => 0, recent => [], APIkey => '', max_items => 500, country => Slim::Utils::Strings::getLanguage(), APIurl => 'https://www.googleapis.com/youtube/v3' });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 20;
 
