@@ -22,9 +22,7 @@ my $cache = Slim::Utils::Cache->new();
 sub search {
 	my ( $class, $cb, $args ) = @_;
 	
-	warn Data::Dump::dump($args);
 	$args ||= {};
-	$args->{maxResults} = 50;
 	$args->{part}       = 'snippet';
 	$args->{type}     ||= 'video';
 	$args->{relevanceLanguage} = Slim::Utils::Strings::getLanguage();
@@ -56,11 +54,29 @@ sub searchPlaylists {
 	$class->search($cb, $args);
 }
 
+sub getPlaylist {
+	my ( $class, $cb, $args ) = @_;
+	
+	_pagedCall('playlistItems', {
+		playlistId => $args->{playlistId},
+		_noRegion  => 1,
+	}, $cb);
+}
+
 sub getVideoCategories {
 	my ( $class, $cb ) = @_;
 	
 	_pagedCall('videoCategories', {
 		hl => Slim::Utils::Strings::getLanguage()
+	}, $cb);
+}
+
+sub getVideoDetails {
+	my ( $class, $cb, $ids ) = @_;
+
+	_call('videos', {
+		part => 'snippet,contentDetails',
+		id   => $ids
 	}, $cb);
 }
 
@@ -108,11 +124,15 @@ sub _call {
 	
 	$args->{regionCode} ||= $prefs->get('country') unless delete $args->{_noRegion};
 	$args->{part}       ||= 'snippet' unless delete $args->{_noPart};
+	$args->{maxResults} ||= 50;
 
 	for my $k ( sort keys %{$args} ) {
 		next if $k =~ /^_/;
 		$url .= $k . '=' . URI::Escape::uri_escape_utf8( Encode::decode( 'utf8', $args->{$k} ) ) . '&';
 	}
+	
+	$url =~ s/&$//;
+	$url = API_URL . $method . $url;
 	
 	my $cacheKey = $args->{_noCache} ? '' : md5_hex($url);
 	
@@ -121,9 +141,6 @@ sub _call {
 		$cb->($cached);
 		return;
 	}
-	
-	$url =~ s/&$//;
-	$url = API_URL . $method . $url;
 	
 	main::INFOLOG && $log->info('Calling API: ' . $url);
 
@@ -150,7 +167,7 @@ sub _call {
 		sub {
 			warn Data::Dump::dump(@_);
 			$log->error($_[1]);
-			$cb->([ { name => $_[1], type => 'text' } ]);
+			$cb->( { error => $_[1] } );
 		},
 		
 		{

@@ -7,7 +7,7 @@ use List::Util qw(min max);
 use HTML::Parser;
 use URI::Escape;
 use XML::Simple;
-use Data::Dumper;
+use Scalar::Util qw(blessed);
 use JSON::XS;
 
 use Slim::Utils::Log;
@@ -582,7 +582,7 @@ sub getNextTrack {
 								$song->pluginData(streams => \@streams);	
 								$song->pluginData(stream  => $streamInfo->{'url'} . "&signature=" . $sig);
 								$song->pluginData(format  => $streamInfo->{'format'});
-								$class->getMetadataFor(undef, $masterUrl, undef, $song);
+								$class->getMetadataFor($client, $masterUrl, undef, $song);
 								$successCb->();
 							},
 						
@@ -608,7 +608,7 @@ sub getNextTrack {
 				$song->pluginData(streams => \@streams);	
 				$song->pluginData(stream  => $streamInfo->{'url'} . "&signature=" . $sig);
 				$song->pluginData(format  => $streamInfo->{'format'});
-				$class->getMetadataFor(undef, $masterUrl, undef, $song);
+				$class->getMetadataFor($client, $masterUrl, undef, $song);
 				$successCb->();
 			}	
 			
@@ -635,16 +635,13 @@ sub suppressPlayersMessage {
 	return undef;
 }
 
-
 sub getMetadataFor {
-	my ($class, undef, $url, undef, $song, $cb) = @_;
+	my ($class, $client, $url, undef, $song, $cb) = @_;
 
 	$log->debug("getmetadata: $url");
 	
 	my $id = $class->_id($url) || return {};
 	my $cache = Slim::Utils::Cache->new;
-		
-	###Plugins::YouTube::Plugin::_debug(['vurl',$id,$url]);return {};
 
 	if (my $meta = $cache->get("yt:meta-$id")) {
 		if ($song) {
@@ -654,65 +651,69 @@ sub getMetadataFor {
 				url => $url, name => $meta->{_fulltitle} || $meta->{title}, icon => $meta->{icon}
 			});
 		}
+
 		if ($cb) {
 			$cb->($meta);
-			return undef;
+			return;
 		}
 		
 		$log->debug("cache hit: $id");
 		return $meta;
 	}
 
-	if ($fetching{$id} && !defined $cb) {
+	if ($client->master->pluginData('fetchingYTMeta') && !defined $cb) {
 		$log->debug("already fetching metadata: $id");
 		return {}
 	}
 	
-	my $vurl = $prefs->get('APIurl') . "/videos/?part=snippet,contentDetails&id=$id&key=" .$prefs->get('APIkey');
+	$client->master->pluginData(fetchingYTMeta => 1);
 
-	$log->info("fetching metadata id: $id, vurl :$vurl");
+	# Go fetch metadata for all tracks on the playlist without metadata
+	my @need;
+	
+	for my $track ( @{ Slim::Player::Playlist::playList($client) } ) {
+		my $trackURL = blessed($track) ? $track->url : $track;
+		if ( $trackURL =~ m{youtube:/*(.+)} ) {
+			my $id = $class->_id($trackURL);
+			if ( $id && !$cache->get("yt:meta-$id") ) {
+				push @need, $id;
+			}
+			elsif (!$id) {
+				$log->warn("No id found: $trackURL");
+			}
+			
+			# we can't fetch more than 50 at a time
+			last if scalar @need >= 50;
+		}
+	}
+	
+	if ( main::INFOLOG && $log->is_info ) {
+		$log->info( "Need to fetch metadata for: " . join( ', ', @need ) );
+	}
+	
+	Plugins::YouTube::API->getVideoDetails( sub {
+		my $result = shift;
 		
-	###Plugins::YouTube::Plugin::_debug(['vurl',$id,$vurl]);return {};
-
-	Slim::Networking::SimpleAsyncHTTP->new(
-
-		sub {
-			my $http = shift;
-			my $json = eval { decode_json($http->content) };
-			
-			delete $fetching{$id};			
-
-			if ($@) {
-				$log->warn($@);
-			}
-						
-			### all are in 'items'->[0]
-			
-			my $vdetail = $json->{items}->[0];
-			if (!$vdetail) {
-				if ($cb) {
-					$cb->({});
-				}
-				return;
-			}
-					
-			my $snippet=$vdetail->{snippet};
-			my $cover = $snippet->{thumbnails}->{high}->{url};
-			my $icon = $snippet->{thumbnails}->{default}->{url};
-			my $title  = $snippet->{'title'};
-			my $artist = "";###$xml->{'author'}->{'name'};
+warn Data::Dump::dump($result);
+		my $details;
+		
+		foreach my $item (@{$result->{items}}) {
+			my $snippet = $item->{snippet};
+			my $title   = $snippet->{'title'};
+			my $cover   = my $icon = Plugins::YouTube::Plugin::_getImage($snippet->{thumbnails});
+			my $artist  = "";
 			my $fulltitle;
-
+	
 			if ($title =~ /(.*) - (.*)/) {
 				$fulltitle = $title;
 				$artist = $1;
 				$title  = $2;
 			}
-			my $duration=$vdetail->{contentDetails}->{duration};
-			$log->debug("duration: $duration");
-			$duration =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
-			my ($misc, $hour, $min, $sec) = ($1, $2, $3, $4);
-			$duration = (($sec) ? $sec : 0) + (($min) ? $min*60 : 0) + (($hour) ? $hour*3600 : 0);
+	
+			my $duration = $item->{contentDetails}->{duration};
+			main::INFOLOG && $log->info("Duration: $duration");
+			my ($misc, $hour, $min, $sec) = $duration =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
+			$duration = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
 									
 			if ($duration && $title) {
 				my $meta = {
@@ -723,36 +724,31 @@ sub getMetadataFor {
 					cover    => $cover || $icon,
 					type     => 'YouTube',
 				};
-
-				$meta->{_fulltitle} = $fulltitle if $fulltitle;
-
-				if ($song) {
-					$song->track->title($meta->{'title'});
-					$song->track->secs($meta->{'duration'});
-					Plugins::YouTube::Plugin->updateRecentlyPlayed({ url => $url, name => $fulltitle || $title, icon => $icon });
-				}
-
-				$cache->set("yt:meta-$id", $meta, 86400);
-
-				if ($cb) {
-					$cb->($meta);
-					return;
-				}
+	
+				$meta->{_fulltitle} = $fulltitle;
+	
+#				if ($song) {
+#					$song->track->title($title);
+#					$song->track->secs($duration);
+#					Plugins::YouTube::Plugin->updateRecentlyPlayed({ url => $url, name => $fulltitle || $title, icon => $icon });
+#				}
+				$details ||= $meta;
+	
+				$cache->set("yt:meta-" . $item->{id}, $meta, 86400);
 			}
-		},
+		}				
+	
+		$client->master->pluginData(fetchingYTMeta => 0);
 
-		sub {
-			$log->warn("error: $_[1]");
-			delete $fetching{$id};
-			if ($cb) {
-				$cb->({});
-			}
-		},
+		if ($cb) {
+			$cb->($details);
 
-	)->get($vurl);
-
-	$fetching{$id} = 1;
-
+			Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] ) if $client;
+			return;
+		}
+		
+	}, join( ',', @need ));
+	
 	return undef if ($cb);
 
 	return {};

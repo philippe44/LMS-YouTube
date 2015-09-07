@@ -158,7 +158,7 @@ sub urlHandler {
 	$log->debug("urlHandler: $args->{'search'}");
 	# use metadata handler to get track info
 				
-	Plugins::YouTube::ProtocolHandler->getMetadataFor(undef, $url, undef, undef,
+	Plugins::YouTube::ProtocolHandler->getMetadataFor($client, $url, undef, undef,
 		sub {
 			my $meta = shift;
 			if (keys %$meta) {
@@ -282,28 +282,69 @@ sub playlistSearchHandler {
 	my ($client, $cb, $args) = @_;
 	
 	Plugins::YouTube::API->searchPlaylists(sub {
-		my $result = shift;
-		
-		my $items = [];
-
-		for my $entry (@{$result->{items} || []}) {
-			my $snippet = $entry->{snippet} || next;
-			my $title = $snippet->{title} || next;
-			my $id    = $snippet->{channelId} || next;
-
-			push @$items, {
-				name => $title,
-				type => 'playlist',
-				url  => \&videoSearchHandler,
-				passthrough => [  { channelId => $id } ],
-				image => _getImage($snippet->{thumbnails}),
-			};
-		}
-
-		$cb->( $items );
+		$cb->( _renderList($_[0]->{items}) );
 	}, {
 		q => delete $args->{search}
 	});
+}
+
+sub _renderList {
+	my ($entries) = @_;
+
+	my $items = [];
+
+	for my $entry (@{$entries || []}) {
+		my $snippet = $entry->{snippet} || next;
+		my $title = $snippet->{title} || next;
+		
+		next unless $entry->{id};
+		
+		my $item = {
+			name => $title,
+			type => 'playlist',
+			url  => \&videoSearchHandler,
+			image => _getImage($snippet->{thumbnails}),
+		};
+
+		if (!ref $entry->{id}) {
+			my $id;
+
+			if ($snippet->{id}) {
+				$id = $snippet->{id}->{videoId};
+			}
+			elsif ($snippet->{resourceId}) {
+				$id = $snippet->{resourceId}->{videoId}
+			}
+			
+			if (!$id) {
+				$log->error("Unexpected data: " . Data::Dump::dump($entry));
+				next;
+			}
+			
+			my $url = STREAM_BASE_URL . $id;
+
+			$item->{on_select} = 'play';
+			$item->{play}      = $url;
+		}
+		elsif (my $id = $entry->{id}->{channelId}) {
+			warn "channel";
+			$item->{passthrough} = [ { channelId => $id } ];
+#			$item->{url}         = \&playlistHandler;
+		}
+		elsif (my $id = $entry->{id}->{playlistId}) {
+#			warn "playlist";
+			$item->{passthrough} = [ { playlistId => $id } ];
+			$item->{url}         = \&playlistHandler;
+		}
+		else {
+			# no known item type - skip it
+			next;
+		}
+
+		push @$items, $item;
+	}
+	
+	return $items;
 }
 
 sub _getImage {
@@ -312,12 +353,24 @@ sub _getImage {
 	my $image;
 	
 	if (my $thumbs = $imageList) {
-		foreach ( qw(high medium default) ) {
+		foreach ( qw(maxres standard high medium default) ) {
 			last if $image = $thumbs->{$_}->{url};
 		}
 	}
 	
 	return $image;
+}
+
+sub playlistHandler {
+	my ($client, $cb, $args, $params) = @_;
+	
+	warn Data::Dump::dump($params);
+	
+	Plugins::YouTube::API->getPlaylist(sub {
+		$cb->( _renderList($_[0]->{items}) );
+	}, {
+		playlistId => $params->{playlistId}
+	});
 }
 
 sub searchHandler {
