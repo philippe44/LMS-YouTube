@@ -315,15 +315,15 @@ sub playlistHandler {
 sub trackInfoMenu {
 	my ($client, $url, $track, $remoteMeta) = @_;
 
-	# XXX - should we search for track title, too?
-	my $artist = ($remoteMeta && $remoteMeta->{artist}) || ($track && $track->artistName);
+	my $artist = ($remoteMeta && $remoteMeta->{artist}) || ($track && $track->artistName) || '';
+	my $title  = ($remoteMeta && $remoteMeta->{title}) || ($track && $track->title) || '';
 
-	if ($artist) {
+	if ($artist || $title) {
 		return {
 			type      => 'outline',
 			name      => cstring($client, 'PLUGIN_YOUTUBE_ON_YOUTUBE'),
 			url       => \&videoSearchHandler,
-			passthrough => [ { q => $artist } ], 
+			passthrough => [ { q => "$artist $title" } ], 
 		};
 	}
 }
