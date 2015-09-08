@@ -411,7 +411,7 @@ sub decode_u16 { unpack('n', $_[0]) }
 sub decode_u24 { unpack('N', ("\0" . $_[0]) ) }
 sub decode_u32 { unpack('N', $_[0]) }
 
-sub _id {
+sub getId {
 	my ($class, $url) = @_;
 
 	$url .= '&';
@@ -450,7 +450,7 @@ sub getNextTrack {
 
 	my $masterUrl = $song->track()->url;
 	my $client    = $song->master();
-	my $id = $class->_id($masterUrl);
+	my $id = $class->getId($masterUrl);
 	my $url = "http://www.youtube.com/watch?v=$id";
 
 	$log->info("next track id: $id url: $url master: $masterUrl");
@@ -640,7 +640,7 @@ sub getMetadataFor {
 
 	$log->debug("getmetadata: $url");
 	
-	my $id = $class->_id($url) || return {};
+	my $id = $class->getId($url) || return {};
 	my $cache = Slim::Utils::Cache->new;
 
 	if (my $meta = $cache->get("yt:meta-$id")) {
@@ -674,7 +674,7 @@ sub getMetadataFor {
 	for my $track ( @{ Slim::Player::Playlist::playList($client) } ) {
 		my $trackURL = blessed($track) ? $track->url : $track;
 		if ( $trackURL =~ m{youtube:/*(.+)} ) {
-			my $id = $class->_id($trackURL);
+			my $id = $class->getId($trackURL);
 			if ( $id && !$cache->get("yt:meta-$id") ) {
 				push @need, $id;
 			}
@@ -694,7 +694,6 @@ sub getMetadataFor {
 	Plugins::YouTube::API->getVideoDetails( sub {
 		my $result = shift;
 		
-warn Data::Dump::dump($result);
 		my $details;
 		
 		foreach my $item (@{$result->{items}}) {
