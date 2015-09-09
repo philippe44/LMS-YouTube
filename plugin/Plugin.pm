@@ -7,29 +7,37 @@ package Plugins::YouTube::Plugin;
 use strict;
 use base qw(Slim::Plugin::OPMLBased);
 
-use URI::Escape;
-use JSON::XS;
-use File::Spec::Functions qw(:ALL);
-use List::Util qw(min max);
-use Data::Dumper;
-
-use Slim::Utils::Strings qw(string);
+use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Prefs;
 use Slim::Utils::Log;
 
+use Plugins::YouTube::API;
 use Plugins::YouTube::ProtocolHandler;
 
+use constant BASE_URL => 'www.youtube.com/v/';
+use constant STREAM_BASE_URL => 'youtube://' . BASE_URL;
+use constant VIDEO_BASE_URL  => 'http://www.youtube.com/watch?v=%s';
+
+my $WEBLINK_SUPPORTED_UA_RE = qr/iPeng|SqueezePad|OrangeSqueeze/i;
+
+
 my	$log = Slim::Utils::Log->addLogCategory({
-		'category'     => 'plugin.youtube',
-		'defaultLevel' => 'WARN',
-		'description'  => string('PLUGIN_YOUTUBE'),
-	});
+	'category'     => 'plugin.youtube',
+	'defaultLevel' => 'WARN',
+	'description'  => 'PLUGIN_YOUTUBE',
+});
 
 my $prefs = preferences('plugin.youtube');
 
-$prefs->init({ prefer_lowbitrate => 0, recent => [], APIkey => '', max_items => 500, country => Slim::Utils::Strings::getLanguage(), APIurl => 'https://www.googleapis.com/youtube/v3' });
+$prefs->init({ 
+	prefer_lowbitrate => 0, 
+	recent => [], 
+	APIkey => '', 
+	max_items => 200, 
+	country => Slim::Utils::Strings::getLanguage()
+});
 
-tie my %recentlyPlayed, 'Tie::Cache::LRU', 20;
+tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
 
 sub initPlugin {
 	my $class = shift;
@@ -115,69 +123,59 @@ sub toplevel {
 	
 	if (!$prefs->get('APIkey')) {
 		$callback->([
-			{ name => string('PLUGIN_YOUTUBE_MISSINGKEY'), type => 'text' },
+			{ name => cstring($client, 'PLUGIN_YOUTUBE_MISSINGKEY'), type => 'text' },
 		]);
-			return;
+		return;
 	}
 	
 	$callback->([
-	  
-		{ name => string('PLUGIN_YOUTUBE_VIDEOCATEGORIES'), type => 'url',
-		  url  => \&searchHandler, passthrough => [ 'videoCategories', \&_parseVideoCategories ] },
-			  	  
-		#{ name => string('PLUGIN_YOUTUBE_GUIDECATEGORIES'), type => 'url',
-		#  url  => \&searchHandler, passthrough => [ 'guideCategories', \&_parseGuideCategories ] },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_VIDEOCATEGORIES'), type => 'url', url => \&videoCategoriesHandler },
 
-		{ name => string('PLUGIN_YOUTUBE_SEARCH'),  type => 'search',
-		  url  => \&searchHandler, passthrough => [ 'videos', \&_parseVideos ] },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_SEARCH'),  type => 'search', url => \&videoSearchHandler },
 
-		{ name => string('PLUGIN_YOUTUBE_MUSICSEARCH'), type => 'search',
-		  #FIXME: is this always 10 ?
-		  url  => \&searchHandler, passthrough => [ 'videos', \&_parseVideos, 'type=video&videoCategoryId=10' ] },
+		#FIXME: is this always 10 ?
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_MUSICSEARCH'), type => 'search', url => \&videoSearchHandler, passthrough => [ { videoCategoryId => 10 }] },
 
-		{ name => string('PLUGIN_YOUTUBE_CHANNELSEARCH'), type => 'search',
-		  url  => \&searchHandler, passthrough => [ 'channels', \&_parseChannels ] },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_CHANNELSEARCH'), type => 'search', url => \&channelSearchHandler },
 
-		{ name => string('PLUGIN_YOUTUBE_PLAYLISTSEARCH'), type => 'search',
-		  url  => \&searchHandler, passthrough => [ 'playlists/snippets', \&_parsePlaylists ] },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_PLAYLISTSEARCH'), type => 'search', url => \&playlistSearchHandler },
 	
-		{ name => string('PLUGIN_YOUTUBE_RECENTLYPLAYED'), url  => \&recentHandler, },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_RECENTLYPLAYED'), url  => \&recentHandler, },
 
-		{ name => string('PLUGIN_YOUTUBE_URL'), type => 'search', url  => \&urlHandler, },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_URL'), type => 'search', url  => \&urlHandler, },
 	]);
 }
 
 sub urlHandler {
-	my ($client, $callback, $args) = @_;
+	my ($client, $cb, $args) = @_;
+	
+	my $url = $args->{search};
 
-	my $url = 'youtube://' . $args->{'search'};
-
-	#because search replaces '.' by ' '
+	# because search replaces '.' by ' '
 	$url =~ s/ /./g;
 	
-	$log->debug("urlHandler: $args->{'search'}");
-	# use metadata handler to get track info
+	my $id = Plugins::YouTube::ProtocolHandler->getId($url);
+
+	my $errorItems = { items => [ { 
+		type => 'text',
+		name => cstring($client, 'PLUGIN_YOUTUBE_BADURL'), 
+	} ] };
+	
+	if (!$id) {
+		$cb->( $errorItems );
+		return;
+	}
 				
-	Plugins::YouTube::ProtocolHandler->getMetadataFor(undef, $url, undef, undef,
-		sub {
-			my $meta = shift;
-			if (keys %$meta) {
-				$callback->({
-					items => [ {
-						name => $meta->{'title'},
-						url  => $url,
-						type => 'audio',
-						icon => $meta->{'icon'},
-						cover=> $meta->{'cover'},
-					} ]
-				});
-			} else {
-				$callback->([ { name => string('PLUGIN_YOUTUBE_BADURL'), type => 'text' } ]);
-			}
+	Plugins::YouTube::API->getVideoDetails( sub {
+		my $items = $_[0]->{items};
+		
+		if (scalar @$items) {
+			$cb->( _renderList($items) );
 		}
-	) && do {
-		$callback->([ { name => string('PLUGIN_YOUTUBE_BADURL'), type => 'text' } ]);
-	};
+		else {
+			$cb->( $errorItems );
+		}
+	}, $id );
 }
 
 sub recentHandler {
@@ -188,274 +186,170 @@ sub recentHandler {
 	for my $item(reverse values %recentlyPlayed) {
 		unshift  @menu, {
 			name => $item->{'name'},
-			url  => $item->{'url'},
-			icon => $item->{'icon'},
-			type => 'audio',
+			play => $item->{'url'},
+			on_select => 'play',
+			image => $item->{'icon'},
+			type => 'playlist',
 		};
 	}
 
 	$callback->({ items => \@menu });
 }
 
-sub searchHandler {
-	my ($client, $callback, $args, $feed, $parser, $term) = @_;
-	my $menu = [];
-
-	# use paging on interfaces which allow otherwise fetch 200 entries for button mode
-	my $index    = $args->{'index'} || 0;
-	my $quantity = $args->{'quantity'} || 200;
-	my $search   = $args->{'search'} ? "$args->{search}" : '';
-	my $next;
-	my $count = 0;
-			
-	$term ||= '';	
-	$search = URI::Escape::uri_escape_utf8($search);
-	$search = "q=$search";
+sub videoCategoriesHandler {
+	my ($client, $cb) = @_;
 	
-	$log->debug("search: $search, feed: $feed, parser :$parser, term: $term\n", Dumper($args));
+	Plugins::YouTube::API->getVideoCategories(sub {
+		my $result = shift;
 		
-	# fetch in stages as api only allows 50 items per response, cli clients require $quantity responses which can be more than 50
-	my $fetch;
+		my $items = [];
 
-	# FIXME: this could be sped up by performing parallel requests once the number of responses is known??
-	$fetch = sub {
+		for my $entry (@{$result->{items} || []}) {
+			my $title = $entry->{snippet}->{title} || next;
 
-		my $max = 50;
-		my $queryUrl;
-
-		if ($feed =~ /^http/) {
-			$queryUrl = "$feed&pageToken=$next&maxResults=$max&v=2&alt=json";
-		} else {
-		
-			##$queryUrl = "http://gdata.youtube.com/feeds/api/$feed?$term&$search&start-index=$i&max-results=$max&v=2&alt=json";
-			$queryUrl = $prefs->get('APIurl') . "/search/?$search";
-			
-			if ($feed =~ /(channel|playlist)/) {
-				$queryUrl .="&type=$1"; 
-			} elsif ($feed =~ /(videos)/) {
-				# nothing now
-			} elsif ($feed =~ /(videoCategories|guideCategories)/) {
-			   $queryUrl = $prefs->get('APIurl') . "/$1?regionCode=". $prefs->get('country');
-			}
-			
-			if ($term) {
-				$queryUrl .= "&$term";
-			}
-			
-			$queryUrl .= "&pageToken=$next&maxResults=$max&v=2&alt=json&part=id,snippet&key=" . $prefs->get('APIkey');
-			
+			push @$items, {
+				name => $title,
+				type => 'search',
+				url  => \&videoSearchHandler,
+				passthrough => [  { videoCategoryId => $entry->{id} } ],
+			};
 		}
 
-		$log->info("fetching: $queryUrl");
-		_debug('queryUrl',$feed,$queryUrl);
+		$cb->( $items );
+	});
+}
+
+sub videoSearchHandler {
+	my ($client, $cb, $args, $params) = @_;
+	
+	$params->{q} ||= delete $args->{search} if $args->{search};
+	
+	Plugins::YouTube::API->searchVideos(sub {
+		$cb->( _renderList($_[0]->{items}) );
+	}, $params);
+}
+
+sub channelSearchHandler {
+	my ($client, $cb, $args) = @_;
+	
+	Plugins::YouTube::API->searchChannels(sub {
+		$cb->( _renderList($_[0]->{items}) );
+	},{
+		q => delete $args->{search}
+	});
+}
+
+sub playlistSearchHandler {
+	my ($client, $cb, $args) = @_;
+	
+	Plugins::YouTube::API->searchPlaylists(sub {
+		$cb->( _renderList($_[0]->{items}) );
+	}, {
+		q => delete $args->{search}
+	});
+}
+
+sub _renderList {
+	my ($entries) = @_;
+
+	my $items = [];
+
+	for my $entry (@{$entries || []}) {
+		my $snippet = $entry->{snippet} || next;
+		my $title = $snippet->{title} || next;
 		
-		Slim::Networking::SimpleAsyncHTTP->new(
-
-			sub {
-				my $http = shift;
-				
-				my $json = eval { decode_json($http->content) };
-				
-				if ($@) {
-					$log->warn($@);
-				}
-
-				# Restrict responses to requested searchmax 
-				my $total = min($json->{'pageInfo'}->{'totalResults'}, $args->{'searchmax'} || $prefs->get('max_items'), $prefs->get('max_items'));
-				my $n = $json->{'pageInfo'}->{'resultsPerPage'};
-				
-				# The 'categories' search do not have a totalResults / resultsPerPage
-				if (!$total) {
-					$n = $total = scalar @{$json->{'items'}} || 0;
-				}
-				
-				$count += $n;
-				$parser->($json, $menu);
-				$log->debug("this page: " . scalar @$menu . " index: $index" . " quantity: $quantity" . " count: $count" . " total: $total" . " next: $next");
-
-				# get some more if we have yet to build the required page for client				
-				if ($total && (scalar @$menu < $quantity + $index) && ($count < $total)) {
-					$next = $json->{'nextPageToken'};
-					$log->debug("fetching recursive");
-					$fetch->();
-
-				} else {
-
-					$callback->({
-						items  => $menu,
-						offset => 0,
-						total  => $total,
-					});
-				}
-			},
-
-			sub {
-				$log->warn("error: $_[1] ");
-				$callback->([ { name => $_[1], type => 'text' } ]);
-			},
-
-		)->get($queryUrl);
-	};
-
-	$fetch->();
-}
-
-
-sub _parseVideos {
-	my ($json, $menu) = @_;
-	for my $entry (@{$json->{'items'} || []}) {
-		my $vurl = "www.youtube.com/v/$entry->{id}->{videoId}";
-		#$log->debug("parse video (url: $vurl) ==> " , Dumper($entry));
-		$log->debug("parse video (url: $vurl)");
-		push @$menu, {
-			name => $entry->{'snippet'}->{'title'},
-			type => 'audio',
-			on_select => 'play',
-			playall => 0,
-			url  => 'youtube://' . $vurl,
-			play => 'youtube://' . $vurl,
-			icon => $entry->{'snippet'}->{'thumbnails'}->{'default'}->{'url'},
-		};
-	}
-}
-
-
-sub _parseVideosAlternate {
-	my ($json, $menu) = @_;
-	for my $entry (@{$json->{'items'} || []}) {
-		my $vurl = "www.youtube.com/v/$entry->{'snippet'}->{resourceId}->{videoId}";
-		#$log->debug("parse video alternate (url: $vurl) ==> " , Dumper($entry));
-		$log->debug("parse video alternate (url: $vurl)");
-		push @$menu, {
-			name => $entry->{'snippet'}->{'title'},
-			type => 'audio',
-			on_select => 'play',
-			playall => 0,
-			url  => 'youtube://' . $vurl,
-			play => 'youtube://' . $vurl,
-			icon => $entry->{'snippet'}->{'thumbnails'}->{'default'}->{'url'},
-		};
-	}
-}
-
-sub _debug{
-	$log->debug(Dumper([caller,@_]));
-}
-
-
-sub _parseChannels {
-	my ($json, $menu) = @_;
+		next unless $entry->{id};
 		
-	for my $entry (@{$json->{'items'} || []}) {
-		my $title = $entry->{'snippet'}->{'title'} || 'No Title';
-		$title = Slim::Formats::XML::unescapeAndTrim($title);
-		my $id = $entry->{id}->{channelId};
-		#my $url = $prefs->get('APIurl') . "/channels?part=snippet&id=$id&key=" . $prefs->get('APIkey');
-		my $url = $prefs->get('APIurl') . "/search/?part=snippet&channelId=$id&key=" . $prefs->get('APIkey');
-		
-		#$log->debug("parse channel (id: $id) ==>", Dumper($entry));
-		$log->debug("parse channel (id: $id)");
-		push @$menu, {
+		my $item = {
 			name => $title,
-			type => 'link',
-			url  => \&searchHandler,
-			#passthrough => [ 'videos', \&_parseVideos, "channelId=" . $id ],
-			passthrough => [ $url, \&_parseVideos ],
+			type => 'playlist',
+			image => _getImage($snippet->{thumbnails}),
 		};
+
+		if (!ref $entry->{id} || ($entry->{id}->{kind} && $entry->{id}->{kind} eq 'youtube#video')) {
+			my $id;
+
+			if ($snippet->{id}) {
+				$id = $snippet->{id}->{videoId};
+			}
+			elsif ($snippet->{resourceId}) {
+				$id = $snippet->{resourceId}->{videoId}
+			}
+			elsif (!ref $entry->{id}) {
+				$id = $entry->{id};
+			}
+			elsif ($entry->{id}->{videoId}) {
+				$id = $entry->{id}->{videoId};
+			}
+			
+			if (!$id) {
+				$log->error("Unexpected data: " . Data::Dump::dump($entry));
+				next;
+			}
+			
+			my $url = STREAM_BASE_URL . $id;
+
+			$item->{on_select} = 'play';
+			$item->{play}      = $url;
+		}
+		elsif (my $id = $entry->{id}->{channelId}) {
+			$item->{passthrough} = [ { channelId => $id } ];
+			$item->{url}         = \&videoSearchHandler;
+		}
+		elsif (my $id = $entry->{id}->{playlistId}) {
+			$item->{passthrough} = [ { playlistId => $id } ];
+			$item->{url}         = \&playlistHandler;
+		}
+		else {
+			# no known item type - skip it
+			$log->warn("Unknown item type");
+			main::DEBUGLOG && $log->is_debug && $log->debug(Data::Dump::dump($entry));
+			next;
+		}
+
+		push @$items, $item;
 	}
 	
-	###_debug('_parseChannels results',$menu);
+	return $items;
 }
 
-
-sub _parseVideoCategories {
-	my ($json, $menu) = @_;
-		
-	for my $entry (@{$json->{'items'} || []}) {
-		my $title = $entry->{'snippet'}->{'title'} || 'No Title';
-		$title = Slim::Formats::XML::unescapeAndTrim($title);
-		my $id = $entry->{id};
-				
-		#$log->debug("parse video category (id: $id) ==>", Dumper($entry));
-		$log->debug("parse video category (id: $id)");
-		push @$menu, {
-			name => $title,
-			type => 'search',
-			url  => \&searchHandler,
-			passthrough => [  'videos', \&_parseVideos, 'type=video&videoCategoryId=' . $id ],
-		};
+sub _getImage {
+	my ($imageList) = @_;
+	
+	my $image;
+	
+	if (my $thumbs = $imageList) {
+		foreach ( qw(maxres standard high medium default) ) {
+			last if $image = $thumbs->{$_}->{url};
+		}
 	}
 	
-	###_debug('_parseChannels results',$menu);
-	
-	
+	return $image;
 }
 
-sub _parseGuideCategories {
-	my ($json, $menu) = @_;
-		
-	for my $entry (@{$json->{'items'} || []}) {
-		my $title = $entry->{'snippet'}->{'title'} || 'No Title';
-		$title = Slim::Formats::XML::unescapeAndTrim($title);
-		my $id = $entry->{id};
-				
-		#$log->debug("parse guide category (id: $id) ==>", Dumper($entry));
-		$log->debug("parse guide category (id: $id)");
-		push @$menu, {
-			name => $title,
-			type => 'search',
-			url  => \&searchHandler,
-			passthrough => [  'videos', \&_parseVideos, 'type=video&guideCategoryId=' . $id ],
-		};
-	}
+sub playlistHandler {
+	my ($client, $cb, $args, $params) = @_;
 	
-	###_debug('_parseChannels results',$menu);
+	Plugins::YouTube::API->getPlaylist(sub {
+		$cb->( _renderList($_[0]->{items}) );
+	}, {
+		playlistId => $params->{playlistId}
+	});
 }
-
-
-sub _parsePlaylists {
-	my ($json, $menu) = @_;	
-	
-	for my $entry (@{$json->{'items'} || []}) {
-		my $title = $entry->{'snippet'}->{title} || 'No Title';;
-		$title = Slim::Formats::XML::unescapeAndTrim($title);
-		my $id = $entry->{id}->{playlistId};
-		#my $url = $prefs->get('APIurl') . "/search/?part=snippet&playlistId=$id&key=" . $prefs->get('APIkey');
-		my $url = $prefs->get('APIurl') . "/playlistItems?part=snippet&playlistId=$id&key=" . $prefs->get('APIkey');
-		
-		#$log->debug("parse playlist (id: $id) ==>", Dumper($entry));
-		$log->debug("parse playlist (id: $id)");
-		push @$menu, {
-			name => $title,
-			type => 'link',
-			url  => \&searchHandler,
-			passthrough => [ $url, \&_parseVideosAlternate ],
-		};
-	}
-}
-
 
 sub trackInfoMenu {
 	my ($client, $url, $track, $remoteMeta) = @_;
 
-	my $artist = ($remoteMeta && $remoteMeta->{artist}) || ($track && $track->artistName);
+	my $artist = ($remoteMeta && $remoteMeta->{artist}) || ($track && $track->artistName) || '';
+	my $title  = ($remoteMeta && $remoteMeta->{title}) || ($track && $track->title) || '';
 
-	$artist = URI::Escape::uri_escape_utf8($artist);
-
-	if ($artist) {
+	if ($artist || $title) {
 		return {
-			type      => 'opml',
-			name      => string('PLUGIN_YOUTUBE_ON_YOUTUBE'),
-			url       => sub {
-				my ($client, $callback, $args) = @_;
-				$args->{'search'} = $artist;
-				$args->{'searchmax'} = 200; # only get 200 entries within context menu
-				searchHandler($client, $callback, $args, 'videos', \&_parseVideos);
-			},
-			favorites => 0,
+			type      => 'outline',
+			name      => cstring($client, 'PLUGIN_YOUTUBE_ON_YOUTUBE'),
+			url       => \&videoSearchHandler,
+			passthrough => [ { q => "$artist $title" } ], 
 		};
-	} else {
-		return {};
 	}
 }
 
@@ -464,52 +358,29 @@ sub artistInfoMenu {
 
 	my $artist = ($remoteMeta && $remoteMeta->{artist}) || ($obj && $obj->name);
 
-	$artist = URI::Escape::uri_escape_utf8($artist);
-
 	if ($artist) {
 		return {
-			type      => 'opml',
-			name      => string('PLUGIN_YOUTUBE_ON_YOUTUBE'),
-			url       => sub {
-				my ($client, $callback, $args) = @_;
-				$args->{'search'} = $artist;
-				$args->{'searchmax'} = 200; # only get 200 entries within context menu
-				searchHandler($client, $callback, $args, 'videos', \&_parseVideos);
-			},
-			favorites => 0,
+			type      => 'outline',
+			name      => cstring($client, 'PLUGIN_YOUTUBE_ON_YOUTUBE'),
+			url       => \&videoSearchHandler,
+			passthrough => [ { q => $artist } ], 
 		};
-	} else {
-		return {};
 	}
 }
 
 sub webVideoLink {
-	my ($client, $url) = @_;
-
-#	_debug('webVideoLink',$url);
+	my ($client, $url, $obj, $remoteMeta, $tags, $filter) = @_;
 	
-	if (my $id = Plugins::YouTube::ProtocolHandler->_id($url)) {
+	return unless $client;
 
-		my $show;
-		my $i = 0;
-		while (my $caller = (caller($i++))[3]) {
-			if ($caller =~ /Slim::Web::Pages/) {
-				$show = 1;
-				last;
-			}
-			if ($caller =~ /cliQuery/) {
-				if ($client->can('controllerUA') && $client->controllerUA =~ /iPeng/) {
-					$show = 1;
-				}
-				last;
-			}
-		}
+	if (my $id = Plugins::YouTube::ProtocolHandler->getId($url)) {
 
-		if ($show) {
+		# only web UI (controllerUA undefined) and certain controllers allow watching videos
+		if ( ($client->controllerUA && $client->controllerUA =~ $WEBLINK_SUPPORTED_UA_RE) || not defined $client->controllerUA ) {
 			return {
 				type    => 'text',
-				name    => string('PLUGIN_YOUTUBE_WEBLINK'),
-				weblink => "http://www.youtube.com/watch?v=$id",
+				name    => cstring($client, 'PLUGIN_YOUTUBE_WEBLINK'),
+				weblink => sprintf(VIDEO_BASE_URL, $id),
 				jive => {
 					actions => {
 						go => {
@@ -523,8 +394,6 @@ sub webVideoLink {
 			};
 		}
 	}
-
-	return undef;
 }
 
 sub searchInfoMenu {
@@ -532,31 +401,20 @@ sub searchInfoMenu {
 
 	my $query = $tags->{'search'};
 
-	$query = URI::Escape::uri_escape_utf8($query);
-
 	return {
-		name => string('PLUGIN_YOUTUBE'),
+		name => cstring($client, 'PLUGIN_YOUTUBE'),
 		items => [
 			{
-				name => string('PLUGIN_YOUTUBE_SEARCH'),
+				name => cstring($client, 'PLUGIN_YOUTUBE_SEARCH'),
 				type => 'link',
-				url  => sub {
-					my ($client, $callback, $args) = @_;
-					$args->{'search'} = $query;
-					searchHandler($client, $callback, $args, 'videos', \&_parseVideos);
-				},
-				favorites => 0,
+				url  => \&videoSearchHandler, 
+				passthrough => [ { q => $query }]
 			},
 			{
-				name => string('PLUGIN_YOUTUBE_MUSICSEARCH'),
+				name => cstring($client, 'PLUGIN_YOUTUBE_MUSICSEARCH'),
 				type => 'link',
-				url  => sub {
-					my ($client, $callback, $args) = @_;
-					$args->{'search'} = $query;
-					#FIXME: is this always 10 ?
-					searchHandler($client, $callback, $args, 'videos', \&_parseVideos, 'type=video&videoCategoryId=10');
-				},
-				favorites => 0,
+				url  => \&videoSearchHandler, 
+				passthrough => [ { videoCategoryId => 10, q => $query }]
 			},
 		   ],
 	};
@@ -573,8 +431,8 @@ sub cliInfoQuery {
 
 	my $id = $request->getParam('id');
 
-	$request->addResultLoop('item_loop', 0, 'text', string('PLUGIN_YOUTUBE_PLAYLINK'));
-	$request->addResultLoop('item_loop', 0, 'weblink', "http://www.youtube.com/v/$id");
+	$request->addResultLoop('item_loop', 0, 'text', cstring($request->client, 'PLUGIN_YOUTUBE_PLAYLINK'));
+	$request->addResultLoop('item_loop', 0, 'weblink', sprintf(VIDEO_BASE_URL, $id));
 	$request->addResult('count', 1);
 	$request->addResult('offset', 0);
 
