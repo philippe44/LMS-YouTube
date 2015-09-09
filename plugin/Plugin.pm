@@ -29,9 +29,15 @@ my	$log = Slim::Utils::Log->addLogCategory({
 
 my $prefs = preferences('plugin.youtube');
 
-$prefs->init({ prefer_lowbitrate => 0, recent => [], APIkey => '', max_items => 500, country => Slim::Utils::Strings::getLanguage(), APIurl => 'https://www.googleapis.com/youtube/v3' });
+$prefs->init({ 
+	prefer_lowbitrate => 0, 
+	recent => [], 
+	APIkey => '', 
+	max_items => 200, 
+	country => Slim::Utils::Strings::getLanguage()
+});
 
-tie my %recentlyPlayed, 'Tie::Cache::LRU', 20;
+tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
 
 sub initPlugin {
 	my $class = shift;
@@ -147,10 +153,29 @@ sub urlHandler {
 
 	# because search replaces '.' by ' '
 	$url =~ s/ /./g;
+	
+	my $id = Plugins::YouTube::ProtocolHandler->getId($url);
+
+	my $errorItems = { items => [ { 
+		type => 'text',
+		name => cstring($client, 'PLUGIN_YOUTUBE_BADURL'), 
+	} ] };
+	
+	if (!$id) {
+		$cb->( $errorItems );
+		return;
+	}
 				
 	Plugins::YouTube::API->getVideoDetails( sub {
-		$cb->( _renderList($_[0]->{items}) );
-	}, Plugins::YouTube::ProtocolHandler->getId($url) );
+		my $items = $_[0]->{items};
+		
+		if (scalar @$items) {
+			$cb->( _renderList($items) );
+		}
+		else {
+			$cb->( $errorItems );
+		}
+	}, $id );
 }
 
 sub recentHandler {
