@@ -6,7 +6,6 @@ use strict;
 use List::Util qw(min max);
 use HTML::Parser;
 use URI::Escape;
-use XML::Simple;
 use Scalar::Util qw(blessed);
 use JSON::XS;
 
@@ -31,39 +30,25 @@ use constant DISCARD    => 5;
 my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
 
-my %fetching; # hash of ids we are fetching metadata for to avoid multiple fetches
-
 Slim::Player::ProtocolHandlers->registerHandler('youtube', __PACKAGE__);
-
-sub crackURL {
-	my ($string) = @_;
-
-	my $urlstring = "https";
-
-	$string =~ m|(?:$urlstring)://(?:([^\@:]+):?([^\@]*)\@)?([^:/]+):*(\d*)(\S*)|i;
-		
-	my ($user, $pass, $host, $port, $path) = ($1, $2, $3, $4, $5);
-
-	$path ||= '/';
-	$port ||= 443;
-	
-	return ($host, $port, $path, $user, $pass);
-}
 
 sub open {
 	my $class = shift;
 	my $args  = shift;
-	my $url   = $args->{'url'};
-	my ($server, $port, $path, $user, $password) = crackURL($url);
-	my $timeout = 30;
+	my $url   = $args->{'url'} || '';
+	
+	my ($server, $port, $path) = Slim::Utils::Misc::crackURL($url);
+	my $timeout = 10;
 
-	if (!$server || !$port) {
+	if ($url !~ /^http/ || !$server || !$port) {
 
-		$log->error("Couldn't find server or port in url: [$url]");
+		$log->error("Couldn't find valid protocol, server or port in url: [$url]");
 		return;
 	}
+	
+	$port = 443 if $url =~ /^https:/;
 
-	$log->info("Opening connection to $url: [$server on port $port with path $path with timeout $timeout]");
+	$log->info("Opening connection to $url: \n[$server on port $port with path $path with timeout $timeout]");
 
 	my $sock = $class->SUPER::new(
 		Timeout	  => $timeout,
@@ -417,7 +402,7 @@ sub getId {
 	$url .= '&';
 	## also youtube://http://www youtube com/watch?v=tU0_rKD8qjw
 		
-	if ($url =~ /^youtube:\/\/https?:\/\/www\.youtube\.com\/watch\?v=(.*)&/ || 
+	if ($url =~ /^(?:youtube:\/\/)?https?:\/\/www\.youtube\.com\/watch\?v=(.*)&/ || 
 		$url =~ /^youtube:\/\/www\.youtube\.com\/v\/(.*)&/ ||
 		$url =~ /^youtube:\/\/(.*)&/) {
 	
@@ -636,34 +621,27 @@ sub suppressPlayersMessage {
 }
 
 sub getMetadataFor {
-	my ($class, $client, $url, undef, $song, $cb) = @_;
+	my ($class, $client, $url) = @_;
 
-	$log->debug("getmetadata: $url");
+	main::DEBUGLOG && $log->debug("getmetadata: $url");
 	
 	my $id = $class->getId($url) || return {};
 	my $cache = Slim::Utils::Cache->new;
 
 	if (my $meta = $cache->get("yt:meta-$id")) {
-		if ($song) {
-			$song->track->title($meta->{'title'});
-			$song->track->secs($meta->{'duration'});
-			Plugins::YouTube::Plugin->updateRecentlyPlayed({
-				url => $url, name => $meta->{_fulltitle} || $meta->{title}, icon => $meta->{icon}
-			});
-		}
+		Plugins::YouTube::Plugin->updateRecentlyPlayed({
+			url  => $url, 
+			name => $meta->{_fulltitle} || $meta->{title}, 
+			icon => $meta->{icon},
+		});
 
-		if ($cb) {
-			$cb->($meta);
-			return;
-		}
-		
-		$log->debug("cache hit: $id");
+		main::DEBUGLOG && $log->debug("cache hit: $id");
 		return $meta;
 	}
 
-	if ($client->master->pluginData('fetchingYTMeta') && !defined $cb) {
+	if ($client->master->pluginData('fetchingYTMeta')) {
 		$log->debug("already fetching metadata: $id");
-		return {}
+		return {};
 	}
 	
 	$client->master->pluginData(fetchingYTMeta => 1);
@@ -693,6 +671,12 @@ sub getMetadataFor {
 	
 	Plugins::YouTube::API->getVideoDetails( sub {
 		my $result = shift;
+		
+		if (!$result || $result->{error}) {
+			$log->error($result->{error} || 'Failed to grab track information');
+			$client->master->pluginData(fetchingYTMeta => 0);
+			return {};
+		}
 		
 		my $details;
 		
@@ -726,11 +710,6 @@ sub getMetadataFor {
 	
 				$meta->{_fulltitle} = $fulltitle;
 	
-#				if ($song) {
-#					$song->track->title($title);
-#					$song->track->secs($duration);
-#					Plugins::YouTube::Plugin->updateRecentlyPlayed({ url => $url, name => $fulltitle || $title, icon => $icon });
-#				}
 				$details ||= $meta;
 	
 				$cache->set("yt:meta-" . $item->{id}, $meta, 86400);
@@ -739,16 +718,9 @@ sub getMetadataFor {
 	
 		$client->master->pluginData(fetchingYTMeta => 0);
 
-		if ($cb) {
-			$cb->($details);
+		Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] ) if $client;
 
-			Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] ) if $client;
-			return;
-		}
-		
 	}, join( ',', @need ));
-	
-	return undef if ($cb);
 
 	return {};
 }
