@@ -48,7 +48,7 @@ sub open {
 	
 	$port = 443 if $url =~ /^https:/;
 
-	$log->info("Opening connection to $url: \n[$server on port $port with path $path with timeout $timeout]");
+	main::INFOLOG && $log->is_info && $log->info("Opening connection to $url: \n[$server on port $port with path $path with timeout $timeout]");
 
 	my $sock = $class->SUPER::new(
 		Timeout	  => $timeout,
@@ -98,7 +98,7 @@ sub new {
 		$args->{'client'}->master->remoteStreamStartTime(Time::HiRes::time() - $newtime);
 	}
 
-	$log->info("url: $args->{url}");
+	main::INFOLOG && $log->is_info && $log->info("url: $args->{url}");
 		
 	#$log->debug("in new class ref: ", ref $class);
 	my $self = $class->open($args);
@@ -199,7 +199,7 @@ sub sysread {
 
 	} elsif (!$v->{'streaming'}) {
 
-		$log->debug("stream ended");
+		main::DEBUGLOG && $log->is_debug && $log->debug("stream ended");
 
 		$self->close;
 
@@ -207,7 +207,7 @@ sub sysread {
 
 	} elsif (!$self->connected) {
 
-		$log->debug("input socket not connected");
+		main::DEBUGLOG && $log->is_debug && $log->debug("input socket not connected");
 
 		$self->close;
 
@@ -227,7 +227,7 @@ sub processFLV {
 	my $self = shift;
 	my $v = $self->vars;
 
-	$log->debug('processing FLV');
+	main::DEBUGLOG && $log->is_debug && $log->debug('processing FLV');
 	
 	while (1) {
 
@@ -240,7 +240,7 @@ sub processFLV {
 
 				if ($bytes == 0) {
 
-					if ($log->is_debug) {
+					if (main::DEBUGLOG && $log->is_debug) {
 						if (my $duration = ${*$self}{'song'}->track->secs) {
 							my $audio = int($v->{'audioBytes'} * 8 / $duration / 1000);
 							my $total = int($v->{'streamBytes'} * 8 / $duration / 1000);
@@ -273,11 +273,11 @@ sub processFLV {
 			my $video  = $flags & 0x01 ? 1 : 0;
 
 			if ($sig ne 'FLV' && $version != 1) {
-				$log->info("non FLV stream sig: $sig version: $version - closing");
+				main::INFOLOG && $log->is_info && $log->info("non FLV stream sig: $sig version: $version - closing");
 				return 0;
 			}
 
-			$log->info("Header: sig: $sig version: $version flags: $flags (audio: $audio video: $video) offset: $offset");
+			main::INFOLOG && $log->is_info && $log->info("Header: sig: $sig version: $version flags: $flags (audio: $audio video: $video) offset: $offset");
 
 			$v->{'inBuf'} = substr($v->{'inBuf'}, $offset);
 			$v->{'next'}  = SIZE;
@@ -296,7 +296,7 @@ sub processFLV {
 			my $type  = $flags & 0x1f;
 			my $size  = decode_u24(substr($v->{'inBuf'}, 1, 3));
 
-			$log->debug("Tag Header: flags: $flags filt: $filter type: $type size: $size");
+			main::DEBUGLOG && $log->is_debug && $log->debug("Tag Header: flags: $flags filt: $filter type: $type size: $size");
 
 			$v->{'tagSize'} = $size;
 			$v->{'inBuf'} = substr($v->{'inBuf'}, 11);
@@ -308,7 +308,7 @@ sub processFLV {
 			}
 
 			if (!$v->{'audioseen'} && $v->{'count'}++ > 10) {
-				$log->info("closing stream - no audio");
+				main::INFOLOG && $log->is_info && $log->info("closing stream - no audio");
 				return 0;
 			}
 
@@ -324,7 +324,7 @@ sub processFLV {
 
 			if (($firstword & 0xFFFF0000) == 0xAF010000) {      # AAC audio data
 
-				$log->debug("AAC Audio");
+				main::DEBUGLOG && $log->is_debug && $log->debug("AAC Audio");
 
 				my $header = $v->{'adtsbase'};
 
@@ -344,14 +344,14 @@ sub processFLV {
 				$v->{'audioBytes'} += $v->{'tagSize'} - 2;
 
 				$v->{'audioseen'} ||= do {
-					$log->debug("audio seen");
+					main::DEBUGLOG && $log->is_debug && $log->debug("audio seen");
 					${*$self}{'song'}->_playlist(0);
 					1;
 				};
 
 			} elsif (($firstword & 0xFFFF0000) == 0xAF000000) { # AAC Config
 
-				$log->debug("AAC Config");
+				main::DEBUGLOG && $log->is_debug && $log->debug("AAC Config");
 
 				my $profile  = 1; # hard code to 1 rather than ($firstword & 0x0000f800) >> 11;
 				my $sr_index = ($firstword & 0x00000780) >>  7;
@@ -368,13 +368,13 @@ sub processFLV {
 
 			} elsif (($firstword & 0xF0000000) == 0x20000000) { # MP3 Audio
 
-				$log->debug("MP3 Audio");
+				main::DEBUGLOG && $log->is_debug && $log->debug("MP3 Audio");
 
 				$v->{'outBuf'} .= substr($v->{'inBuf'}, 1, $v->{'tagSize'} - 1);
 				$v->{'audioBytes'} += $v->{'tagSize'} - 1;
 
 				$v->{'audioseen'} ||= do {
-					$log->debug("audio seen");
+					main::DEBUGLOG && $log->is_debug && $log->debug("audio seen");
 					${*$self}{'song'}->_playlist(0);
 					1;
 				};
@@ -420,7 +420,7 @@ sub isRepeatingStream { 1 }
 sub getNextTrack {
 	my ($class, $song, $successCb, $errorCb) = @_;
 
-	$log->debug('getNextTrack');
+	main::DEBUGLOG && $log->is_debug && $log->debug('getNextTrack');
 	# play url from previously fetched list if we have yet to find a playable stream
 	if ($song->pluginData('streams')) {
 		if (my $streamInfo = shift @{$song->pluginData('streams')}) {
@@ -438,7 +438,7 @@ sub getNextTrack {
 	my $id = $class->getId($masterUrl);
 	my $url = "http://www.youtube.com/watch?v=$id";
 
-	$log->info("next track id: $id url: $url master: $masterUrl");
+	main::INFOLOG && $log->is_info && $log->info("next track id: $id url: $url master: $masterUrl");
 
 	Slim::Networking::SimpleAsyncHTTP->new(
 
@@ -481,7 +481,7 @@ sub getNextTrack {
                 # Replace known unicode characters
                 $vars{url_encoded_fmt_stream_map} =~ s/\\u0026/\&/g;
                 #$vars{url_encoded_fmt_stream_map} =~ s/sig=/signature=/g;
-                $log->debug("url_encoded_fmt_stream_map: $vars{url_encoded_fmt_stream_map}");
+                main::DEBUGLOG && $log->is_debug && $log->debug("url_encoded_fmt_stream_map: $vars{url_encoded_fmt_stream_map}");
             }
 						
 			if (!defined $vars{player_url}) {
@@ -497,7 +497,7 @@ sub getNextTrack {
 						$vars{player_url} = "https://www.youtube.com" . $vars{player_url};
 					}
 				}
-				$log->debug("player_url: $vars{player_url}");
+				main::DEBUGLOG && $log->is_debug && $log->debug("player_url: $vars{player_url}");
 			}
 
             for my $stream (split(/,/, $vars{url_encoded_fmt_stream_map})) {
@@ -509,7 +509,7 @@ sub getNextTrack {
 
                 for my $id (@streamOrder) {
                 if ($id == $props{itag}) {
-					$log->debug("props: $props{url}");
+					main::DEBUGLOG && $log->is_debug && $log->debug("props: $props{url}");
                     my $url = uri_unescape($props{url});
 					my $rawsig;
 					my $encryptedsig = 0;
@@ -523,7 +523,7 @@ sub getNextTrack {
 						$rawsig = $props{signature};
 					}
 											
-					$log->debug("sig $rawsig encrypted $encryptedsig");
+					main::DEBUGLOG && $log->is_debug && $log->debug("sig $rawsig encrypted $encryptedsig");
 					
 					push @streams, { url => $url, format => $id == 5 ? 'mp3' : 'aac',
 								 rawsig => $rawsig, encryptedsig => $encryptedsig };
@@ -539,13 +539,13 @@ sub getNextTrack {
 			if ($streamInfo->{'encryptedsig'}) {
 				if ($vars{player_url}) {
 					if (Plugins::YouTube::Signature::has_player($vars{player_url})) {
-					    $log->debug("Using cached player $vars{player_url}");
+					    main::DEBUGLOG && $log->is_debug && $log->debug("Using cached player $vars{player_url}");
 					    $sig = Plugins::YouTube::Signature::unobfuscate_signature(
 										$vars{player_url}, $streamInfo->{'rawsig'} );
 							
-					    $log->debug("Unobfuscated signature (cached) $sig");
+					    main::DEBUGLOG && $log->is_debug && $log->debug("Unobfuscated signature (cached) $sig");
 					} else {
-					    $log->debug("Fetching new player $vars{player_url}");
+					    main::DEBUGLOG && $log->is_debug && $log->debug("Fetching new player $vars{player_url}");
 						$proceed = 0;
 						
 					    Slim::Networking::SimpleAsyncHTTP->new(
@@ -555,7 +555,7 @@ sub getNextTrack {
 
 								eval {
 									Plugins::YouTube::Signature::cache_player($vars{player_url}, $jscode);
-									$log->debug("Saved new player $vars{player_url}");
+									main::DEBUGLOG && $log->is_debug && $log->debug("Saved new player $vars{player_url}");
 								};
 								if ($@) {
 									$errorCb->("cannot load player code: $@");
@@ -563,7 +563,7 @@ sub getNextTrack {
 								}
 								my $sig = Plugins::YouTube::Signature::unobfuscate_signature(
 											$vars{player_url}, $streamInfo->{'rawsig'} );
-								$log->debug("Unobfuscated signature $sig");
+								main::DEBUGLOG && $log->is_debug && $log->debug("Unobfuscated signature $sig");
 								$song->pluginData(streams => \@streams);	
 								$song->pluginData(stream  => $streamInfo->{'url'} . "&signature=" . $sig);
 								$song->pluginData(format  => $streamInfo->{'format'});
@@ -572,20 +572,20 @@ sub getNextTrack {
 							},
 						
 							sub {
-								$log->debug("Cannot fetch player " . $_[1]);
+								main::DEBUGLOG && $log->is_debug && $log->debug("Cannot fetch player " . $_[1]);
 								$errorCb->("cannot fetch player code");
 							},
 					
 						)->get($vars{player_url});
 					}
 				} else {
-					    $log->debug("No player url to unobfuscat signature");
+					    main::DEBUGLOG && $log->is_debug && $log->debug("No player url to unobfuscat signature");
 						$errorCb->("no player url found");
 						$proceed = 0;
 				}
 				
 			} else {
-				$log->debug("raw signature $sig");
+				main::DEBUGLOG && $log->is_debug && $log->debug("raw signature $sig");
 			    $sig = $streamInfo->{'rawsig'};
 			}
 			
@@ -623,7 +623,7 @@ sub suppressPlayersMessage {
 sub getMetadataFor {
 	my ($class, $client, $url) = @_;
 
-	main::DEBUGLOG && $log->debug("getmetadata: $url");
+	main::DEBUGLOG && $log->is_debug && $log->debug("getmetadata: $url");
 	
 	my $id = $class->getId($url) || return {};
 	my $cache = Slim::Utils::Cache->new;
@@ -635,12 +635,12 @@ sub getMetadataFor {
 			icon => $meta->{icon},
 		});
 
-		main::DEBUGLOG && $log->debug("cache hit: $id");
+		main::DEBUGLOG && $log->is_debug && $log->debug("cache hit: $id");
 		return $meta;
 	}
 
 	if ($client->master->pluginData('fetchingYTMeta')) {
-		$log->debug("already fetching metadata: $id");
+		main::DEBUGLOG && $log->is_debug && $log->debug("already fetching metadata: $id");
 		return {};
 	}
 	
@@ -665,9 +665,7 @@ sub getMetadataFor {
 		}
 	}
 	
-	if ( main::INFOLOG && $log->is_info ) {
-		$log->info( "Need to fetch metadata for: " . join( ', ', @need ) );
-	}
+	main::INFOLOG && $log->is_info && $log->info( "Need to fetch metadata for: " . join( ', ', @need ) );
 	
 	Plugins::YouTube::API->getVideoDetails( sub {
 		my $result = shift;
@@ -694,7 +692,7 @@ sub getMetadataFor {
 			}
 	
 			my $duration = $item->{contentDetails}->{duration};
-			main::INFOLOG && $log->info("Duration: $duration");
+			main::INFOLOG && $log->is_info && $log->info("Duration: $duration");
 			my ($misc, $hour, $min, $sec) = $duration =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
 			$duration = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
 									
