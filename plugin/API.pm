@@ -9,14 +9,14 @@ use List::Util qw(min max);
 use URI::Escape qw(uri_escape uri_escape_utf8);
 
 use constant API_URL => 'https://www.googleapis.com/youtube/v3/';
-use constant DEFAULT_CACHE_TTL => 3600;
+use constant DEFAULT_CACHE_TTL => 24 * 3600;
 
 use Slim::Utils::Cache;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 
 my $prefs = preferences('plugin.youtube');
-my $log   = logger('plugin.youtube.api');
+my $log   = logger('plugin.youtube');
 my $cache = Slim::Utils::Cache->new();
 	
 sub search {
@@ -67,7 +67,9 @@ sub getVideoCategories {
 	my ( $class, $cb ) = @_;
 	
 	_pagedCall('videoCategories', {
-		hl => Slim::Utils::Strings::getLanguage()
+		hl => Slim::Utils::Strings::getLanguage(),
+		# categories don't change that often
+		_cache_ttl => 7 * 86400,
 	}, $cb);
 }
 
@@ -76,7 +78,9 @@ sub getVideoDetails {
 
 	_call('videos', {
 		part => 'snippet,contentDetails',
-		id   => $ids
+		id   => $ids,
+		# cache video details a bit longer
+		_cache_ttl => 7 * 86400,
 	}, $cb);
 }
 
@@ -101,10 +105,7 @@ sub _pagedCall {
 			$args->{pageToken} = $results->{nextPageToken};
 			main::INFOLOG && $log->info("Get next page using token " . $args->{pageToken});
 
-#			require Slim::Utils::Timers;
-#			Slim::Utils::Timers::setTimer( undef, time() + 0.1, sub {
-				_call($method, $args, $pagingCb);
-#			} );
+			_call($method, $args, $pagingCb);
 		}
 		else {
 			main::INFOLOG && $log->info("Got all we wanted. Return " . scalar @$items . " items.");
@@ -159,7 +160,7 @@ sub _call {
 
 			$result ||= {};
 			
-			$cache->set($cacheKey, $result, DEFAULT_CACHE_TTL);
+			$cache->set($cacheKey, $result, $args->{_cache_ttl} || DEFAULT_CACHE_TTL);
 
 			$cb->($result);
 		},
