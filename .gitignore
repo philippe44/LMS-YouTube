@@ -219,7 +219,8 @@ key.txt
 *.cmd
 *.pl
 *.zip
-*.xml
+repo*.xml
+*.txt
 /_backup
 /*.pm
 *.diff

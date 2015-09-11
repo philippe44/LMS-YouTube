@@ -621,7 +621,7 @@ sub suppressPlayersMessage {
 }
 
 sub getMetadataFor {
-	my ($class, $client, $url) = @_;
+	my ($class, $client, $url, undef, $song) = @_;
 
 	main::DEBUGLOG && $log->debug("getmetadata: $url");
 	
@@ -629,6 +629,7 @@ sub getMetadataFor {
 	my $cache = Slim::Utils::Cache->new;
 
 	if (my $meta = $cache->get("yt:meta-$id")) {
+		$song->track->secs($meta->{'duration'}) if $song;
 		Plugins::YouTube::Plugin->updateRecentlyPlayed({
 			url  => $url, 
 			name => $meta->{_fulltitle} || $meta->{title}, 
@@ -717,6 +718,10 @@ sub getMetadataFor {
 		}				
 	
 		$client->master->pluginData(fetchingYTMeta => 0);
+		if ($song) {
+			my $meta = $cache->get("yt:meta-$id");
+			$song->track->secs($meta->{'duration'}) if $meta;
+		}
 
 		Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] ) if $client;
 
