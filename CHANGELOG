@@ -1,3 +1,10 @@
+0.30
+ - Major refactor by Michael
+ - Channel/Playlist can be played direclty as playlist
+ - Get video icons in the search results
+ - Caching of searches 
+ - Get metadata for the whole playlist
+ 
 0.27
  - Handle HTTP redirect
  - Country taken from system
