@@ -640,6 +640,7 @@ sub getMetadataFor {
 		});
 
 		main::DEBUGLOG && $log->debug("cache hit: $id");
+		
 		return $meta;
 	}
 

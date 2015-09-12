@@ -156,6 +156,8 @@ sub toplevel {
 	
 	$callback->([
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_VIDEOCATEGORIES'), type => 'url', url => \&videoCategoriesHandler },
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_GUIDECATEGORIES'), type => 'url', url => \&guideCategoriesHandler },
 
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_SEARCH'),  type => 'search', url => \&videoSearchHandler },
 
@@ -222,6 +224,29 @@ sub recentHandler {
 	$callback->({ items => \@menu });
 }
 
+sub guideCategoriesHandler {
+	my ($client, $cb, $args) = @_;
+	
+	Plugins::YouTube::API->getGuideCategories(sub {
+		my $result = shift;
+		
+		my $items = [];
+
+		for my $entry (@{$result->{items} || []}) {
+			my $title = $entry->{snippet}->{title} || next;
+
+			push @$items, {
+				name => $title,
+				type => 'url',
+				url  => \&channelDirectSearchHandler,
+				passthrough => [  { categoryId => $entry->{id} } ],
+			};
+		}
+
+		$cb->( $items );
+	}, $args->{quantity} + $args->{index} || 0 );
+}
+
 sub videoCategoriesHandler {
 	my ($client, $cb, $args) = @_;
 	
@@ -269,6 +294,20 @@ sub channelSearchHandler {
 	});
 }
 
+sub channelDirectSearchHandler {
+	my ($client, $cb, $args, $params) = @_;
+	
+	$params ||= {};
+	
+	Plugins::YouTube::API->searchChannelsDirect(sub {
+		$cb->( { items => _renderList($_[0]->{items}), 
+				 total => $_[0]->{total} } );
+	}, {
+		quota  => $args->{quantity} + $args->{index} || 0,
+		%{$params},
+	});
+}
+
 sub playlistSearchHandler {
 	my ($client, $cb, $args) = @_;
 	
@@ -298,7 +337,16 @@ sub _renderList {
 			image => _getImage($snippet->{thumbnails}),
 		};
 		
-		if (!ref $entry->{id} || ($entry->{id}->{kind} && $entry->{id}->{kind} eq 'youtube#video')) {
+		if ($entry->{kind} eq 'youtube#channel') {
+			my $id = $entry->{id};
+						
+			$item->{passthrough} = [ { channelId => $id } ];
+			#$item->{type}		= 'search';
+			$item->{url}        = \&videoSearchHandler;
+			#$item->{play}		= 'ytplaylist://channelId=' . $id;
+			#$item->{type} = 'url'
+		}
+		elsif (!ref $entry->{id} || ($entry->{id}->{kind} && $entry->{id}->{kind} eq 'youtube#video')) {
 			my $id;
 
 			if ($snippet->{id}) {

@@ -50,6 +50,17 @@ sub searchChannels {
 	$class->search($cb, $args);
 }
 
+sub searchChannelsDirect {
+	my ( $class, $cb, $args ) = @_;
+	
+	$args ||= {};
+	
+	_pagedCall('channels', {
+		%{$args},
+		_noRegion 	=> 1,
+	}, $cb);
+}
+
 sub searchPlaylists {
 	my ( $class, $cb, $args ) = @_;
 	
@@ -72,6 +83,17 @@ sub getVideoCategories {
 	my ( $class, $cb, $quota ) = @_;
 	
 	_pagedCall('videoCategories', {
+		hl => Slim::Utils::Strings::getLanguage(),
+		# categories don't change that often
+		_cache_ttl => 7 * 86400,
+		quota	   => $quota,
+	}, $cb);
+}
+
+sub getGuideCategories {
+	my ( $class, $cb, $quota ) = @_;
+	
+	_pagedCall('guideCategories', {
 		hl => Slim::Utils::Strings::getLanguage(),
 		# categories don't change that often
 		_cache_ttl => 7 * 86400,
