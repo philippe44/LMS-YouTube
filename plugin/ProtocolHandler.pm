@@ -29,8 +29,11 @@ use constant DISCARD    => 5;
 
 my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
+my $cache = Slim::Utils::Cache->new;
 
 Slim::Player::ProtocolHandlers->registerHandler('youtube', __PACKAGE__);
+
+sub flushCache { $cache->cleanup(); }
 
 sub open {
 	my $class = shift;
@@ -626,8 +629,7 @@ sub getMetadataFor {
 	main::DEBUGLOG && $log->debug("getmetadata: $url");
 	
 	my $id = $class->getId($url) || return {};
-	my $cache = Slim::Utils::Cache->new;
-
+	
 	if (my $meta = $cache->get("yt:meta-$id")) {
 		$song->track->secs($meta->{'duration'}) if $song;
 		Plugins::YouTube::Plugin->updateRecentlyPlayed({

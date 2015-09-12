@@ -29,6 +29,15 @@
 		<input type="text" class="stdedit" name="pref_country" id="pref_country" value="[% prefs.pref_country %]" size="2">
 
 	[% END %]
+	
 	</div>
+	
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_CACHE" desc="PLUGIN_YOUTUBE_CACHE_DESC" %]
+
+		<input name="flushcache" type="checkbox">
+
+	[% END %]
+	
+	
 
 [% PROCESS settings/footer.html %]

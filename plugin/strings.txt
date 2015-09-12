@@ -75,3 +75,9 @@ PLUGIN_YOUTUBE_COUNTRY
 
 PLUGIN_YOUTUBE_COUNTRY_DESC
 	EN	Set the 2-letters country use to search available categories
+
+PLUGIN_YOUTUBE_CACHE
+	EN	Flush cache 
+
+PLUGIN_YOUTUBE_CACHE_DESC
+	EN	Search results are cached for a day. Click to flush them

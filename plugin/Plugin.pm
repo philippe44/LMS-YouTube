@@ -37,7 +37,8 @@ $prefs->init({
 	recent => [], 
 	APIkey => '', 
 	max_items => 200, 
-	country => Slim::Utils::Strings::getLanguage()
+	country => Slim::Utils::Strings::getLanguage(),
+	cache => 1
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
@@ -165,8 +166,6 @@ sub urlHandler {
 	
 	my $id = Plugins::YouTube::ProtocolHandler->getId($url);
 	
-	$log->error('url:', $url, $id);
-
 	my $errorItems = { items => [ { 
 		type => 'text',
 		name => cstring($client, 'PLUGIN_YOUTUBE_BADURL'), 

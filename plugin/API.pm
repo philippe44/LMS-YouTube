@@ -20,6 +20,8 @@ use Slim::Utils::Prefs;
 my $prefs = preferences('plugin.youtube');
 my $log   = logger('plugin.youtube');
 my $cache = Slim::Utils::Cache->new();
+
+sub flushCache { $cache->cleanup(); }
 	
 sub search {
 	my ( $class, $cb, $upto, $args ) = @_;
