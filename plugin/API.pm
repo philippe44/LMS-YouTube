@@ -24,57 +24,59 @@ my $cache = Slim::Utils::Cache->new();
 sub flushCache { $cache->cleanup(); }
 	
 sub search {
-	my ( $class, $cb, $upto, $args ) = @_;
+	my ( $class, $cb, $args ) = @_;
 	
 	$args ||= {};
 	$args->{part}       = 'snippet';
 	$args->{type}     ||= 'video';
 	$args->{relevanceLanguage} = Slim::Utils::Strings::getLanguage();
 	
-	_pagedCall('search', $args, $cb, $upto);
+	_pagedCall('search', $args, $cb);
 }
 
 sub searchVideos {
-	my ( $class, $cb, $upto, $args ) = @_;
+	my ( $class, $cb, $args ) = @_;
 	
 	$args ||= {};
 	$args->{type} = 'video';
-	$class->search($cb, $upto, $args);
+	$class->search($cb, $args);
 }	
 
 sub searchChannels {
-	my ( $class, $cb, $upto, $args ) = @_;
+	my ( $class, $cb, $args ) = @_;
 	
 	$args ||= {};
 	$args->{type} = 'channel';
-	$class->search($cb, $upto, $args);
+	$class->search($cb, $args);
 }
 
 sub searchPlaylists {
-	my ( $class, $cb, $upto, $args ) = @_;
+	my ( $class, $cb, $args ) = @_;
 	
 	$args ||= {};
 	$args->{type} = 'playlist';
-	$class->search($cb, $upto, $args);
+	$class->search($cb, $args);
 }
 
 sub getPlaylist {
-	my ( $class, $cb, $upto, $args ) = @_;
+	my ( $class, $cb, $args ) = @_;
 	
 	_pagedCall('playlistItems', {
 		playlistId => $args->{playlistId},
 		_noRegion  => 1,
-	}, $cb, $upto);
+		quota	   => $args->{quota},
+	}, $cb);
 }
 
 sub getVideoCategories {
-	my ( $class, $cb, $upto ) = @_;
+	my ( $class, $cb, $quota ) = @_;
 	
 	_pagedCall('videoCategories', {
 		hl => Slim::Utils::Strings::getLanguage(),
 		# categories don't change that often
 		_cache_ttl => 7 * 86400,
-	}, $cb, $upto);
+		quota	   => $quota,
+	}, $cb);
 }
 
 sub getVideoDetails {
@@ -89,10 +91,10 @@ sub getVideoDetails {
 }
 
 sub _pagedCall {
-	my ( $method, $args, $cb, $upto ) = @_;
+	my ( $method, $args, $cb ) = @_;
 	
 	my $maxItems = delete $args->{maxItems} || $prefs->get('max_items');
-	my $wantedItems = min($maxItems, $upto || $maxItems);
+	my $wantedItems = min(delete $args->{quota}, $maxItems);
 		
 	my $items = [];
 		
@@ -112,11 +114,9 @@ sub _pagedCall {
 			_call($method, $args, $pagingCb);
 		}
 		else {
-			my $total = $results->{'pageInfo'}->{'totalResults'} || scalar @$items;
+			my $total = min($results->{'pageInfo'}->{'totalResults'} || scalar @$items, $maxItems);
 			main::INFOLOG && $log->info("Got all we wanted. Return " . scalar @$items . " items.");
-			$results->{items} = $items;
-			$results->{total} = min($total, $maxItems);
-			$cb->($results);
+			$cb->( { items => $items, total  => $total } );
 		}
 	};
 

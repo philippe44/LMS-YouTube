@@ -37,11 +37,20 @@ $prefs->init({
 	recent => [], 
 	APIkey => '', 
 	max_items => 200, 
-	country => Slim::Utils::Strings::getLanguage(),
+	country => setCountry(),
 	cache => 1
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
+
+sub setCountry {
+	my $convert = { EN => 'US', FR => 'FR' };
+	my $lang = Slim::Utils::Strings::getLanguage();
+	
+	$lang = $convert->{$lang} if $convert->{$lang};
+	
+	return $lang;
+}
 
 sub initPlugin {
 	my $class = shift;
@@ -134,6 +143,13 @@ sub toplevel {
 	if (!$prefs->get('APIkey')) {
 		$callback->([
 			{ name => cstring($client, 'PLUGIN_YOUTUBE_MISSINGKEY'), type => 'text' },
+		]);
+		return;
+	}
+	
+	if (!Slim::Networking::Async::HTTP::hasSSL()) {
+		$callback->([
+			{ name => cstring($client, 'PLUGIN_YOUTUBE_MISSINGSSL'), type => 'text' },
 		]);
 		return;
 	}
@@ -233,11 +249,12 @@ sub videoSearchHandler {
 	my ($client, $cb, $args, $params) = @_;
 	
 	$params->{q} ||= delete $args->{search} if $args->{search};
+	$params->{quota} = $args->{quantity} + $args->{index} || 0;
 	
 	Plugins::YouTube::API->searchVideos(sub {
 		$cb->( { items => _renderList($_[0]->{items}), 
 				 total => $_[0]->{total} } );
-	}, $args->{quantity} + $args->{index} || 0, $params);
+	}, $params);
 }
 
 sub channelSearchHandler {
@@ -246,8 +263,9 @@ sub channelSearchHandler {
 	Plugins::YouTube::API->searchChannels(sub {
 		$cb->( { items => _renderList($_[0]->{items}), 
 				 total => $_[0]->{total} } );
-	}, $args->{quantity} + $args->{index} || 0, {
-		q => delete $args->{search}
+	}, {
+		q 	   => delete $args->{search},
+		quota  => $args->{quantity} + $args->{index} || 0,
 	});
 }
 
@@ -257,8 +275,9 @@ sub playlistSearchHandler {
 	Plugins::YouTube::API->searchPlaylists(sub {
 		$cb->( { items => _renderList($_[0]->{items}), 
 				 total => $_[0]->{total} } );
-	}, $args->{quantity} + $args->{index} || 0, { 
-		q => delete $args->{search}
+	}, { 
+		q 	  => delete $args->{search},
+		quota => $args->{quantity} + $args->{index} || 0,
 	});
 }
 
@@ -278,7 +297,7 @@ sub _renderList {
 			type => 'playlist',
 			image => _getImage($snippet->{thumbnails}),
 		};
-
+		
 		if (!ref $entry->{id} || ($entry->{id}->{kind} && $entry->{id}->{kind} eq 'youtube#video')) {
 			my $id;
 
@@ -348,8 +367,9 @@ sub playlistHandler {
 	Plugins::YouTube::API->getPlaylist(sub {
 		$cb->( { items => _renderList($_[0]->{items}), 
 				 total => $_[0]->{total} } );
-	}, $args->{quantity} + $args->{index} || 0, {
-		playlistId => $params->{playlistId}
+	}, {
+		playlistId 	=> $params->{playlistId},
+		quota 		=> $args->{quantity} + $args->{index} || 0,
 	});
 }
 

@@ -632,6 +632,7 @@ sub getMetadataFor {
 	
 	if (my $meta = $cache->get("yt:meta-$id")) {
 		$song->track->secs($meta->{'duration'}) if $song;
+				
 		Plugins::YouTube::Plugin->updateRecentlyPlayed({
 			url  => $url, 
 			name => $meta->{_fulltitle} || $meta->{title}, 
@@ -681,8 +682,6 @@ sub getMetadataFor {
 			return {};
 		}
 		
-		my $details;
-		
 		foreach my $item (@{$result->{items}}) {
 			my $snippet = $item->{snippet};
 			my $title   = $snippet->{'title'};
@@ -712,17 +711,17 @@ sub getMetadataFor {
 				};
 	
 				$meta->{_fulltitle} = $fulltitle;
-	
-				$details ||= $meta;
-	
 				$cache->set("yt:meta-" . $item->{id}, $meta, 86400);
+			
 			}
 		}				
-	
+		
 		$client->master->pluginData(fetchingYTMeta => 0);
+
 		if ($song) {
 			my $meta = $cache->get("yt:meta-$id");
 			$song->track->secs($meta->{'duration'}) if $meta;
+			#$client->master->pluginData( metadata => $meta ) if $client;
 		}
 
 		Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] ) if $client;

@@ -7,6 +7,9 @@ PLUGIN_YOUTUBE_DESC
 PLUGIN_YOUTUBE_MISSINGKEY
 	EN	Missing YouTube API key (see settings)
 	
+PLUGIN_YOUTUBE_MISSINGSSL
+	EN	SSL required (try to install it using CPAN)
+	
 PLUGIN_YOUTUBE_SEARCH
 	EN	YouTube Search
 
@@ -74,7 +77,7 @@ PLUGIN_YOUTUBE_COUNTRY
 	EN	Country for categories
 
 PLUGIN_YOUTUBE_COUNTRY_DESC
-	EN	Set the 2-letters country use to search available categories
+	EN	Set the 2-letters country used to search available categories
 
 PLUGIN_YOUTUBE_CACHE
 	EN	Flush cache 
