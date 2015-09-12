@@ -8,6 +8,8 @@ use JSON::XS::VersionOneAndTwo;
 use List::Util qw(min max);
 use URI::Escape qw(uri_escape uri_escape_utf8);
 
+use Data::Dumper;
+
 use constant API_URL => 'https://www.googleapis.com/youtube/v3/';
 use constant DEFAULT_CACHE_TTL => 24 * 3600;
 
@@ -20,57 +22,57 @@ my $log   = logger('plugin.youtube');
 my $cache = Slim::Utils::Cache->new();
 	
 sub search {
-	my ( $class, $cb, $args ) = @_;
+	my ( $class, $cb, $upto, $args ) = @_;
 	
 	$args ||= {};
 	$args->{part}       = 'snippet';
 	$args->{type}     ||= 'video';
 	$args->{relevanceLanguage} = Slim::Utils::Strings::getLanguage();
 	
-	_pagedCall('search', $args, $cb);
+	_pagedCall('search', $args, $cb, $upto);
 }
 
 sub searchVideos {
-	my ( $class, $cb, $args ) = @_;
+	my ( $class, $cb, $upto, $args ) = @_;
 	
 	$args ||= {};
 	$args->{type} = 'video';
-	$class->search($cb, $args);
+	$class->search($cb, $upto, $args);
 }	
 
 sub searchChannels {
-	my ( $class, $cb, $args ) = @_;
+	my ( $class, $cb, $upto, $args ) = @_;
 	
 	$args ||= {};
 	$args->{type} = 'channel';
-	$class->search($cb, $args);
+	$class->search($cb, $upto, $args);
 }
 
 sub searchPlaylists {
-	my ( $class, $cb, $args ) = @_;
+	my ( $class, $cb, $upto, $args ) = @_;
 	
 	$args ||= {};
 	$args->{type} = 'playlist';
-	$class->search($cb, $args);
+	$class->search($cb, $upto, $args);
 }
 
 sub getPlaylist {
-	my ( $class, $cb, $args ) = @_;
+	my ( $class, $cb, $upto, $args ) = @_;
 	
 	_pagedCall('playlistItems', {
 		playlistId => $args->{playlistId},
 		_noRegion  => 1,
-	}, $cb);
+	}, $cb, $upto);
 }
 
 sub getVideoCategories {
-	my ( $class, $cb ) = @_;
+	my ( $class, $cb, $upto ) = @_;
 	
 	_pagedCall('videoCategories', {
 		hl => Slim::Utils::Strings::getLanguage(),
 		# categories don't change that often
 		_cache_ttl => 7 * 86400,
-	}, $cb);
+	}, $cb, $upto);
 }
 
 sub getVideoDetails {
@@ -85,13 +87,13 @@ sub getVideoDetails {
 }
 
 sub _pagedCall {
-	my ( $method, $args, $cb ) = @_;
+	my ( $method, $args, $cb, $upto ) = @_;
 	
 	my $maxItems = delete $args->{maxItems} || $prefs->get('max_items');
-
+	my $wantedItems = min($maxItems, $upto || $maxItems);
+		
 	my $items = [];
-	my ($offset, $resultsAvailable);
-	
+		
 	my $pagingCb;
 	
 	$pagingCb = sub {
@@ -99,17 +101,19 @@ sub _pagedCall {
 
 		push @$items, @{$results->{items}};
 		
-		main::INFOLOG && $log->info("We want $maxItems items, have " . scalar @$items . " so far");
+		main::INFOLOG && $log->info("We want $wantedItems items, have " . scalar @$items . " so far");
 		
-		if (@$items < $maxItems && $results->{nextPageToken}) {
+		if (@$items < $wantedItems && $results->{nextPageToken}) {
 			$args->{pageToken} = $results->{nextPageToken};
 			main::INFOLOG && $log->info("Get next page using token " . $args->{pageToken});
 
 			_call($method, $args, $pagingCb);
 		}
 		else {
+			my $total = $results->{'pageInfo'}->{'totalResults'} || scalar @$items;
 			main::INFOLOG && $log->info("Got all we wanted. Return " . scalar @$items . " items.");
 			$results->{items} = $items;
+			$results->{total} = min($total, $maxItems);
 			$cb->($results);
 		}
 	};

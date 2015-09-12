@@ -13,7 +13,7 @@
  - Remove wrong SSL parameter on opening
  
 0.26
- - JSinterpret was using JSON and not JSON:XS which seems to not be available on some linux 
+ - JSinterpret was using JSON and not JSON:XS which seems to not be available on some Linux 
  
 0.25
  - Use JSON::XS so move from_json to json_decode

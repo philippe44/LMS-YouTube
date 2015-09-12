@@ -7,12 +7,15 @@ package Plugins::YouTube::Plugin;
 use strict;
 use base qw(Slim::Plugin::OPMLBased);
 
+use Data::Dumper;
+
 use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Prefs;
 use Slim::Utils::Log;
 
 use Plugins::YouTube::API;
 use Plugins::YouTube::ProtocolHandler;
+use Plugins::YouTube::ListProtocolHandler;
 
 use constant BASE_URL => 'www.youtube.com/v/';
 use constant STREAM_BASE_URL => 'youtube://' . BASE_URL;
@@ -79,8 +82,14 @@ sub initPlugin {
 	for my $recent (reverse @{$prefs->get('recent')}) {
 		$recentlyPlayed{ $recent->{'url'} } = $recent;
 	}
+	
+#        |requires Client
+#        |  |is a Query
+#        |  |  |has Tags
+#        |  |  |  |Function to call
+	Slim::Control::Request::addDispatch(['youtube', 'info'], 
+		[1, 1, 1, \&cliInfoQuery]);
 
-	Slim::Control::Request::addDispatch(['youtube', 'info'], [1, 1, 1, \&cliInfoQuery]);
 }
 
 sub shutdownPlugin {
@@ -155,6 +164,8 @@ sub urlHandler {
 	$url =~ s/ /./g;
 	
 	my $id = Plugins::YouTube::ProtocolHandler->getId($url);
+	
+	$log->error('url:', $url, $id);
 
 	my $errorItems = { items => [ { 
 		type => 'text',
@@ -197,7 +208,7 @@ sub recentHandler {
 }
 
 sub videoCategoriesHandler {
-	my ($client, $cb) = @_;
+	my ($client, $cb, $args) = @_;
 	
 	Plugins::YouTube::API->getVideoCategories(sub {
 		my $result = shift;
@@ -216,7 +227,7 @@ sub videoCategoriesHandler {
 		}
 
 		$cb->( $items );
-	});
+	}, $args->{quantity} + $args->{index} || 0 );
 }
 
 sub videoSearchHandler {
@@ -225,16 +236,18 @@ sub videoSearchHandler {
 	$params->{q} ||= delete $args->{search} if $args->{search};
 	
 	Plugins::YouTube::API->searchVideos(sub {
-		$cb->( _renderList($_[0]->{items}) );
-	}, $params);
+		$cb->( { items => _renderList($_[0]->{items}), 
+				 total => $_[0]->{total} } );
+	}, $args->{quantity} + $args->{index} || 0, $params);
 }
 
 sub channelSearchHandler {
 	my ($client, $cb, $args) = @_;
 	
 	Plugins::YouTube::API->searchChannels(sub {
-		$cb->( _renderList($_[0]->{items}) );
-	},{
+		$cb->( { items => _renderList($_[0]->{items}), 
+				 total => $_[0]->{total} } );
+	}, $args->{quantity} + $args->{index} || 0, {
 		q => delete $args->{search}
 	});
 }
@@ -243,8 +256,9 @@ sub playlistSearchHandler {
 	my ($client, $cb, $args) = @_;
 	
 	Plugins::YouTube::API->searchPlaylists(sub {
-		$cb->( _renderList($_[0]->{items}) );
-	}, {
+		$cb->( { items => _renderList($_[0]->{items}), 
+				 total => $_[0]->{total} } );
+	}, $args->{quantity} + $args->{index} || 0, { 
 		q => delete $args->{search}
 	});
 }
@@ -253,7 +267,7 @@ sub _renderList {
 	my ($entries) = @_;
 
 	my $items = [];
-
+	
 	for my $entry (@{$entries || []}) {
 		my $snippet = $entry->{snippet} || next;
 		my $title = $snippet->{title} || next;
@@ -295,6 +309,8 @@ sub _renderList {
 		elsif (my $id = $entry->{id}->{channelId}) {
 			$item->{passthrough} = [ { channelId => $id } ];
 			$item->{url}         = \&videoSearchHandler;
+			#$item->{play}		= 'ytplaylist://channelId=' . $id;
+			#$item->{type} = 'url';
 		}
 		elsif (my $id = $entry->{id}->{playlistId}) {
 			$item->{passthrough} = [ { playlistId => $id } ];
@@ -331,8 +347,9 @@ sub playlistHandler {
 	my ($client, $cb, $args, $params) = @_;
 	
 	Plugins::YouTube::API->getPlaylist(sub {
-		$cb->( _renderList($_[0]->{items}) );
-	}, {
+		$cb->( { items => _renderList($_[0]->{items}), 
+				 total => $_[0]->{total} } );
+	}, $args->{quantity} + $args->{index} || 0, {
 		playlistId => $params->{playlistId}
 	});
 }
