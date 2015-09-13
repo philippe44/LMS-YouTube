@@ -401,7 +401,7 @@ sub _getImage {
 	my $image;
 	
 	if (my $thumbs = $imageList) {
-		foreach ( qw(maxres standard high medium default) ) {
+		foreach ( qw(default maxres standard high medium) ) {
 			last if $image = $thumbs->{$_}->{url};
 		}
 	}
