@@ -38,7 +38,7 @@ sub searchVideos {
 	my ( $class, $cb, $args ) = @_;
 	
 	$args ||= {};
-	$args->{type} = 'video';
+	$args->{type} ||= 'video';
 	$class->search($cb, $args);
 }	
 

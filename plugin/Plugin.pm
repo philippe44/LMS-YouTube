@@ -340,7 +340,7 @@ sub _renderList {
 		if ($entry->{kind} eq 'youtube#channel') {
 			my $id = $entry->{id};
 						
-			$item->{passthrough} = [ { channelId => $id } ];
+			$item->{passthrough} = [ { channelId => $id, type => 'video,playlist' } ];
 			#$item->{type}		= 'search';
 			$item->{url}        = \&videoSearchHandler;
 			#$item->{play}		= 'ytplaylist://channelId=' . $id;
