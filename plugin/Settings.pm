@@ -26,11 +26,13 @@ sub prefs {
 sub handler {
 	my ($class, $client, $params, $callback, @args) = @_;
 	
+=comment	
 	if ($params->{flushcache}) {
 		$log->info('flushing cache');
 		Plugins::YouTube::API::flushCache();
 		Plugins::YouTube::ProtocolHandler::flushCache();
 	}
+=cut	
 
 	$params->{pref_max_items} = min($params->{pref_max_items}, 500);
 	

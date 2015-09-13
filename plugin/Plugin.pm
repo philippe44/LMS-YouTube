@@ -358,8 +358,8 @@ sub _renderList {
 			my $id = $entry->{id};
 						
 			$item->{passthrough} = [ { channelId => $id, type => 'video,playlist' } ];
-			#$item->{type}		= 'search';
 			$item->{url}        = \&videoSearchHandler;
+			#$item->{type}		= 'search';
 			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
 			$item->{favorites_type}	= 'audio';
 		}

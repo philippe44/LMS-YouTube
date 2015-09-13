@@ -1,5 +1,8 @@
 0.33.x
  - Encode search in utf8 to accept multi-byte strings
+ - Remove cache flush, does not work
+ - Channels and playlists can be added to favorites
+ - (B) play/add on a channel/playlist was limited to 1st 50 items
  
 0.32
  - Guided Channels can include PlayLists

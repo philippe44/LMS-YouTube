@@ -135,7 +135,7 @@ sub _pagedCall {
 			_call($method, $args, $pagingCb);
 		}
 		else {
-			my $total = min($results->{'pageInfo'}->{'totalResults'} || scalar @$items, $maxItems);
+			my $total = min($results->{'pageInfo'}->{'totalResults'} || scalar @$items, $prefs->get('max_items'));
 			main::INFOLOG && $log->info("Got all we wanted. Return " . scalar @$items . " items.");
 			$cb->( { items => $items, total  => $total } );
 		}
