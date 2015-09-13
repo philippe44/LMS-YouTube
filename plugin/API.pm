@@ -115,9 +115,8 @@ sub getVideoDetails {
 sub _pagedCall {
 	my ( $method, $args, $cb ) = @_;
 	
-	my $maxItems = delete $args->{maxItems} || $prefs->get('max_items');
-	my $wantedItems = min(delete $args->{quota}, $maxItems);
-		
+	my $wantedItems = min(delete $args->{quota} || $prefs->get('max_items'));
+			
 	my $items = [];
 		
 	my $pagingCb;

@@ -1,3 +1,6 @@
+0.33.x
+ - Encode search in utf8 to accept multi-byte strings
+ 
 0.32
  - Guided Channels can include PlayLists
 

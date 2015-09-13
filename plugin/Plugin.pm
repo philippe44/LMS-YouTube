@@ -8,6 +8,7 @@ use strict;
 use base qw(Slim::Plugin::OPMLBased);
 
 use Data::Dumper;
+use Encode qw(encode decode);
 
 use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Prefs;
@@ -273,8 +274,14 @@ sub videoCategoriesHandler {
 sub videoSearchHandler {
 	my ($client, $cb, $args, $params) = @_;
 	
-	$params->{q} ||= delete $args->{search} if $args->{search};
-	$params->{quota} = $args->{quantity} + $args->{index} || 0;
+	if ($args->{search}) {
+		$args->{search} = encode('utf8', $args->{search});
+		$params->{q} ||= delete $args->{search};
+	}	
+	
+	$params->{quota} = defined $args->{index} ? 
+					   ($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
+					   $args->{quantity};
 	
 	Plugins::YouTube::API->searchVideos(sub {
 		$cb->( { items => _renderList($_[0]->{items}), 
@@ -284,13 +291,17 @@ sub videoSearchHandler {
 
 sub channelSearchHandler {
 	my ($client, $cb, $args) = @_;
-	
+		
+	$args->{search} = encode('utf8', $args->{search});
+		
 	Plugins::YouTube::API->searchChannels(sub {
 		$cb->( { items => _renderList($_[0]->{items}), 
 				 total => $_[0]->{total} } );
 	}, {
 		q 	   => delete $args->{search},
-		quota  => $args->{quantity} + $args->{index} || 0,
+		quota  => defined $args->{index} ? 
+				($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
+				$args->{quantity},
 	});
 }
 
@@ -303,7 +314,9 @@ sub channelDirectSearchHandler {
 		$cb->( { items => _renderList($_[0]->{items}), 
 				 total => $_[0]->{total} } );
 	}, {
-		quota  => $args->{quantity} + $args->{index} || 0,
+		quota  => defined $args->{index} ? 
+				($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
+				$args->{quantity},
 		%{$params},
 	});
 }
@@ -311,12 +324,16 @@ sub channelDirectSearchHandler {
 sub playlistSearchHandler {
 	my ($client, $cb, $args) = @_;
 	
+	$args->{search} = encode('utf8', $args->{search});
+	
 	Plugins::YouTube::API->searchPlaylists(sub {
 		$cb->( { items => _renderList($_[0]->{items}), 
 				 total => $_[0]->{total} } );
 	}, { 
 		q 	  => delete $args->{search},
-		quota => $args->{quantity} + $args->{index} || 0,
+		quota  => defined $args->{index} ? 
+				($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
+				$args->{quantity},
 	});
 }
 
@@ -343,8 +360,8 @@ sub _renderList {
 			$item->{passthrough} = [ { channelId => $id, type => 'video,playlist' } ];
 			#$item->{type}		= 'search';
 			$item->{url}        = \&videoSearchHandler;
-			#$item->{play}		= 'ytplaylist://channelId=' . $id;
-			#$item->{type} = 'url'
+			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
+			$item->{favorites_type}	= 'audio';
 		}
 		elsif (!ref $entry->{id} || ($entry->{id}->{kind} && $entry->{id}->{kind} eq 'youtube#video')) {
 			my $id;
@@ -375,12 +392,14 @@ sub _renderList {
 		elsif (my $id = $entry->{id}->{channelId}) {
 			$item->{passthrough} = [ { channelId => $id } ];
 			$item->{url}         = \&videoSearchHandler;
-			#$item->{play}		= 'ytplaylist://channelId=' . $id;
-			#$item->{type} = 'url';
+			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
+			$item->{favorites_type}	= 'audio';
 		}
 		elsif (my $id = $entry->{id}->{playlistId}) {
 			$item->{passthrough} = [ { playlistId => $id } ];
 			$item->{url}         = \&playlistHandler;
+			$item->{favorites_url}	= 'ytplaylist://playlistId=' . $id;
+			$item->{favorites_type}	= 'audio';
 		}
 		else {
 			# no known item type - skip it
@@ -417,7 +436,9 @@ sub playlistHandler {
 				 total => $_[0]->{total} } );
 	}, {
 		playlistId 	=> $params->{playlistId},
-		quota 		=> $args->{quantity} + $args->{index} || 0,
+		quota  => defined $args->{index} ? 
+				($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
+				$args->{quantity},
 	});
 }
 
