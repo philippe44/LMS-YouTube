@@ -661,7 +661,7 @@ sub getMetadataFor {
 	my $pageCb;
 	
 	# Go fetch metadata for all tracks on the playlist without metadata
-	$pagingCb = sub {
+	my $pagingCb = sub {
 		my ($status) = @_;
 		my @need;
 		
