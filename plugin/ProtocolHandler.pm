@@ -661,7 +661,7 @@ sub getMetadataFor {
 	my $pageCb;
 	
 	# Go fetch metadata for all tracks on the playlist without metadata
-	$pageCb = sub {
+	$pagingCb = sub {
 		my ($status) = @_;
 		my @need;
 		
@@ -686,9 +686,7 @@ sub getMetadataFor {
 		}
 				
 		if (scalar @need && $status) {
-			
-			_getMetaPage($client, $pageCb, join( ',', @need ));
-			
+			_getBulkMetadata($client, $pagingCb, join( ',', @need ));
 		} else {
 			$client->master->pluginData(fetchingYTMeta => 0);
 			
@@ -704,7 +702,8 @@ sub getMetadataFor {
 		}	
 	};
 
-	$pageCb->(1);
+	$client->master->pluginData(fetchingYTMeta => 1);
+	$pagingCb->(1);
 	
 	return {	
 			type	=> 'YouTube',
@@ -714,7 +713,7 @@ sub getMetadataFor {
 	};
 }	
 	
-sub _getMetaPage {
+sub _getBulkMetadata {
 	my ($client, $cb, $ids) = @_;
 	
 	Plugins::YouTube::API->getVideoDetails( sub {
@@ -723,6 +722,7 @@ sub _getMetaPage {
 		if (!$result || $result->{error} || !$result->{pageInfo}->{totalResults} ) {
 			$log->error($result->{error} || 'Failed to grab track information');
 			$cb->(0);
+			return;
 		}
 		
 		foreach my $item (@{$result->{items}}) {
@@ -759,7 +759,7 @@ sub _getMetaPage {
 			}
 		}				
 			
-		$cb->();
+		$cb->(1);
 		
 	}, $ids);
 }

@@ -3,7 +3,7 @@
  - Remove cache flush, does not work
  - Channels and playlists can be added to favorites
  - (B) play/add on a channel/playlist was limited to 1st 50 items
- - (B) on LMS < 7.9 playlist played direclty from channel/playlist failed to get metadata
+ - (B) on LMS < 7.9 playlist played directly from channel/playlist failed to get metadata
  
 0.32
  - Guided Channels can include PlayLists
