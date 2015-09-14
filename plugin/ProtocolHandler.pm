@@ -8,6 +8,7 @@ use HTML::Parser;
 use URI::Escape;
 use Scalar::Util qw(blessed);
 use JSON::XS;
+use Data::Dumper;
 
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
@@ -628,7 +629,7 @@ sub getMetadataFor {
 	my $icon = $class->getIcon();
 	
 	main::DEBUGLOG && $log->debug("getmetadata: $url");
-	
+		
 	my $id = $class->getId($url) || return {};
 	
 	if (my $meta = $cache->get("yt:meta-$id")) {
@@ -644,7 +645,7 @@ sub getMetadataFor {
 		
 		return $meta;
 	}
-
+	
 	if ($client->master->pluginData('fetchingYTMeta')) {
 		$log->debug("already fetching metadata: $id");
 		return {	
@@ -659,10 +660,11 @@ sub getMetadataFor {
 
 	my $pageCb;
 	
+	# Go fetch metadata for all tracks on the playlist without metadata
 	$pageCb = sub {
-		# Go fetch metadata for all tracks on the playlist without metadata
+		my ($status) = @_;
 		my @need;
-			
+		
 		for my $track ( @{ Slim::Player::Playlist::playList($client) } ) {
 			my $trackURL = blessed($track) ? $track->url : $track;
 			if ( $trackURL =~ m{youtube:/*(.+)} ) {
@@ -683,8 +685,8 @@ sub getMetadataFor {
 			$log->info( "Need to fetch metadata for: " . join( ', ', @need ) );
 		}
 				
-		if (scalar @need) {
-		
+		if (scalar @need && $status) {
+			
 			_getMetaPage($client, $pageCb, join( ',', @need ));
 			
 		} else {
@@ -702,7 +704,7 @@ sub getMetadataFor {
 		}	
 	};
 
-	$pageCb->();
+	$pageCb->(1);
 	
 	return {	
 			type	=> 'YouTube',
@@ -718,9 +720,9 @@ sub _getMetaPage {
 	Plugins::YouTube::API->getVideoDetails( sub {
 		my $result = shift;
 		
-		if (!$result || $result->{error}) {
+		if (!$result || $result->{error} || !$result->{pageInfo}->{totalResults} ) {
 			$log->error($result->{error} || 'Failed to grab track information');
-			$cb->();
+			$cb->(0);
 		}
 		
 		foreach my $item (@{$result->{items}}) {
