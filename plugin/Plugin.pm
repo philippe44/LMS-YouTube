@@ -84,12 +84,12 @@ sub initPlugin {
 		name  => 'PLUGIN_YOUTUBE',
 		func  => \&searchInfoMenu,
 	) );
-
+	
 	if ( main::WEBUI ) {
 		require Plugins::YouTube::Settings;
 		Plugins::YouTube::Settings->new;
 	}
-
+	
 	for my $recent (reverse @{$prefs->get('recent')}) {
 		$recentlyPlayed{ $recent->{'url'} } = $recent;
 	}
@@ -543,5 +543,6 @@ sub cliInfoQuery {
 
 	$request->setStatusDone();
 }
+
 
 1;

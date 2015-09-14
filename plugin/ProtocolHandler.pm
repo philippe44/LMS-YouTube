@@ -625,7 +625,8 @@ sub suppressPlayersMessage {
 
 sub getMetadataFor {
 	my ($class, $client, $url, undef, $song) = @_;
-
+	my $icon = $class->getIcon();
+	
 	main::DEBUGLOG && $log->debug("getmetadata: $url");
 	
 	my $id = $class->getId($url) || return {};
@@ -646,41 +647,80 @@ sub getMetadataFor {
 
 	if ($client->master->pluginData('fetchingYTMeta')) {
 		$log->debug("already fetching metadata: $id");
-		return {};
+		return {	
+			type	=> 'YouTube',
+			title	=> $url,
+			icon	=> $icon,
+			cover	=> $icon,
+		};	
 	}
 	
 	$client->master->pluginData(fetchingYTMeta => 1);
 
-	# Go fetch metadata for all tracks on the playlist without metadata
-	my @need;
+	my $loopCb;
 	
-	for my $track ( @{ Slim::Player::Playlist::playList($client) } ) {
-		my $trackURL = blessed($track) ? $track->url : $track;
-		if ( $trackURL =~ m{youtube:/*(.+)} ) {
-			my $id = $class->getId($trackURL);
-			if ( $id && !$cache->get("yt:meta-$id") ) {
-				push @need, $id;
-			}
-			elsif (!$id) {
-				$log->warn("No id found: $trackURL");
-			}
+	$loopCb = sub {
+		# Go fetch metadata for all tracks on the playlist without metadata
+		my @need;
 			
-			# we can't fetch more than 50 at a time
-			last if scalar @need >= 50;
+		for my $track ( @{ Slim::Player::Playlist::playList($client) } ) {
+			my $trackURL = blessed($track) ? $track->url : $track;
+			if ( $trackURL =~ m{youtube:/*(.+)} ) {
+				my $id = $class->getId($trackURL);
+				if ( $id && !$cache->get("yt:meta-$id") ) {
+					push @need, $id;
+				}
+				elsif (!$id) {
+					$log->warn("No id found: $trackURL");
+				}
+			
+				# we can't fetch more than 50 at a time
+				last if (scalar @need >= 50);
+			}
 		}
-	}
+		
+		if ( main::INFOLOG && $log->is_info ) {
+			$log->info( "Need to fetch metadata for: " . join( ', ', @need ) );
+		}
+				
+		if (scalar @need) {
+		
+			_getMeta($client, $loopCb, join( ',', @need ));
+			
+		} else {
+			$client->master->pluginData(fetchingYTMeta => 0);
+			
+			if ($song) {
+				my $meta = $cache->get("yt:meta-$id");
+				$song->track->secs($meta->{'duration'}) if $meta;
+			}
+		
+			if ($client) {
+				$client->currentPlaylistUpdateTime( Time::HiRes::time() );
+				Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );
+			}	
+		}	
+	};
+
+	$loopCb->();
 	
-	if ( main::INFOLOG && $log->is_info ) {
-		$log->info( "Need to fetch metadata for: " . join( ', ', @need ) );
-	}
+	return {	
+			type	=> 'YouTube',
+			title	=> $url,
+			icon	=> $icon,
+			cover	=> $icon,
+	};
+}	
+	
+sub _getMeta {
+	my ($client, $cb, $ids) = @_;
 	
 	Plugins::YouTube::API->getVideoDetails( sub {
 		my $result = shift;
 		
 		if (!$result || $result->{error}) {
 			$log->error($result->{error} || 'Failed to grab track information');
-			$client->master->pluginData(fetchingYTMeta => 0);
-			return {};
+			$cb->();
 		}
 		
 		foreach my $item (@{$result->{items}}) {
@@ -716,20 +756,18 @@ sub getMetadataFor {
 			
 			}
 		}				
+			
+		$cb->();
 		
-		$client->master->pluginData(fetchingYTMeta => 0);
-
-		if ($song) {
-			my $meta = $cache->get("yt:meta-$id");
-			$song->track->secs($meta->{'duration'}) if $meta;
-			#$client->master->pluginData( metadata => $meta ) if $client;
-		}
-
-		Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] ) if $client;
-
-	}, join( ',', @need ));
-
-	return {};
+	}, $ids);
 }
+
+sub getIcon {
+	my ( $class, $url ) = @_;
+
+	return Plugins::YouTube::Plugin->_pluginDataFor('icon');
+}
+
+
 
 1;
