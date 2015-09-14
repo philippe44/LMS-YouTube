@@ -657,7 +657,7 @@ sub getMetadataFor {
 	
 	$client->master->pluginData(fetchingYTMeta => 1);
 
-	my $loopCb;
+	my $pageCb;
 	
 	$pageCb = sub {
 		# Go fetch metadata for all tracks on the playlist without metadata
