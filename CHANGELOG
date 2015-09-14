@@ -1,12 +1,13 @@
 0.33.x
  - Encode search in utf8 to accept multi-byte strings
  - Remove cache flush, does not work
- - Channels and playlists can be added to favorites
+ - Channels and Playlists can be added to favorites
+ - Pressing 'play' on guided channels only play video in channels, *not* playlist
  - (B) play/add on a channel/playlist was limited to 1st 50 items
  - (B) on LMS < 7.9 playlist played directly from channel/playlist failed to get metadata
  
 0.32
- - Guided Channels can include PlayLists
+ - Guided Channels can include Playlists
 
 0.31
  - add Guided Channels (categories)

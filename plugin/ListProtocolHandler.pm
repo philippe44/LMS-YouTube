@@ -23,11 +23,20 @@ sub overridePlayback {
 	
 	my ($type, $id) = ($1, $2);
 	
-	$log->error("ListPlayback with type: $type id: $id");
-	Plugins::YouTube::API->searchVideos( sub {
-		createPlaylist($client, Plugins::YouTube::Plugin::_renderList($_[0]->{items})); }, 
-		{ $type => $id } );
-		
+	if ($type eq 'channelId') {
+	
+		Plugins::YouTube::API->searchVideos( sub {
+			createPlaylist($client, Plugins::YouTube::Plugin::_renderList($_[0]->{items})); }, 
+			{ channelId => $id } );
+			
+	} elsif ($type eq 'playlistId') {
+	
+		Plugins::YouTube::API->getPlaylist( sub {
+			createPlaylist($client, Plugins::YouTube::Plugin::_renderList($_[0]->{items})); }, 
+			{ playlistId => $id } );
+			
+	}
+			
 	return 1;
 }
 
@@ -48,24 +57,11 @@ sub canDirectStream {
 	return 1;
 }
 
-=comment
 sub contentType {
-	return 'src';
+	return 'youtube';
 }
-=cut
 
 sub isRemote { 1 }
 
-=comment
-sub cliPlayCombo {
-	my $request = shift;
-	
-	$log->error("cliplaycombo");
-	my $client = $request->client();
-	my $albumId = $request->getParam('_p2');
-	#my $action = $request->isCommand([['qobuz'], ['addalbum']]) ? 'addtracks' : 'playtracks';
-	$client->execute( ["playlist", "play", "listref", $tracks] );
-}
-=cut	
 
 1;

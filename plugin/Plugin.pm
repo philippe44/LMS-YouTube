@@ -354,6 +354,7 @@ sub _renderList {
 			image => _getImage($snippet->{thumbnails}),
 		};
 		
+		# result of search amongst guided channels (search for video or playlist) 
 		if ($entry->{kind} eq 'youtube#channel') {
 			my $id = $entry->{id};
 						
@@ -363,6 +364,7 @@ sub _renderList {
 			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
 			$item->{favorites_type}	= 'audio';
 		}
+		#result of search amongst videos within a given channel/playlist
 		elsif (!ref $entry->{id} || ($entry->{id}->{kind} && $entry->{id}->{kind} eq 'youtube#video')) {
 			my $id;
 
@@ -389,12 +391,14 @@ sub _renderList {
 			$item->{on_select} = 'play';
 			$item->{play}      = $url;
 		}
+		#result of search amongst channels
 		elsif (my $id = $entry->{id}->{channelId}) {
 			$item->{passthrough} = [ { channelId => $id } ];
 			$item->{url}         = \&videoSearchHandler;
 			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
 			$item->{favorites_type}	= 'audio';
 		}
+		#result of search amongst playlists
 		elsif (my $id = $entry->{id}->{playlistId}) {
 			$item->{passthrough} = [ { playlistId => $id } ];
 			$item->{url}         = \&playlistHandler;

@@ -70,21 +70,7 @@ sub open {
 	${*$sock}{'_sel'} = IO::Select->new($sock);
 	${*$sock}{'song'} = $args->{'song'};
 	
-	#$log->debug("in open ref sock: ", ref $sock, "(D)", Dumper($sock));
-	#$log->debug("in open ref class: ", ref $class, "(D)", Dumper($class));
-
-=comment
-	#this is proven to work, the socket is open and connected
-	my $c;
-	print $sock "HEAD / HTTP/1.0\r\n\r\n";
-	while (!$c) {
-		$sock->SUPER::sysread($c, 10);
-	}
-	$log->info("test string: $c");
-=cut
-
 	return $sock->request($args);
-
 }
 
 
@@ -656,12 +642,10 @@ sub getMetadataFor {
 		};	
 	}
 	
-	$client->master->pluginData(fetchingYTMeta => 1);
-
-	my $pageCb;
-	
 	# Go fetch metadata for all tracks on the playlist without metadata
-	my $pagingCb = sub {
+	my $pagingCb;
+
+	$pagingCb = sub {
 		my ($status) = @_;
 		my @need;
 		
