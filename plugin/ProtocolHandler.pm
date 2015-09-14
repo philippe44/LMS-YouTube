@@ -659,7 +659,7 @@ sub getMetadataFor {
 
 	my $loopCb;
 	
-	$loopCb = sub {
+	$pageCb = sub {
 		# Go fetch metadata for all tracks on the playlist without metadata
 		my @need;
 			
@@ -685,7 +685,7 @@ sub getMetadataFor {
 				
 		if (scalar @need) {
 		
-			_getMeta($client, $loopCb, join( ',', @need ));
+			_getMetaPage($client, $pageCb, join( ',', @need ));
 			
 		} else {
 			$client->master->pluginData(fetchingYTMeta => 0);
@@ -702,7 +702,7 @@ sub getMetadataFor {
 		}	
 	};
 
-	$loopCb->();
+	$pageCb->();
 	
 	return {	
 			type	=> 'YouTube',
@@ -712,7 +712,7 @@ sub getMetadataFor {
 	};
 }	
 	
-sub _getMeta {
+sub _getMetaPage {
 	my ($client, $cb, $ids) = @_;
 	
 	Plugins::YouTube::API->getVideoDetails( sub {
