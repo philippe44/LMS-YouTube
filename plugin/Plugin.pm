@@ -168,6 +168,8 @@ sub toplevel {
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_CHANNELSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'channel' } ] },
 
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_PLAYLISTSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'playlist' } ] },
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_WHOLE'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'video,channel,playlist' } ] },
 	
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_RECENTLYPLAYED'), url  => \&recentHandler, },
 
@@ -352,7 +354,7 @@ sub _renderList {
 		#result of search amongst videos within a given channel/playlist
 		elsif (!ref $entry->{id} || ($entry->{id}->{kind} && $entry->{id}->{kind} eq 'youtube#video')) {
 			my $id;
-
+			
 			if ($snippet->{id}) {
 				$id = $snippet->{id}->{videoId};
 			}
@@ -378,6 +380,7 @@ sub _renderList {
 		}
 		#result of search amongst channels
 		elsif (my $id = $entry->{id}->{channelId}) {
+			$item->{name} = '<b>(C)</b> ' . $title;
 			$item->{passthrough} = [ { channelId => $id, %{$through} } ];
 			$item->{url}         = \&searchHandler;
 			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
@@ -385,6 +388,7 @@ sub _renderList {
 		}
 		#result of search amongst playlists
 		elsif (my $id = $entry->{id}->{playlistId}) {
+			$item->{name} = '<b>(P)</b> ' . $title;
 			$item->{passthrough} = [ { playlistId => $id, %{$through} } ];
 			$item->{url}         = \&playlistHandler;
 			$item->{favorites_url}	= 'ytplaylist://playlistId=' . $id;
