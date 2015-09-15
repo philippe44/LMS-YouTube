@@ -34,48 +34,14 @@ sub search {
 	_pagedCall('search', $args, $cb);
 }
 
-sub searchVideos {
-	my ( $class, $cb, $args ) = @_;
-	
-	$args ||= {};
-	$args->{type} ||= 'video';
-	$class->search($cb, $args);
-}	
-
-sub searchChannels {
-	my ( $class, $cb, $args ) = @_;
-	
-	$args ||= {};
-	$args->{type} = 'channel';
-	$class->search($cb, $args);
-}
-
-sub searchChannelsDirect {
-	my ( $class, $cb, $args ) = @_;
+sub searchDirect {
+	my ( $class, $type, $cb, $args ) = @_;
 	
 	$args ||= {};
 	
-	_pagedCall('channels', {
+	_pagedCall( $type, {
 		%{$args},
 		_noRegion 	=> 1,
-	}, $cb);
-}
-
-sub searchPlaylists {
-	my ( $class, $cb, $args ) = @_;
-	
-	$args ||= {};
-	$args->{type} = 'playlist';
-	$class->search($cb, $args);
-}
-
-sub getPlaylist {
-	my ( $class, $cb, $args ) = @_;
-	
-	_pagedCall('playlistItems', {
-		playlistId => $args->{playlistId},
-		_noRegion  => 1,
-		quota	   => $args->{quota},
 	}, $cb);
 }
 

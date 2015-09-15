@@ -160,14 +160,14 @@ sub toplevel {
 		
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_GUIDECATEGORIES'), type => 'url', url => \&guideCategoriesHandler },
 
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_SEARCH'),  type => 'search', url => \&videoSearchHandler },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_SEARCH'),  type => 'search', url => \&searchHandler },
 
 		#FIXME: is this always 10 ?
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_MUSICSEARCH'), type => 'search', url => \&videoSearchHandler, passthrough => [ { videoCategoryId => 10 }] },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_MUSICSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { videoCategoryId => 10 } ] },
 
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_CHANNELSEARCH'), type => 'search', url => \&channelSearchHandler },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_CHANNELSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'channel' } ] },
 
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_PLAYLISTSEARCH'), type => 'search', url => \&playlistSearchHandler },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_PLAYLISTSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'playlist' } ] },
 	
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_RECENTLYPLAYED'), url  => \&recentHandler, },
 
@@ -239,7 +239,7 @@ sub guideCategoriesHandler {
 			push @$items, {
 				name => $title,
 				type => 'url',
-				url  => \&channelDirectSearchHandler,
+				url  => \&channelHandler,
 				passthrough => [  { categoryId => $entry->{id} } ],
 			};
 		}
@@ -262,7 +262,7 @@ sub videoCategoriesHandler {
 			push @$items, {
 				name => $title,
 				type => 'search',
-				url  => \&videoSearchHandler,
+				url  => \&searchHandler,
 				passthrough => [  { videoCategoryId => $entry->{id} } ],
 			};
 		}
@@ -271,7 +271,7 @@ sub videoCategoriesHandler {
 	}, $args->{quantity} + $args->{index} || 0 );
 }
 
-sub videoSearchHandler {
+sub searchHandler {
 	my ($client, $cb, $args, $params) = @_;
 	
 	if ($args->{search}) {
@@ -283,34 +283,34 @@ sub videoSearchHandler {
 					   ($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
 					   $args->{quantity};
 	
-	Plugins::YouTube::API->searchVideos(sub {
+	Plugins::YouTube::API->search(sub {
 		$cb->( { items => _renderList($_[0]->{items}), 
 				 total => $_[0]->{total} } );
-	}, $params);
+	}, $params );
 }
 
-sub channelSearchHandler {
-	my ($client, $cb, $args) = @_;
-		
-	$args->{search} = encode('utf8', $args->{search});
-		
-	Plugins::YouTube::API->searchChannels(sub {
+sub playlistHandler {
+	my ($client, $cb, $args, $params) = @_;
+	
+	$params ||= {};
+	
+	Plugins::YouTube::API->searchDirect('playlistItems', sub {
 		$cb->( { items => _renderList($_[0]->{items}), 
 				 total => $_[0]->{total} } );
 	}, {
-		q 	   => delete $args->{search},
+		playlistId 	=> $params->{playlistId},
 		quota  => defined $args->{index} ? 
 				($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
 				$args->{quantity},
 	});
 }
 
-sub channelDirectSearchHandler {
+sub channelHandler {
 	my ($client, $cb, $args, $params) = @_;
 	
 	$params ||= {};
 	
-	Plugins::YouTube::API->searchChannelsDirect(sub {
+	Plugins::YouTube::API->searchDirect('channels', sub {
 		$cb->( { items => _renderList($_[0]->{items}), 
 				 total => $_[0]->{total} } );
 	}, {
@@ -321,26 +321,11 @@ sub channelDirectSearchHandler {
 	});
 }
 
-sub playlistSearchHandler {
-	my ($client, $cb, $args) = @_;
-	
-	$args->{search} = encode('utf8', $args->{search});
-	
-	Plugins::YouTube::API->searchPlaylists(sub {
-		$cb->( { items => _renderList($_[0]->{items}), 
-				 total => $_[0]->{total} } );
-	}, { 
-		q 	  => delete $args->{search},
-		quota  => defined $args->{index} ? 
-				($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
-				$args->{quantity},
-	});
-}
-
 sub _renderList {
-	my ($entries) = @_;
-
+	my ($entries, $through) = @_;
 	my $items = [];
+	
+	$through ||= {};
 	
 	for my $entry (@{$entries || []}) {
 		my $snippet = $entry->{snippet} || next;
@@ -359,7 +344,7 @@ sub _renderList {
 			my $id = $entry->{id};
 						
 			$item->{passthrough} = [ { channelId => $id, type => 'video,playlist' } ];
-			$item->{url}        = \&videoSearchHandler;
+			$item->{url}        = \&searchHandler;
 			#$item->{type}		= 'search';
 			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
 			$item->{favorites_type}	= 'audio';
@@ -393,14 +378,14 @@ sub _renderList {
 		}
 		#result of search amongst channels
 		elsif (my $id = $entry->{id}->{channelId}) {
-			$item->{passthrough} = [ { channelId => $id } ];
-			$item->{url}         = \&videoSearchHandler;
+			$item->{passthrough} = [ { channelId => $id, %{$through} } ];
+			$item->{url}         = \&searchHandler;
 			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
 			$item->{favorites_type}	= 'audio';
 		}
 		#result of search amongst playlists
 		elsif (my $id = $entry->{id}->{playlistId}) {
-			$item->{passthrough} = [ { playlistId => $id } ];
+			$item->{passthrough} = [ { playlistId => $id, %{$through} } ];
 			$item->{url}         = \&playlistHandler;
 			$item->{favorites_url}	= 'ytplaylist://playlistId=' . $id;
 			$item->{favorites_type}	= 'audio';
@@ -432,20 +417,6 @@ sub _getImage {
 	return $image;
 }
 
-sub playlistHandler {
-	my ($client, $cb, $args, $params) = @_;
-	
-	Plugins::YouTube::API->getPlaylist(sub {
-		$cb->( { items => _renderList($_[0]->{items}), 
-				 total => $_[0]->{total} } );
-	}, {
-		playlistId 	=> $params->{playlistId},
-		quota  => defined $args->{index} ? 
-				($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
-				$args->{quantity},
-	});
-}
-
 sub trackInfoMenu {
 	my ($client, $url, $track, $remoteMeta) = @_;
 
@@ -456,7 +427,7 @@ sub trackInfoMenu {
 		return {
 			type      => 'outline',
 			name      => cstring($client, 'PLUGIN_YOUTUBE_ON_YOUTUBE'),
-			url       => \&videoSearchHandler,
+			url       => \&searchHandler,
 			passthrough => [ { q => "$artist $title" } ], 
 		};
 	}
@@ -471,7 +442,7 @@ sub artistInfoMenu {
 		return {
 			type      => 'outline',
 			name      => cstring($client, 'PLUGIN_YOUTUBE_ON_YOUTUBE'),
-			url       => \&videoSearchHandler,
+			url       => \&searchHandler,
 			passthrough => [ { q => $artist } ], 
 		};
 	}
@@ -516,13 +487,13 @@ sub searchInfoMenu {
 			{
 				name => cstring($client, 'PLUGIN_YOUTUBE_SEARCH'),
 				type => 'link',
-				url  => \&videoSearchHandler, 
+				url  => \&searchHandler, 
 				passthrough => [ { q => $query }]
 			},
 			{
 				name => cstring($client, 'PLUGIN_YOUTUBE_MUSICSEARCH'),
 				type => 'link',
-				url  => \&videoSearchHandler, 
+				url  => \&searchHandler, 
 				passthrough => [ { videoCategoryId => 10, q => $query }]
 			},
 		   ],

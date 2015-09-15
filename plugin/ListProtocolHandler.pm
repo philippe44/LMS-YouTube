@@ -25,9 +25,9 @@ sub overridePlayback {
 	
 	if ($type eq 'channelId') {
 	
-		Plugins::YouTube::API->searchVideos( sub {
+		Plugins::YouTube::API->search( sub {
 			createPlaylist($client, Plugins::YouTube::Plugin::_renderList($_[0]->{items})); }, 
-			{ channelId => $id } );
+			{ channelId => $id, type => 'video' } );
 			
 	} elsif ($type eq 'playlistId') {
 	
