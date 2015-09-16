@@ -346,6 +346,7 @@ sub _renderList {
 		if ($entry->{kind} eq 'youtube#channel') {
 			my $id = $entry->{id};
 						
+			$item->{name} = '<b>(C)</b> ' . $title;
 			$item->{passthrough} = [ { channelId => $id, type => 'video,playlist' } ];
 			$item->{url}        = \&searchHandler;
 			#$item->{type}		= 'search';

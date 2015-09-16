@@ -31,7 +31,7 @@ sub overridePlayback {
 			
 	} elsif ($type eq 'playlistId') {
 	
-		Plugins::YouTube::API->getPlaylist( sub {
+		Plugins::YouTube::API->searchDirect( 'playlistItems', sub {
 			createPlaylist($client, Plugins::YouTube::Plugin::_renderList($_[0]->{items})); }, 
 			{ playlistId => $id } );
 			

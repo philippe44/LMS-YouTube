@@ -615,9 +615,9 @@ sub getMetadataFor {
 	my $icon = $class->getIcon();
 	
 	main::DEBUGLOG && $log->debug("getmetadata: $url");
-		
+			
 	my $id = $class->getId($url) || return {};
-	
+		
 	if (my $meta = $cache->get("yt:meta-$id")) {
 		$song->track->secs($meta->{'duration'}) if $song;
 				

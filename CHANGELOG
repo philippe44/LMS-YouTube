@@ -1,4 +1,4 @@
-0.33.x
+0.33
  - Encode search in utf8 to accept multi-byte strings
  - Remove cache flush, does not work
  - Channels and Playlists can be added to favorites
