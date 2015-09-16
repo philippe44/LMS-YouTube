@@ -3,7 +3,7 @@ use base qw(IO::Socket::SSL Slim::Formats::RemoteStream);
 
 use strict;
 
-use List::Util qw(min max);
+use List::Util qw(min max first);
 use HTML::Parser;
 use URI::Escape;
 use Scalar::Util qw(blessed);
@@ -683,7 +683,17 @@ sub getMetadataFor {
 				$client->currentPlaylistUpdateTime( Time::HiRes::time() );
 				Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );
 			}	
-		}	
+			
+			if (my $match = first { /$id/ } @need) { 
+				my $meta = {
+					type	=> 'YouTube',
+					title	=> $url,
+					icon	=> $icon,
+					cover	=> $icon,
+				};	
+				$cache->set("yt:meta-" . $id, $meta, 86400);
+			}
+		} 
 	};
 
 	$client->master->pluginData(fetchingYTMeta => 1);

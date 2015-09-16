@@ -82,7 +82,7 @@ sub _pagedCall {
 	my ( $method, $args, $cb ) = @_;
 	
 	my $wantedItems = min(delete $args->{quota} || $prefs->get('max_items'));
-			
+				
 	my $items = [];
 		
 	my $pagingCb;

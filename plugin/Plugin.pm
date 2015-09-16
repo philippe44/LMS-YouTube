@@ -334,6 +334,7 @@ sub _renderList {
 		my $title = $snippet->{title} || next;
 		
 		next unless $entry->{id};
+		next unless $snippet->{thumbnails};
 		
 		my $item = {
 			name => $title,

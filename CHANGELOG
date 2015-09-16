@@ -4,6 +4,7 @@
  - Channels and Playlists can be added to favorites
  - Pressing 'play' on guided channels only play video in channels, *not* playlist
  - Change backend / frontend a bit to factorize similar function 
+ - Skip videos w/o a thumbnail(private/deleted)
  - (B) play/add on a channel/playlist was limited to 1st 50 items
  - (B) on LMS < 7.9 playlist played directly from channel/playlist failed to get metadata
  
