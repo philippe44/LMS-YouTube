@@ -5,6 +5,8 @@
  - Pressing 'play' on guided channels only play video in channels, *not* playlist
  - Change backend / frontend a bit to factorize similar function 
  - Skip videos w/o a thumbnail(private/deleted)
+ - Channels are in bold and playlist in italic bold
+ - Add search in everything (channel, playlist and video)
  - (B) play/add on a channel/playlist was limited to 1st 50 items
  - (B) on LMS < 7.9 playlist played directly from channel/playlist failed to get metadata
  
