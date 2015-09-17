@@ -326,7 +326,11 @@ sub channelHandler {
 sub _renderList {
 	my ($entries, $through) = @_;
 	my $items = [];
-	
+	my $chTags	= { prefix => $prefs->get('channel_prefix'), 
+					suffix => $prefs->get('channel_suffix') };
+	my $plTags	= { prefix => $prefs->get('playlist_prefix'), 
+					suffix => $prefs->get('playlist_suffix') };
+
 	$through ||= {};
 	
 	for my $entry (@{$entries || []}) {
@@ -346,7 +350,7 @@ sub _renderList {
 		if ($entry->{kind} eq 'youtube#channel') {
 			my $id = $entry->{id};
 						
-			$item->{name} = '<b>' . $title . '</b>';
+			$item->{name} = $chTags->{prefix} . $title . $chTags->{suffix};
 			$item->{passthrough} = [ { channelId => $id, type => 'video,playlist' } ];
 			$item->{url}        = \&searchHandler;
 			#$item->{type}		= 'search';
@@ -382,7 +386,7 @@ sub _renderList {
 		}
 		#result of search amongst channels
 		elsif (my $id = $entry->{id}->{channelId}) {
-			$item->{name} = '<b>' . $title . '</b>';
+			$item->{name} = $chTags->{prefix} . $title . $chTags->{suffix};
 			$item->{passthrough} = [ { channelId => $id, %{$through} } ];
 			$item->{url}         = \&searchHandler;
 			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
@@ -390,7 +394,7 @@ sub _renderList {
 		}
 		#result of search amongst playlists
 		elsif (my $id = $entry->{id}->{playlistId}) {
-			$item->{name} = '<b><i>' . $title . '</i></b>' ;
+			$item->{name} = $plTags->{prefix} . $title . $plTags->{suffix};
 			$item->{passthrough} = [ { playlistId => $id, %{$through} } ];
 			$item->{url}         = \&playlistHandler;
 			$item->{favorites_url}	= 'ytplaylist://playlistId=' . $id;

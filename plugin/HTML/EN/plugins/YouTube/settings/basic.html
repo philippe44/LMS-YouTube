@@ -30,6 +30,24 @@
 
 	[% END %]
 	
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_CHANNELTAGS" desc="PLUGIN_YOUTUBE_CHANNELTAGS_DESC" %]
+
+		[% "PLUGIN_YOUTUBE_PREFIX" | string %]
+		&nbsp<input type="text" class="stdedit" name="pref_channel_prefix" id="pref_channel_prefix" value="[% prefs.pref_channel_prefix %]" size="5">
+		&nbsp[% "PLUGIN_YOUTUBE_SUFFIX" | string %]
+		&nbsp<input type="text" class="stdedit" name="pref_channel_suffix" id="pref_channel_suffix" value="[% prefs.pref_channel_suffix %]" size="5">
+
+	[% END %]
+	
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_PLAYLISTTAGS" desc="PLUGIN_YOUTUBE_PLAYLISTTAGS_DESC" %]
+
+		[% "PLUGIN_YOUTUBE_PREFIX" | string %]
+		&nbsp<input type="text" class="stdedit" name="pref_playlist_prefix" id="pref_playlist_prefix" value="[% prefs.pref_playlist_prefix %]" size="5">
+		&nbsp[% "PLUGIN_YOUTUBE_SUFFIX" | string %]
+		&nbsp<input type="text" class="stdedit" name="pref_playlist_suffix" id="pref_playlist_suffix" value="[% prefs.pref_playlist_suffix %]" size="5">
+
+	[% END %]
+	
 	</div>
 	
 <!--

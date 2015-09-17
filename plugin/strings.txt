@@ -87,3 +87,26 @@ PLUGIN_YOUTUBE_CACHE
 
 PLUGIN_YOUTUBE_CACHE_DESC
 	EN	Search results are cached for a day. Click to flush them
+
+PLUGIN_YOUTUBE_CHANNELTAGS
+	EN	Channel identification tags
+
+PLUGIN_YOUTUBE_CHANNELTAGS_DESC
+	EN	To identify channels amongst playlists and videos in a search result, set string or font modifier (eg <b> and </b> for bold) to be added before and after then title
+
+PLUGIN_YOUTUBE_PLAYLISTTAGS
+	EN	Playlist identification tags
+	
+PLUGIN_YOUTUBE_CHANNELTAGS_DESC
+	EN	To identify playlists amongst channels and videos in a search result, set string or font modifier (eg <b> and </b> for bold) to be added before and after then title
+	
+PLUGIN_YOUTUBE_PREFIX
+	EN	Prefix
+	
+PLUGIN_YOUTUBE_SUFFIX
+	EN	Suffix
+
+
+
+	
+	
