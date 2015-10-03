@@ -8,7 +8,7 @@ PLUGIN_YOUTUBE_MISSINGKEY
 	EN	Missing YouTube API key (see settings)
 	
 PLUGIN_YOUTUBE_MISSINGSSL
-	EN	SSL required (try to install it using CPAN)
+	EN	SSL required (try to install it using CPAN and/or on Linux do "sudo apt-get install libio-socket-ssl-perl")
 	
 PLUGIN_YOUTUBE_SEARCH
 	EN	YouTube Search

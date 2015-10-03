@@ -41,17 +41,16 @@ sub open {
 	my $args  = shift;
 	my $url   = $args->{'url'} || '';
 	
-	my ($server, $port, $path) = Slim::Utils::Misc::crackURL($url);
+	$url =~ m|(?:https)://(?:([^\@:]+):?([^\@]*)\@)?([^:/]+):*(\d*)(\S*)|i;
+	my ($server, $port, $path) = ($3, $4 || 443, $5);
 	my $timeout = 10;
-
-	if ($url !~ /^http/ || !$server || !$port) {
+	
+	if ($url !~ /^https/ || !$server || !$port) {
 
 		$log->error("Couldn't find valid protocol, server or port in url: [$url]");
 		return;
 	}
 	
-	$port = 443 if $url =~ /^https:/;
-
 	$log->info("Opening connection to $url: \n[$server on port $port with path $path with timeout $timeout]");
 
 	my $sock = $class->SUPER::new(

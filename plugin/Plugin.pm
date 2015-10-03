@@ -148,7 +148,7 @@ sub toplevel {
 		return;
 	}
 	
-	if (!Slim::Networking::Async::HTTP::hasSSL()) {
+	if (!Slim::Networking::Async::HTTP::hasSSL() || !eval { require IO::Socket::SSL } ) {
 		$callback->([
 			{ name => cstring($client, 'PLUGIN_YOUTUBE_MISSINGSSL'), type => 'text' },
 		]);

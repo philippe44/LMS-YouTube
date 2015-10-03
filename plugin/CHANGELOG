@@ -1,3 +1,13 @@
+0.35
+ - Trying to detect if IO::Socket::SSL is available
+ - Favorite returned list was not accepted (blessing problem ?) 
+ 
+0.34.1
+ - url parsing is done inside protocolhandler 
+
+0.34
+ - offer choice to prefix and postfix for Channel and Playlist
+ 
 0.33
  - Encode search in utf8 to accept multi-byte strings
  - Remove cache flush, does not work
