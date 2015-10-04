@@ -50,7 +50,7 @@ sub createPlaylist {
 	}
 	
 	$client->execute([ 'playlist', 'clear' ]);
-	$client->execute([ 'playlist', 'addtracks', 'listRef', \@urls ]);
+	$client->execute([ 'playlist', 'addtracks', 'listRef', \@tracks ]);
 	$client->execute([ 'play' ]);
 }
 
