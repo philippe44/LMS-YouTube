@@ -1,3 +1,9 @@
+0.36.1
+ - Addition help in settings to add missing SSL libraries
+
+0.36
+ - Fix constant "plugin updated" message in LMS
+ 
 0.35
  - Trying to detect if IO::Socket::SSL is available
  - Favorite returned list was not accepted (blessing problem ?) 

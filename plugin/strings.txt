@@ -8,8 +8,9 @@ PLUGIN_YOUTUBE_MISSINGKEY
 	EN	Missing YouTube API key (see settings)
 	
 PLUGIN_YOUTUBE_MISSINGSSL
-	EN	SSL required (try to install it using CPAN and/or on Linux do "sudo apt-get install libio-socket-ssl-perl")
-	
+	EN	SSL required (try to install it using CPAN and/or on Linux do "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl
+")
+
 PLUGIN_YOUTUBE_SEARCH
 	EN	YouTube Search
 
@@ -53,7 +54,12 @@ PLUGIN_YOUTUBE_BANNER
 	EN	WARNING
 
 PLUGIN_YOUTUBE_BANNER_TEXT
-	EN	Please note that this plugin streams the entire YouTube video file to playback the audio stream.  This will use use significantly more network bandwidth than audio only streaming.  Please consider this if your internet connection has a usage charge.
+	EN	Please note that this plugin streams the entire YouTube video file to playback the audio stream.  
+	EN	This will use use significantly more network bandwidth than audio only streaming.  Please consider
+	EN	this if your internet connection has a usage charge.<br>
+	EN	Note that SSL is required, but on some Linux installation, a few libraries are missing. If the plugin
+	EN	does not work, open a command line and run: 
+	EN	"sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl"
 
 PLUGIN_YOUTUBE_PREFER_LOWBITRATE
 	EN	Preferred Streams
