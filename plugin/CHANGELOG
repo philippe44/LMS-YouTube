@@ -1,3 +1,6 @@
+0.37
+ - only metadata from active playlist where searched
+
 0.36.1
  - Addition help in settings to add missing SSL libraries
 

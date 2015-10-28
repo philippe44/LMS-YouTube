@@ -651,11 +651,11 @@ sub getMetadataFor {
 		for my $track ( @{ Slim::Player::Playlist::playList($client) } ) {
 			my $trackURL = blessed($track) ? $track->url : $track;
 			if ( $trackURL =~ m{youtube:/*(.+)} ) {
-				my $id = $class->getId($trackURL);
-				if ( $id && !$cache->get("yt:meta-$id") ) {
-					push @need, $id;
+				my $trackId = $class->getId($trackURL);
+				if ( $trackId && !$cache->get("yt:meta-$trackId") && $trackId != $id ) {
+					push @need, $trackId;
 				}
-				elsif (!$id) {
+				elsif (!$trackId) {
 					$log->warn("No id found: $trackURL");
 				}
 			
@@ -696,6 +696,11 @@ sub getMetadataFor {
 	};
 
 	$client->master->pluginData(fetchingYTMeta => 1);
+	
+	# Need to start with current $id in case there is no YT active playlist
+	_getBulkMetadata($client, undef, $id);
+	
+	# Then check the playlist (or terminate if empty)
 	$pagingCb->(1);
 	
 	return {	
@@ -752,7 +757,7 @@ sub _getBulkMetadata {
 			}
 		}				
 			
-		$cb->(1);
+		$cb->(1) if ($cb);
 		
 	}, $ids);
 }
