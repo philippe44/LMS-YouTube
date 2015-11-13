@@ -381,20 +381,28 @@ sub extract_object {
     return $obj;
 }
 
+#(?:function\s+\Q$funcname\E|[{;]\Q$funcname\E\s*=\s*function)\s*
 
 sub extract_function {
     my ($self, $depth, $funcname) = @_;
     $self->progress($depth, "--", "Extract $funcname");
+	my $args;
+    my $code;
 
-    if (!($self->{code} =~ /
-                (?:function\s+\Q$funcname\E|[{;]\Q$funcname\E\s*=\s*function)\s*
+	if (($self->{code} =~ /(?:function\s+\Q$funcname\E|[{;]\Q$funcname\E\s*=\s*function)\s*
                 \(([^)]*)\)\s*
-                \{([^}]+)\}
-             /x)) {
-	die "Could not find JS function '$funcname'";
+                \{([^}]+)\}/x)) {
+		$args = $1;
+		$code = $2;
+	} elsif (($self->{code} =~ /(?:var\s+\Q$funcname\E\s*=\s*function)\s*
+                \(([^)]*)\)\s*
+                \{([^}]+)\}/x)) {
+		$args = $1;
+		$code = $2;
+	} else {
+		die "Could not find JS function '$funcname'";
     }
-    my $args = $1;
-    my $code = $2;
+    
     $self->progress($depth, "%%", $code);
     $self->progress($depth, "--", "Got $args with code $code");
     my @argnames = split /,/, $args;

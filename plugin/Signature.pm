@@ -23,7 +23,7 @@ sub cache_player {
 
     my $js = Plugins::YouTube::JSInterp->new($code);
 
-    if ($code !~ /\.sig\|\|([a-zA-Z0-9\$]+)\(/) {
+	if ($code !~ /\.sig\|\|([a-zA-Z0-9\$]+)\(/) {
 	die "Cannot find JS player signature function name in '" . $code . "'";
     }
 
