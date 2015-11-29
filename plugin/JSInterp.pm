@@ -360,7 +360,7 @@ sub extract_object {
             (?:var\s+)?
              \Q$objname\E
              \s*=\s*\{
-             \s*(([a-zA-Z\$0-9]+\s*:\s*function\(.*?\)\s*\{.*?\})*)
+             \s*(([a-zA-Z\$0-9]+\s*:\s*function\(.*?\)\s*\{.*?\}(?:,\s*)?)*)
             \}\s*;
               /x)) {
 	die "Could not extract JS object '$objname'";
@@ -402,7 +402,7 @@ sub extract_function {
 	} else {
 		die "Could not find JS function '$funcname'";
     }
-    
+
     $self->progress($depth, "%%", $code);
     $self->progress($depth, "--", "Got $args with code $code");
     my @argnames = split /,/, $args;
