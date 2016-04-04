@@ -1,14 +1,14 @@
 <?xml version='1.0' standalone='yes'?>
 <extensions>
-  <icon>plugins/YouTube/html/images/youtube.png</icon>
-  <description>PLUGIN_YOUTUBE_DESC</description>
   <module>Plugins::YouTube::Plugin</module>
-  <defaultState>enabled</defaultState>
-  <targetApplication>
-    <id>SlimServer</id>
-    <maxVersion>7.*</maxVersion>
-    <minVersion>7.7</minVersion>
-  </targetApplication>
   <name>PLUGIN_YOUTUBE</name>
+  <description>PLUGIN_YOUTUBE_DESC</description>
   <version>0.37.4</version>
+  <icon>plugins/YouTube/html/images/youtube.png</icon>
+  <targetApplication>
+    <minVersion>7.7</minVersion>
+    <maxVersion>7.*</maxVersion>
+    <id>SlimServer</id>
+  </targetApplication>
+  <defaultState>enabled</defaultState>
 </extensions>
