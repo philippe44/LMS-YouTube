@@ -394,7 +394,7 @@ sub getId {
 	if ($url =~ /^(?:youtube:\/\/)?https?:\/\/www\.youtube\.com\/watch\?v=(.*)&/ || 
 		$url =~ /^youtube:\/\/www\.youtube\.com\/v\/(.*)&/ ||
 		$url =~ /^youtube:\/\/(.*)&/ ||
-		$url =~ /([a-zA-Z0-9]+)&/ )
+		$url =~ /([a-zA-Z0-9_\-]+)&/ )
 		{
 	
 		return $1;

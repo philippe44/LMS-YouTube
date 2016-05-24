@@ -1,3 +1,6 @@
+0.38.1
+ - Hash code pattern extraction in video search by ID was only alphanumerical: '-' and '_' are need
+ 
 0.38
  - Can play the whole result of a search (only video, not channels)
  - add 'related URL/ID' search
