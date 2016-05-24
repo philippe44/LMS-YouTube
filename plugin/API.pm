@@ -90,6 +90,8 @@ sub _pagedCall {
 	$pagingCb = sub {
 		my $results = shift;
 
+		$cb->( { items => undef, total => 0 } ) if ( $results->{error} );
+		
 		push @$items, @{$results->{items}};
 		
 		main::INFOLOG && $log->info("We want $wantedItems items, have " . scalar @$items . " so far");

@@ -176,12 +176,13 @@ sub toplevel {
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_RECENTLYPLAYED'), url  => \&recentHandler, },
 
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_URL'), type => 'search', url  => \&urlHandler, },
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_URLRELATEDSEARCH'), type => 'search', url => \&relatedURLHandler },
 	]);
 }
 
 sub urlHandler {
 	my ($client, $cb, $args) = @_;
-	
 	my $url = $args->{search};
 
 	# because search replaces '.' by ' '
@@ -210,6 +211,41 @@ sub urlHandler {
 		}
 	}, $id );
 }
+
+
+sub relatedURLHandler {
+	my ($client, $cb, $args) = @_;
+	my $url = $args->{search};
+	
+	# because search replaces '.' by ' '
+	$url =~ s/ /./g;
+	
+	my $id = Plugins::YouTube::ProtocolHandler->getId($url);
+	
+	my $errorItems = { items => [ { 
+		type => 'text',
+		name => cstring($client, 'PLUGIN_YOUTUBE_BADURL'), 
+	} ] };
+	
+	if (!$id) {
+		$cb->( $errorItems );
+		return;
+	}
+	
+	my $params;
+	
+	$params->{type} = 'video';
+	$params->{relatedToVideoId} = $id;
+	$params->{quota} = defined $args->{index} ? 
+					   ($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
+					   $args->{quantity};
+	
+	Plugins::YouTube::API->search(sub {
+		$cb->( { items => _renderList($_[0]->{items}), 
+				 total => $_[0]->{total} } );
+	}, $params );
+}
+
 
 sub recentHandler {
 	my ($client, $callback, $args) = @_;
@@ -293,6 +329,7 @@ sub searchHandler {
 	}, $params );
 }
 
+
 sub playlistHandler {
 	my ($client, $cb, $args, $params) = @_;
 	
@@ -325,9 +362,35 @@ sub channelHandler {
 	});
 }
 
+sub channelHandler {
+	my ($client, $cb, $args, $params) = @_;
+	
+	$params ||= {};
+	
+	Plugins::YouTube::API->searchDirect('channels', sub {
+		$cb->( { items => _renderList($_[0]->{items}), 
+				 total => $_[0]->{total} } );
+	}, {
+		quota  => defined $args->{index} ? 
+				($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
+				$args->{quantity},
+		%{$params},
+	});
+}
+
+
+sub playAllHandler {
+	my ($client, $cb, $args, $params) = @_;
+	my @list = grep { defined $_->{play} } @{$params->{items} || []};
+	
+	$cb->( { items => \@list, total => scalar @list } );
+}
+
+
 sub _renderList {
 	my ($entries, $through) = @_;
 	my $items = [];
+	my $isTrack = 0;
 	my $chTags	= { prefix => $prefs->get('channel_prefix'), 
 					suffix => $prefs->get('channel_suffix') };
 	my $plTags	= { prefix => $prefs->get('playlist_prefix'), 
@@ -385,6 +448,7 @@ sub _renderList {
 
 			$item->{on_select} = 'play';
 			$item->{play}      = $url;
+			$isTrack++;
 		}
 		#result of search amongst channels
 		elsif (my $id = $entry->{id}->{channelId}) {
@@ -412,6 +476,13 @@ sub _renderList {
 		push @$items, $item;
 	}
 	
+	unshift @$items, {	name => cstring(undef, 'PLUGIN_YOUTUBE_PLAYALL'),
+						type => 'playlist',
+						image => Plugins::YouTube::Plugin->_pluginDataFor('icon'),
+						passthrough => [ { items => $items } ],
+						url  => \&playAllHandler,
+					} if ($isTrack > 1);	
+		
 	return $items;
 }
 

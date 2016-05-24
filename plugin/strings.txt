@@ -8,8 +8,7 @@ PLUGIN_YOUTUBE_MISSINGKEY
 	EN	Missing YouTube API key (see settings)
 	
 PLUGIN_YOUTUBE_MISSINGSSL
-	EN	SSL required (try to install it using CPAN and/or on Linux do "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl
-")
+	EN	SSL required (try to install it using CPAN and/or on Linux do "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
 
 PLUGIN_YOUTUBE_SEARCH
 	EN	YouTube Search
@@ -31,12 +30,18 @@ PLUGIN_YOUTUBE_VIDEOCATEGORIES
 
 PLUGIN_YOUTUBE_RECENTLYPLAYED
 	EN	Recently Played
-
+	
 PLUGIN_YOUTUBE_URL
-	EN	YouTube URL
+	EN	YouTube URL or Video id
+
+PLUGIN_YOUTUBE_URLRELATEDSEARCH
+	EN	Related to URL or Video id
 	
 PLUGIN_YOUTUBE_WHOLE
 	EN	YouTube Search (everything)
+	
+PLUGIN_YOUTUBE_PLAYALL
+	EN	All Songs
 	
 PLUGIN_YOUTUBE_BADURL
 	EN	Bad YouTube URL

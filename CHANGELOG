@@ -1,3 +1,8 @@
+0.38
+ - Can play the whole result of a search (only video, not channels)
+ - add 'related URL/ID' search
+ - Play URL is accepting full URL or just and ID
+
 0.37.4
  - Another change in YouTube signature management
 
