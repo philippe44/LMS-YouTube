@@ -396,7 +396,7 @@ sub extract_function {
 
 # Python version : (?:function\s+%s|[{;,]%s\s*=\s*function|var\s+%s\s*=\s*function)\s*	
 
-	if (($self->{code} =~ /(?:function\s+\Q$funcname\E|[{;,]\Q$funcname\E\s*=\s*function|var\s+\Q$funcname\E\s*=\s*function)\s*
+	if (($self->{code} =~ /(?:function\s+\Q$funcname\E|[{;,]\s*\Q$funcname\E\s*=\s*function|var\s+\Q$funcname\E\s*=\s*function)\s*
                 \(([^)]*)\)\s*
                 \{([^}]+)\}/x)) {
 		$args = $1;

@@ -9,6 +9,10 @@ use URI::Escape;
 use Scalar::Util qw(blessed);
 use JSON::XS;
 use Data::Dumper;
+use File::Spec::Functions;
+use FindBin qw($Bin);
+use lib catdir($Bin, 'Plugins', 'YouTube', 'lib');
+use Digest::CRC qw(crc);
 
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
@@ -20,13 +24,19 @@ use Plugins::YouTube::Signature;
 use constant MAX_INBUF  => 102400;
 use constant MAX_OUTBUF => 4096;
 use constant MAX_READ   => 32768;
+use constant EBML_NEED  => 12;
 
-# streaming states
-use constant HEADER     => 1;
-use constant SIZE       => 2;
-use constant TAG        => 3;
-use constant AUDIO      => 4;
-use constant DISCARD    => 5;
+use constant ID_EBML			=> "\x1A\x45\xDF\xA3";
+use constant ID_SEGMENT			=> "\x18\x53\x80\x67";
+use constant ID_TRACKS 			=> "\x16\x54\xAE\x6B";
+use constant ID_TRACK_ENTRY		=> "\xAE";
+use constant ID_TRACK_NUM		=> "\xD7";
+use constant ID_CODEC			=> "\x86";
+use constant ID_CODEC_PRIVATE	=> "\x63\xA2";
+use constant ID_CLUSTER			=> "\x1F\x43\xB6\x75";
+use constant ID_BLOCK			=> "\xA3";
+use constant ID_BLOCK_SIMPLE	=> "\xA3";
+use constant ID_TIMECODE		=> "\xE7";
 
 my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
@@ -82,7 +92,7 @@ sub new {
 
 	if (my $newtime = $seekdata->{'timeOffset'}) {
 
-		$args->{'url'} .= "&begin=" . int($newtime * 1000);
+		$args->{'url'} .= "&t=" . int($newtime);
 		$song->can('startOffset') ? $song->startOffset($newtime) : $song->{startOffset} = $newtime;
 		$args->{'client'}->master->remoteStreamStartTime(Time::HiRes::time() - $newtime);
 	}
@@ -100,17 +110,17 @@ sub new {
 		${*$self}{'vars'} = {         # variables which hold state for this instance:
 			'inBuf'       => '',      #  buffer of received flv packets/partial packets
 			'outBuf'      => '',      #  buffer of processed audio
-			'next'        => HEADER,  #  expected protocol fragment
+			'need'        => EBML_NEED,  #  minimum size of data to process
+			'id'          => undef,   #  last EBML identifier
+			'blocks'	  => 0,		  #  number of webm blocks
+			'codec'		  => undef,	  #  codec
+			'tracknum'    => 0,  	  #  track number to extract in stream
 			'streaming'   => 1,       #  flag for streaming, changes to 0 when input socket closes
-			'tagSize'     => undef,   #  size of tag expected
-			'adtsbase'    => undef,   #  base for adts output header
-			'count'       => 0,       #  number of tags processed
-			'seenaudio'   => 0,       #  whether audio has been seen (close stream if not seen within 10 tags)
 			'audioBytes'  => 0,       #  audio bytes extracted
 			'streamBytes' => 0,       #  total bytes received for stream
 		};
 	}
-
+	
 	return $self;
 }
 
@@ -146,7 +156,7 @@ sub parseHeaders {
 
 sub songBytes {}
 
-sub canSeek { 1 }
+sub canSeek { 0 }
 
 sub getSeekData {
 	my ($class, $client, $song, $newtime) = @_;
@@ -172,7 +182,7 @@ sub sysread {
 		return $nb;
 	}	
 	
-	$v->{'streaming'} &&= $self->processFLV;
+	$v->{'streaming'} &&= $self->processWebM;
 	
 	my $len = length($v->{'outBuf'});
 
@@ -210,21 +220,27 @@ sub sysread {
 }
 
 
-sub processFLV {
+sub processWebM {
 	use bytes;
 
 	my $self = shift;
 	my $v = $self->vars;
+	my $size;
 
-	$log->debug('processing FLV');
+	$log->debug('processing webm');
 	
 	while (1) {
+		my $id = $v->{id};
+		my $len;
 
-		# fetch some more from input socket until we have moved too much
-		if (length($v->{'inBuf'}) < MAX_INBUF && length($v->{'outBuf'}) < MAX_OUTBUF) {
-
+		# output full, need to empty it a bit
+		return 1 if (length($v->{'outBuf'}) >= MAX_OUTBUF);
+			
+		# fetch some more from input socket until we have moved too much			
+		if (length($v->{'inBuf'}) < MAX_INBUF) {
+		
 			my $bytes = $self->SUPER::sysread($v->{'inBuf'}, MAX_READ, length($v->{'inBuf'}));
-
+		
 			if (defined $bytes) {
 
 				if ($bytes == 0) {
@@ -240,150 +256,223 @@ sub processFLV {
 						}
 					}
 
-					return 0;
+					return 0 if (!length($v->{'inBuf'}));
 
 				} else {
 
 					$v->{'streamBytes'} += $bytes;
 				}
 			}
-		}
-
-		my $len = length($v->{'inBuf'});
-		my $next = $v->{'next'};
-
-		if ($next == HEADER && $len >= 9) {
-
-			my $sig    = substr($v->{'inBuf'}, 0, 3);
-			my $version= decode_u8(substr($v->{'inBuf'}, 3, 1));
-			my $flags  = decode_u8(substr($v-{'inBuf'}, 4, 1));
-			my $offset = decode_u32(substr($v->{'inBuf'}, 5, 4));
-			my $audio  = $flags & 0x04 ? 1 : 0;
-			my $video  = $flags & 0x01 ? 1 : 0;
-
-			if ($sig ne 'FLV' && $version != 1) {
-				$log->info("non FLV stream sig: $sig version: $version - closing");
+			
+		}	
+		
+		$len = length $v->{inBuf};
+			
+		# need more data to do something
+		next if ($v->{need} > $len);
+		
+		if (!defined $v->{id} && !$v->{demux}) {
+			$len -= getEBML(\$v->{inBuf}, \$id, \$size);
+		
+			if ($id eq ID_CLUSTER && !defined $v->{codec}) {
+				$log->error("no VORBIS codec found");
 				return 0;
 			}
-
-			$log->info("Header: sig: $sig version: $version flags: $flags (audio: $audio video: $video) offset: $offset");
-
-			$v->{'inBuf'} = substr($v->{'inBuf'}, $offset);
-			$v->{'next'}  = SIZE;
-
-		} elsif ($next == SIZE && $len >= 4) {
-
-			#my $size = decode_u32(substr($v->{'inBuf'}, 0, 4));
-
-			$v->{'inBuf'} = substr($v->{'inBuf'}, 4);
-			$v->{'next'}  = TAG;
-
-		} elsif ($next == TAG && $len >= 11) {
-
-			my $flags = decode_u8(substr($v->{'inBuf'}, 0, 1));
-			my $filter= $flags & 0x20 ? 1 : 0;
-			my $type  = $flags & 0x1f;
-			my $size  = decode_u24(substr($v->{'inBuf'}, 1, 3));
-
-			$log->debug("Tag Header: flags: $flags filt: $filter type: $type size: $size");
-
-			$v->{'tagSize'} = $size;
-			$v->{'inBuf'} = substr($v->{'inBuf'}, 11);
-			$v->{'next'}  = ($type == 8) ? AUDIO : DISCARD;
-
+						
+			$v->{id} = $id;
+			$v->{need} = $size;
+		
+			# handle all ID's whose size is the whole node and where a next ID is needed
+			if ($id eq ID_SEGMENT || $id eq ID_TRACKS || $id eq ID_CLUSTER) {
+				$v->{need} = EBML_NEED;				
+				undef $v->{id};
+				next;
+			}
+			
 			if ($size > MAX_INBUF) {
-				$log->error("tag size: $size greater than max: " . MAX_INBUF . " - closing stream");
+				$log->error("EBML too large: $size");
 				return 0;
 			}
-
-			if (!$v->{'audioseen'} && $v->{'count'}++ > 10) {
-				$log->info("closing stream - no audio");
-				return 0;
-			}
-
-		} elsif ($next == DISCARD && $len >= $v->{'tagSize'}) {
-
-			# discard as non audio tag
-			$v->{'inBuf'} = substr($v->{'inBuf'}, $v->{'tagSize'});
-			$v->{'next'}  = SIZE;
-
-		} elsif ($next == AUDIO && $len >= $v->{'tagSize'}) {
-
-			my $firstword = decode_u32(substr($v->{'inBuf'}, 0, 4));
-
-			if (($firstword & 0xFFFF0000) == 0xAF010000) {      # AAC audio data
-
-				$log->debug("AAC Audio");
-
-				my $header = $v->{'adtsbase'};
-
-				# add framesize dependant portion
-				my $framesize = $v->{'tagSize'} - 2 + 7;
-				$header |= (
-					"\x00\x00\x00" .
-						chr( (($framesize >> 11) & 0x03) ) .
-						chr( (($framesize >> 3)  & 0xFF) ) .
-						chr( (($framesize << 5)  & 0xE0) )
-				);
-
-				# add header and data to output buf
-				$v->{'outBuf'} .= $header;
-				$v->{'outBuf'} .= substr($v->{'inBuf'}, 2, $v->{'tagSize'} - 2);
-
-				$v->{'audioBytes'} += $v->{'tagSize'} - 2;
-
-				$v->{'audioseen'} ||= do {
-					$log->debug("audio seen");
-					${*$self}{'song'}->_playlist(0);
-					1;
-				};
-
-			} elsif (($firstword & 0xFFFF0000) == 0xAF000000) { # AAC Config
-
-				$log->debug("AAC Config");
-
-				my $profile  = 1; # hard code to 1 rather than ($firstword & 0x0000f800) >> 11;
-				my $sr_index = ($firstword & 0x00000780) >>  7;
-				my $channels = ($firstword & 0x00000078) >>  3;
-
-				$v->{'adtsbase'} =
-					chr( 0xFF ) .
-					chr( 0xF9 ) .
-					chr( (($profile << 6) & 0xC0) | (($sr_index << 2) & 0x3C) | (($channels >> 2) & 0x1) ) .
-					chr( (($channels << 6) & 0xC0) ) .
-					chr( 0x00 ) .
-					chr( ((0x7FF >> 6) & 0x1F) ) .
-					chr( ((0x7FF << 2) & 0xFC) );
-
-			} elsif (($firstword & 0xF0000000) == 0x20000000) { # MP3 Audio
-
-				$log->debug("MP3 Audio");
-
-				$v->{'outBuf'} .= substr($v->{'inBuf'}, 1, $v->{'tagSize'} - 1);
-				$v->{'audioBytes'} += $v->{'tagSize'} - 1;
-
-				$v->{'audioseen'} ||= do {
-					$log->debug("audio seen");
-					${*$self}{'song'}->_playlist(0);
-					1;
-				};
-			}
-
-			$v->{'inBuf'} = substr($v->{'inBuf'}, $v->{'tagSize'});
-			$v->{'next'}  = SIZE;
-
-		} else {
-
-			# can't process any more at present
-			return 1;
+							
+			if ($size > $len) {	next; }
 		}
-	}
+				
+		#$log->error ("size: $size, len: $len, truelen: " . length($v->{inBuf}) . "need: ". $v->{need});				
+		
+		# handle ID's we care		
+		if ($id eq ID_BLOCK || $id eq ID_BLOCK_SIMPLE) {
+			my $time;
+			
+			$v->{blocks}++;
+			my $out = extractVorbis(\$v->{inBuf}, $v->{codec}->{tracknum}, $size, \$time);
+			
+			if (defined $out) { 
+				$v->{outBuf} .= buildOggPage([$out], $v->{timecode} + $time, 0x00, $v->{seqnum}++);
+			}	
+		} elsif	($id eq ID_TRACK_ENTRY) {
+			my $codec =	getCodec(substr $v->{inBuf}, 0, $size);
+			
+			if (defined $codec) {
+				$v->{codec} = $codec;
+				$v->{outBuf} .= buildOggPage([$codec->{header}], 0, 0x02, $v->{seqnum}++);
+				$v->{outBuf} .= buildOggPage([$codec->{setup}, $codec->{comment}], 0, 0x00, $v->{seqnum}++);
+				${*$self}{'song'}->_playlist(0);
+			}	
+		} elsif ($id eq ID_TIMECODE) {
+			$v->{timecode} = decode_u(substr($v->{inBuf}, 0, $size), $size);
+			$log->debug("timecode: $v->{timecode}");
+			#<>;
+		}
+				
+		$v->{inBuf} = substr($v->{inBuf}, $size);
+		$v->{need} = EBML_NEED;
+		undef $v->{id};
+				
+	}	
 }
+
+
+sub buildOggPage {
+	my ($packets, $time, $flags, $seq) = @_;
+	my $count = 0;
+	my $data = "";
+	
+	# 0-3:pattern 4:vers 5:flags 6-13:granule 14-17:serial num 18-21:seqno 22-25:CRC 26:Nseq 27...:segtable
+	my $page = ("OggS" . "\x00" . pack("C", $flags) . 
+				pack("V", $time) . "\x00\x00\x00\x00" . 
+				"\x01\x00\x00\x00" . pack("V", $seq) . 
+				"\x00\x00\x00\x00" . "\x00"
+				);
+			
+	foreach my $p (@{$packets}) {
+		my $len = length $p;
+		while ($len >= 255) { $page .= "\xff"; $len -= 255; $count++ }
+		$page .= pack("C", $len);
+		$count++;
+		$data .= $p;
+	}		
+	$page .= $data;
+	
+	substr($page, 26, 1, pack("C", $count));
+	my $crc = crc($page, 32, 0, 0, 0, 0x04C11DB7, 0, 0);
+	substr($page, 22, 4, pack("V", $crc));
+	
+	return $page;
+}
+
+
+sub getCodec {
+	my $s = shift;
+	my $codec;
+	my $len = length $s;
+	
+	do {
+		my ($id, $size);
+	
+		$len -= getEBML(\$s, \$id, \$size);
+		if ($id eq ID_TRACK_NUM) {
+			$codec->{tracknum} = decode_u(substr($s, 0, $size), $size);
+			$log->debug("tracknum: $codec->{tracknum}");
+		} elsif	($id eq ID_CODEC) {
+			$codec->{id} = substr $s, 0, $size;
+			$log->info("codec: $codec->{id}");
+			return undef if ($codec->{id} ne "A_VORBIS");
+		} elsif ($id eq ID_CODEC_PRIVATE) {
+			my $count = decode_u8(substr $s, 0, 1) + 1;
+			my $hdr_size = decode_u8(substr $s, 1, 1);
+			my $set_size = decode_u8(substr $s, 2, 1);
+			$log->info ("codec headers #:$count, hdr:$hdr_size, set:$set_size, total:$size");
+									
+			$codec->{header} = substr $s, 3, $hdr_size;
+			$codec->{setup} = substr $s, 3 + $hdr_size, $set_size;
+			$codec->{comment} = substr $s, 3 + $hdr_size + $set_size, $size - 3 - $set_size - $hdr_size;
+		}	
+		$s = substr $s, $size;
+		$len -= $size;
+	} while ($len);
+
+	return $codec;
+}
+
+sub extractVorbis {
+	my ($s, $tracknum, $size, $time) = @_;
+	my $val = 0;
+	my $len;
+	
+	my $c = decode_u8(substr($$s, 0, 1));
+			
+	for ($len = 1; !($c & 0x80); $len++) { 
+		$c <<= 1; 
+		$val = ($val << 8) + decode_u8(substr($val, $len-1, 1));
+	}	
+	
+	$val = ($val << 8) + decode_u8(substr($$s, $len-1, 1));
+	$val &= ~(1 << (7*$len));
+	
+	return undef if ($val != $tracknum);
+	
+	$$time = decode_u16(substr $$s, $len, 2);
+	my $flags = decode_u8(substr $$s, $len + 2, 1);
+	$log->debug("found track: $val (ts: $$time, flags: $flags)");
+	
+	if ($flags & 0x60) {
+		$log->error("lacing trame, unsupported");
+		return undef;
+	}
+		
+	return substr($$s, $len + 2 + 1, $size - ($len + 2 + 1));
+}
+
+sub getEBML {
+	my $in = shift;
+	my $id = shift;
+	my $size = shift;
+	my ($len, $total);
+	
+	#get the element_id first
+	my $c = decode_u8(substr($$in, 0, 1));
+	
+	for ($len = 1; !($c & 0x80); $len++) { $c <<= 1; }
+	$$id = substr($$in, 0, $len);
+	$$in = substr($$in, $len);
+	$total = $len;
+	
+	# then get the data size
+	$c = decode_u8(substr($$in, 0, 1));
+	
+	$$size = 0;
+	for ($len = 1; !($c & 0x80); $len++) { 
+		$c <<= 1; 
+		$$size = ($$size << 8) + decode_u8(substr($$in, $len-1, 1));
+	}	
+	
+	$$size = ($$size << 8) + decode_u8(substr($$in, $len-1, 1));
+	$$size &= ~(1 << (7*$len));
+	
+	$log->debug("EBML : $$id, size:$$size (tagsize: $total + $len)");
+	
+	$$in = substr($$in, $len);
+	$total += $len;
+	
+	return $total;
+}
+
 
 sub decode_u8  { unpack('C', $_[0]) }
 sub decode_u16 { unpack('n', $_[0]) }
 sub decode_u24 { unpack('N', ("\0" . $_[0]) ) }
 sub decode_u32 { unpack('N', $_[0]) }
+sub decode_u64 { unpack('Q', $_[0]) }
+sub decode_u { 
+	my ($s, $len) = @_;
+	return unpack('C', $_[0]) if ($len == 1);
+	return unpack('n', $_[0]) if ($len == 2);
+	return unpack('N', ("\0" . $_[0]) ) if ($len == 3);
+	return unpack('N', $_[0]) if ($len == 4);
+	return unpack('Q', $_[0]) if ($len == 8);
+	return undef;
+}
+
 
 sub getId {
 	my ($class, $url) = @_;
@@ -491,20 +580,23 @@ sub getNextTrack {
 				$log->debug("player_url: $vars{player_url}");
 			}
 
-            for my $stream (split(/,/, $vars{url_encoded_fmt_stream_map})) {
+			$log->debug($vars{url_encoded_fmt_stream_map});
+			for my $stream (split(/,/, $vars{url_encoded_fmt_stream_map})) {
                 no strict 'subs';
                 my %props = map { split(/=/, $_) } split(/&/, $stream);
 
 				# check streams in preferred id order
-                my @streamOrder = $prefs->get('prefer_lowbitrate') ? (5, 34) : (34, 35, 5);
+                #my @streamOrder = $prefs->get('prefer_lowbitrate') ? (5, 34) : (34, 35, 5);
+				my @streamOrder = (43);
 
-                for my $id (@streamOrder) {
+			    for my $id (@streamOrder) {
+				$log->info("itag: $props{itag}");
                 if ($id == $props{itag}) {
 					$log->debug("props: $props{url}");
                     my $url = uri_unescape($props{url});
 					my $rawsig;
 					my $encryptedsig = 0;
-											
+					
 					if (exists $props{s}) {
 						$rawsig = $props{s};
 						$encryptedsig = 1;
@@ -514,9 +606,9 @@ sub getNextTrack {
 						$rawsig = $props{signature};
 					}
 											
-					$log->debug("sig $rawsig encrypted $encryptedsig");
+					$log->info("sig $rawsig encrypted $encryptedsig");
 					
-					push @streams, { url => $url, format => $id == 5 ? 'mp3' : 'aac',
+					push @streams, { url => $url, format => $id == 43 ? 'ogg' : 'xxx',
 								 rawsig => $rawsig, encryptedsig => $encryptedsig };
 				}
 			}

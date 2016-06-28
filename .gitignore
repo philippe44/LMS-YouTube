@@ -225,3 +225,4 @@ repo*.xml
 /*.pm
 *.diff
 /.gitignore
+/doc

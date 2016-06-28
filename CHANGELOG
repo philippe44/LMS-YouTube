@@ -1,3 +1,7 @@
+0.40
+ - FLV is deprecated, move to WEBM format
+ - Update JS parsing rule
+ 
 0.38.1
  - Hash code pattern extraction in video search by ID was only alphanumerical: '-' and '_' are need
  
