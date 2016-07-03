@@ -173,11 +173,11 @@ sub toplevel {
 		
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_WHOLE'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'video,channel,playlist' } ] },
 	
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_RECENTLYPLAYED'), url  => \&recentHandler, },
-
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_URL'), type => 'search', url  => \&urlHandler, },
 		
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_URLRELATEDSEARCH'), type => 'search', url => \&relatedURLHandler },
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_RECENTLYPLAYED'), url  => \&recentHandler, },
 	]);
 }
 

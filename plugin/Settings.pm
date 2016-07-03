@@ -20,7 +20,7 @@ sub page {
 }
 
 sub prefs {
-	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix playlist_suffix country max_items APIkey prefer_lowbitrate));
+	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix playlist_suffix country max_items APIkey));
 }
 
 sub handler {

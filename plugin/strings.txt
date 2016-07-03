@@ -66,15 +66,6 @@ PLUGIN_YOUTUBE_BANNER_TEXT
 	EN	does not work, open a command line and run: 
 	EN	"sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl"
 
-PLUGIN_YOUTUBE_PREFER_LOWBITRATE
-	EN	Preferred Streams
-
-PLUGIN_YOUTUBE_LOWRES
-	EN	Prefer Low Resolution
-
-PLUGIN_YOUTUBE_PREFER_LOWBITRATE_DESC
-	EN	Select to prefer lower quality audio from low resolution YouTube videos to use less network bandwidth.
-
 PLUGIN_YOUTUBE_APIKEY
 	EN	YouTube API access key.
 

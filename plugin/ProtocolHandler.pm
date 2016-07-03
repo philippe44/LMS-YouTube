@@ -25,18 +25,32 @@ use constant MAX_INBUF  => 102400;
 use constant MAX_OUTBUF => 4096;
 use constant MAX_READ   => 32768;
 use constant EBML_NEED  => 12;
+use constant CHUNK_SIZE => 4096;	# MUST be less than MAX_READ
 
-use constant ID_EBML			=> "\x1A\x45\xDF\xA3";
-use constant ID_SEGMENT			=> "\x18\x53\x80\x67";
-use constant ID_TRACKS 			=> "\x16\x54\xAE\x6B";
-use constant ID_TRACK_ENTRY		=> "\xAE";
-use constant ID_TRACK_NUM		=> "\xD7";
-use constant ID_CODEC			=> "\x86";
+use constant ID_HEADER		=> "\x1A\x45\xDF\xA3";
+use constant ID_SEGMENT		=> "\x18\x53\x80\x67";
+use constant ID_INFO		=> "\x15\x49\xA9\x66";
+use constant ID_TIMECODE_SCALE => "\x2A\xD7\xB1";
+use constant ID_SEEKHEAD	=> "\x11\x4D\x9B\x74";
+use constant ID_SEEK		=> "\x4D\xBB";
+use constant ID_SEEK_ID		=> "\x53\xAB";
+use constant ID_SEEK_POS	=> "\x53\xAC";
+use constant ID_TRACKS 		=> "\x16\x54\xAE\x6B";
+use constant ID_TRACK_ENTRY	=> "\xAE";
+use constant ID_TRACK_NUM	=> "\xD7";
+use constant ID_CODEC		=> "\x86";
+use constant ID_CODEC_NAME	=> "\x25\x86\x88";
 use constant ID_CODEC_PRIVATE	=> "\x63\xA2";
-use constant ID_CLUSTER			=> "\x1F\x43\xB6\x75";
-use constant ID_BLOCK			=> "\xA3";
+use constant ID_CLUSTER		=> "\x1F\x43\xB6\x75";
+use constant ID_BLOCK		=> "\xA1";
 use constant ID_BLOCK_SIMPLE	=> "\xA3";
-use constant ID_TIMECODE		=> "\xE7";
+use constant ID_TIMECODE	=> "\xE7";
+use constant ID_CUES 		=> "\x1C\x53\xBB\x6B";
+use constant ID_CUE_POINT	=> "\xBB";
+use constant ID_CUE_TIME	=> "\xB3";
+use constant ID_CUE_TRACK_POS	=> "\xB7";
+use constant ID_CUE_TRACK	=> "\xF7";
+use constant ID_CUE_CLUSTER_POS	=> "\xF1";
 
 my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
@@ -78,7 +92,8 @@ sub open {
 	# used for non blocking I/O
 	${*$sock}{'_sel'} = IO::Select->new($sock);
 	${*$sock}{'song'} = $args->{'song'};
-	
+	${*$sock}{'startTime'} = $args->{'startTime'} || 0;
+				
 	return $sock->request($args);
 }
 
@@ -89,35 +104,40 @@ sub new {
 	my $song       = $args->{'song'};
 	$args->{'url'} = $song->pluginData('stream');
 	my $seekdata   = $song->can('seekdata') ? $song->seekdata : $song->{'seekdata'};
-
+  
 	if (my $newtime = $seekdata->{'timeOffset'}) {
-
-		$args->{'url'} .= "&t=" . int($newtime);
 		$song->can('startOffset') ? $song->startOffset($newtime) : $song->{startOffset} = $newtime;
 		$args->{'client'}->master->remoteStreamStartTime(Time::HiRes::time() - $newtime);
+		$args->{url} .= "&keepalive=yes";
+		$args->{startTime} = $newtime;
 	}
-
+	
 	$log->info("url: $args->{url}");
 		
-	#$log->debug("in new class ref: ", ref $class);
 	my $self = $class->open($args);
-	#$log->debug("in new ref class: ", ref $self, "(D)", Dumper($self));
-
+		
 	if (defined($self)) {
 		${*$self}{'client'}  = $args->{'client'};
 		${*$self}{'song'}    = $args->{'song'};
 		${*$self}{'url'}     = $args->{'url'};
 		${*$self}{'vars'} = {         # variables which hold state for this instance:
+			#%{${*$self}{'vars'}},
 			'inBuf'       => '',      #  buffer of received flv packets/partial packets
 			'outBuf'      => '',      #  buffer of processed audio
-			'need'        => EBML_NEED,  #  minimum size of data to process
 			'id'          => undef,   #  last EBML identifier
-			'blocks'	  => 0,		  #  number of webm blocks
+			'need'        => EBML_NEED,  #  minimum size of data to process from Matroska file
+			'position'    => 0,       #  byte position in Matroska stream/file
 			'codec'		  => undef,	  #  codec
 			'tracknum'    => 0,  	  #  track number to extract in stream
 			'streaming'   => 1,       #  flag for streaming, changes to 0 when input socket closes
-			'audioBytes'  => 0,       #  audio bytes extracted
 			'streamBytes' => 0,       #  total bytes received for stream
+			'track'		  => undef,	  #  trackinfo
+			'cue'		  => ${*$self}{'startTime'} != 0,		  #  cue required flag
+			'seqnum'	  => 0,		  #  sequence number
+			'offset'      => 0,       #  offset request from stream to be served at next possible opportunity
+			'nextOffset'  => 0,       #  offset to apply to next GET
+			'process'	  => 1,		  #  shall sysread data be processed or just forwarded ?
+			'startTime'   => ${*$self}{'startTime'},
 		};
 	}
 	
@@ -128,15 +148,51 @@ sub formatOverride {
 	my $class = shift;
 	my $song = shift;
 
-	return $song->pluginData('format') || 'aac';
+	return $song->pluginData('format');
 }
+
+
+sub request {
+	my $self = shift;
+	my $args = shift;
+	my $process = ${*$self}{vars}->{process} || 0;
+	my $ret;
+		
+	${*$self}{vars}->{process} = 0;		
+	$ret = $self->SUPER::request($args);
+	${*$self}{vars}->{process} = $process;		
+		
+	return $ret;
+}
+
+
+sub requestString { 
+	my $self = shift; 
+	my $CRLF = "\x0D\x0A";
+	my $v = $self->vars;
+	my $offset = $v->{nextOffset} || 0;
+	my $cue = (defined $v->{cue}) ? $v->{cue} : (${*$self}{startTime} || 0);
+	
+	$log->error("cue: $v->{cue}, ${*$self}{cue}");
+		
+	my @items = split(/$CRLF/, Slim::Player::Protocols::HTTP->requestString(@_));
+	@items = grep { index($_, "Range:") } @items;
+	if ($cue) { 
+		@items = grep { index($_, "connection:") } @items;
+		push @items, 'Connection: Keep-Alive'; 
+		push @items, 'Range: bytes=' . $offset . '-' . ($offset + CHUNK_SIZE - 1);
+	}
+	else { push @items, 'Range: bytes=' . $offset . '-' }
+	
+	my $request = join($CRLF, @items);
+	$request .= $CRLF . $CRLF;
+	
+	return $request;
+}
+
 
 sub isAudio { 1 }
 
-sub requestString { 
-	shift; 
-	Slim::Player::Protocols::HTTP->requestString(@_);
-}
 
 sub parseHeaders {
 	my ( $self,  @headers ) = @_;
@@ -148,15 +204,13 @@ sub parseHeaders {
 		$header =~ s/\r/\n/g;
 		$header =~ s/\n\n/\n/g;
 
-		if ($header =~ /^Location:\s*(.*)/i) {
-				${*$self}{'redirect'} = $1;
-		}
+		${*$self}{'redirect'} = $1 if ($header =~ /^Location:\s*(.*)/i);
 	}
 }
 
 sub songBytes {}
 
-sub canSeek { 0 }
+sub canSeek { 1 }
 
 sub getSeekData {
 	my ($class, $client, $song, $newtime) = @_;
@@ -168,22 +222,59 @@ sub vars {
 	return ${*{$_[0]}}{'vars'};
 }
 
+
 sub sysread {
 	use bytes;
 
 	my $self  = $_[0];
 	# return in $_[1]
 	my $maxBytes = $_[2];
-
 	my $v = $self->vars;
+	my $bytes;
 	
-	if (!$v) {
-		my $nb = $self->SUPER::sysread($_[1], $maxBytes);
-		return $nb;
+	return $self->SUPER::sysread($_[1], $maxBytes) if (!$v->{process});
+	
+	while (length($v->{'inBuf'}) < MAX_INBUF && length($v->{'outBuf'}) < MAX_OUTBUF && $v->{streaming}) {
+			
+		$bytes = $self->SUPER::sysread($v->{'inBuf'}, MAX_READ, length($v->{'inBuf'}));
+		next unless defined $bytes;
+		
+=comment		
+		$log->error("processing webM");
+		open (my $fh, '>', "d:/toto/webm");
+		binmode $fh;
+		print $fh $v->{inBuf};
+		close $fh;
+=cut		
+		
+		# process all we have in input buffer
+		$v->{streaming} &&= $self->processWebM && $bytes;
+		$v->{streamBytes} += $bytes;
+		
+		#$log->info("bytes: $bytes, streamBytes: $v->{streamBytes}");
+		
+		# Hope this work because when doing partial reponse (206) the whole request shall
+		# be returned at once sysread as the CHUNK is s;aller than the MAX_READ. 
+		# Otherwise need to find a way to detect when chubk is bigger than file and 
+		# detecting $bytes == 0 does not work because the socket will be closed then
+		# Probably parsing the HTTP response header in sysread would work
+		if (($v->{streamBytes} == CHUNK_SIZE && $v->{cue}) || $v->{offset}) {
+			#$log->error("GET again: next $v->{nextOffset} offset $v->{offset},  $v->{streaming}");
+			if ($v->{offset}) {
+				$v->{position} = $v->{nextOffset} = $v->{offset};
+				$v->{inBuf} = "";
+				$v->{offset} = 0;
+				undef $v->{id};
+			} 
+			
+			$v->{streamBytes} = 0;
+			$v->{streaming} = 0 if (!$self->request({ url => ${*$self}{url} }));
+			$v->{nextOffset} += CHUNK_SIZE;
+		}
 	}	
 	
-	$v->{'streaming'} &&= $self->processWebM;
-	
+	#$log->info("loop streamBytes: $v->{streamBytes} inbuf:", length $v->{inBuf}, "outbuf:", length $v->{outBuf});
+		
 	my $len = length($v->{'outBuf'});
 
 	if ($len > 0) {
@@ -198,7 +289,7 @@ sub sysread {
 
 	} elsif (!$v->{'streaming'}) {
 
-		$log->debug("stream ended");
+		$log->info("stream ended $v->{streamBytes} bytes");
 
 		$self->close;
 
@@ -219,116 +310,207 @@ sub sysread {
 	}
 }
 
-
 sub processWebM {
-	use bytes;
-
 	my $self = shift;
 	my $v = $self->vars;
-	my $size;
-
-	$log->debug('processing webm');
 	
-	while (1) {
-		my $id = $v->{id};
-		my $len;
-
-		# output full, need to empty it a bit
-		return 1 if (length($v->{'outBuf'}) >= MAX_OUTBUF);
+	# process all we can ... might be over the MAX_OUTBUF
+	while ($v->{need} <= length $v->{inBuf}) {
+		my $id;
+		my $size;
 			
-		# fetch some more from input socket until we have moved too much			
-		if (length($v->{'inBuf'}) < MAX_INBUF) {
-		
-			my $bytes = $self->SUPER::sysread($v->{'inBuf'}, MAX_READ, length($v->{'inBuf'}));
-		
-			if (defined $bytes) {
-
-				if ($bytes == 0) {
-
-					if ($log->is_debug) {
-						if (my $duration = ${*$self}{'song'}->track->secs) {
-							my $audio = int($v->{'audioBytes'} * 8 / $duration / 1000);
-							my $total = int($v->{'streamBytes'} * 8 / $duration / 1000);
-							$log->debug("stream ended - audio: $v->{audioBytes} bytes $audio kbps, " .
-										"stream: $v->{streamBytes} bytes $total kbps");
-						} else {
-							$log->debug("stream ended");
-						}
-					}
-
-					return 0 if (!length($v->{'inBuf'}));
-
-				} else {
-
-					$v->{'streamBytes'} += $bytes;
-				}
-			}
-			
-		}	
-		
-		$len = length $v->{inBuf};
-			
-		# need more data to do something
-		next if ($v->{need} > $len);
-		
-		if (!defined $v->{id} && !$v->{demux}) {
-			$len -= getEBML(\$v->{inBuf}, \$id, \$size);
-		
-			if ($id eq ID_CLUSTER && !defined $v->{codec}) {
+		# first need to acquired an ID	
+		if (!defined $v->{id}) {
+			$v->{position} += getEBML(\$v->{inBuf}, \$id, \$size);
+							
+			if ($id eq ID_CLUSTER && !defined $v->{track}) {
 				$log->error("no VORBIS codec found");
 				return 0;
 			}
-						
-			$v->{id} = $id;
-			$v->{need} = $size;
-		
+					
 			# handle all ID's whose size is the whole node and where a next ID is needed
 			if ($id eq ID_SEGMENT || $id eq ID_TRACKS || $id eq ID_CLUSTER) {
-				$v->{need} = EBML_NEED;				
-				undef $v->{id};
+				$v->{segment_offset} = $v->{position} if ($id eq ID_SEGMENT);
+				$log->info("cluster of $size byte (last audio $v->{timecode} ms)") if ($id eq ID_CLUSTER);
 				next;
-			}
+			} 
 			
+			$v->{id} = $id;
+			$v->{need} = $size;
+				
 			if ($size > MAX_INBUF) {
 				$log->error("EBML too large: $size");
 				return 0;
 			}
-							
-			if ($size > $len) {	next; }
+					
+			next;
 		}
-				
-		#$log->error ("size: $size, len: $len, truelen: " . length($v->{inBuf}) . "need: ". $v->{need});				
+		
+		$id = $v->{id};
+		$size = $v->{need};;
 		
 		# handle ID's we care		
-		if ($id eq ID_BLOCK || $id eq ID_BLOCK_SIMPLE) {
-			my $time;
+		if ($id eq ID_INFO && $v->{cue}) {
+			# starting from offset, need to get TRACKS directly
+			$v->{timecode_scale} = getInfo(substr($v->{inBuf}, 0, $size), ID_TIMECODE_SCALE, "u");
+			$log->info("track timecode scale: $v->{timecode_scale}");
 			
-			$v->{blocks}++;
-			my $out = extractVorbis(\$v->{inBuf}, $v->{codec}->{tracknum}, $size, \$time);
-			
-			if (defined $out) { 
-				$v->{outBuf} .= buildOggPage([$out], $v->{timecode} + $time, 0x00, $v->{seqnum}++);
-			}	
+			$v->{offset} = getSeekOffset($v->{seektable}, ID_TRACKS) + $v->{segment_offset};
+			$log->info("tracks offset scale: $v->{offset}");
+			#<>;
+		} elsif ($id eq ID_SEEKHEAD && $v->{cue}) {
+			# starting from offset, need to get INFO for timecodescale
+			$v->{seektable} = substr $v->{inBuf}, 0, $size;
+			$v->{offset} = getSeekOffset($v->{seektable}, ID_INFO) + $v->{segment_offset};
+			$log->info("info offset: $v->{offset}");
+			#<>;
 		} elsif	($id eq ID_TRACK_ENTRY) {
-			my $codec =	getCodec(substr $v->{inBuf}, 0, $size);
+			my $track =	getTrackInfo(substr $v->{inBuf}, 0, $size);
+			$log->info("start time: $v->{startTime}");
 			
-			if (defined $codec) {
-				$v->{codec} = $codec;
-				$v->{outBuf} .= buildOggPage([$codec->{header}], 0, 0x02, $v->{seqnum}++);
-				$v->{outBuf} .= buildOggPage([$codec->{setup}, $codec->{comment}], 0, 0x00, $v->{seqnum}++);
-				${*$self}{'song'}->_playlist(0);
+			if (defined $track) {
+				$v->{track} = $track;
+				$v->{outBuf} .= buildOggPage([$track->{codec}->{header}], 0, 0x02, $v->{seqnum}++);
+				$v->{outBuf} .= buildOggPage([$track->{codec}->{setup}, $track->{codec}->{comment}], 0, 0x00, $v->{seqnum}++);
+				#${*$self}{'song'}->_playlist(0);
+				# when starting from offset, need to cue to position
+				if ($v->{cue}) {
+					# got codec, but now needs to cue to the right position
+					$v->{offset} = getSeekOffset($v->{seektable}, ID_CUES) + $v->{segment_offset};
+					$log->info("cues offset: $v->{offset}");
+					#<>;
+				}
 			}	
 		} elsif ($id eq ID_TIMECODE) {
 			$v->{timecode} = decode_u(substr($v->{inBuf}, 0, $size), $size);
 			$log->debug("timecode: $v->{timecode}");
 			#<>;
+		} elsif ($id eq ID_BLOCK || $id eq ID_BLOCK_SIMPLE) {
+			my $time;
+			my $out = extractVorbis(\$v->{inBuf}, $v->{track}->{tracknum}, $size, \$time);
+						
+			if (defined $out) { 
+				$v->{outBuf} .= buildOggPage([$out], $v->{timecode} + $time, 0x00, $v->{seqnum}++);
+			}	
+		} elsif ($id eq ID_CUES && $v->{cue}) {
+			$v->{offset} = getCueOffset($v->{inBuf}, $v->{startTime}*($v->{timecode_scale}/1000000)*1000) + $v->{segment_offset};
+			$v->{cue} = 0;
+			$log->info("1st cluster offset: $v->{offset}");
+			#<>;
 		}
 				
 		$v->{inBuf} = substr($v->{inBuf}, $size);
 		$v->{need} = EBML_NEED;
+		$v->{position} += $size;
 		undef $v->{id};
 				
 	}	
+	
+	return 1;
+}
+
+
+=comment
+TimecodeScale 	2 [2A][D7][B1] 		f
+=cut
+sub getInfo {
+	my ($s, $tag, $fmt) = @_;
+	my ($id, $size);
+		
+	while (length $s) {
+			
+		getEBML(\$s, \$id, \$size);
+		
+		if ($id eq $tag) {
+			if ($fmt eq "u") { return decode_u(substr($s, 0, $size), $size); }
+			if ($fmt eq "f") { return decode_f(substr($s, 0, $size), $size); }
+			if ($fmt eq "s") { return substr($s, 0, $size); }
+		}	
+		
+		$s = substr($s, $size);
+	}	
+	
+	return undef;
+}
+
+
+=comment
+SeekHead 		1 [11][4D][9B][74]	m
+Seek 			2 [4D][BB] 			m
+SeekID 			3 [53][AB] 			b
+SeekPosition 	3 [53][AC] 			u
+=cut
+sub getSeekOffset {
+	my ($s, $tag) = @_;
+	my ($id, $size);
+		
+	while (length $s) {
+		my ($data, $seek_id);
+		my $seek_offset = 0;
+		
+		getEBML(\$s, \$id, \$size);
+		
+		$data = substr($s, 0, $size);
+		$s = substr($s, $size);
+		
+		next if ($id != ID_SEEK);
+		
+		while (length $data) {
+			getEBML(\$data, \$id, \$size);
+			$seek_id = substr($data, 0, $size) if ($id eq ID_SEEK_ID);
+			$seek_offset = decode_u(substr($data, 0, $size), $size) if ($id eq ID_SEEK_POS);
+			$data = substr($data, $size);
+		} 
+		
+		return $seek_offset if ($seek_id eq $tag);
+	} 
+		
+	return undef;
+}
+
+=comment
+Cues 				1 [1C][53][BB][6B] 	m
+CuePoint 			2 [BB] 				m
+CueTime 			3 [B3] 				u
+CueTrackPositions 	3 [B7] 				m
+CueTrack 			4 [F7] 				u
+CueClusterPosition 	4 [F1] 				u
+=cut
+sub getCueOffset {
+	my ($s, $time) = @_;
+	my ($id, $size);
+	my $seek_offset;
+		
+	while (length $s) {
+		my ($data, $cue_time, $cue_track);
+		
+		getEBML(\$s, \$id, \$size);
+		
+		$data = substr($s, 0, $size);
+		$s = substr($s, $size);
+		
+		next if ($id != ID_CUE_POINT);
+		
+		while (length $data) {
+			getEBML(\$data, \$id, \$size);
+			$cue_time = decode_u(substr($data, 0, $size), $size) if ($id eq ID_CUE_TIME);
+			$cue_track = substr($data, 0, $size) if ($id eq ID_CUE_TRACK_POS);
+			$data = substr($data, $size);
+		}
+			
+		next if ($cue_time < $time);
+
+		while (length($cue_track) && !defined $seek_offset) {
+			getEBML(\$cue_track, \$id, \$size);
+			$seek_offset = decode_u(substr($cue_track, 0, $size), $size) if ($id eq ID_CUE_CLUSTER_POS);
+			$cue_track = substr($cue_track, $size);
+		}
+		
+		return $seek_offset;
+	
+	}	
+		
+	return undef;
 }
 
 
@@ -361,38 +543,59 @@ sub buildOggPage {
 }
 
 
-sub getCodec {
-	my $s = shift;
-	my $codec;
-	my $len = length $s;
+=comment
+Tracks 				1 [16][54][AE][6B] 		m
+TrackEntry 			2 [AE] 					m
+TrackNumber 		3 [D7] 					u
+TrackUID 			3 [73][C5] 				u
+TrackType 			3 [83] 					u
+FlagEnabled 		3 [B9] 					u
+FlagDefault 		3 [88] 					u
+FlagForced 			3 [55][AA] 				u
+FlagLacing 			3 [9C] 					u
+MinCache 			3 [6D][E7] 				u
+TrackTimecodeScale	3 [23][31][4F] 			f 
+MaxBlockAdditionID 	3 [55][EE] 				u
+CodecID 			3 [86					s
+CodecPrivate 		3 [63][A2] 				b
+=cut
+sub getTrackInfo {
+	my ($s, $scale) = @_;
+	my ($info, $private);
 	
-	do {
+	while (length $s) {
 		my ($id, $size);
 	
-		$len -= getEBML(\$s, \$id, \$size);
+		getEBML(\$s, \$id, \$size);
+				
 		if ($id eq ID_TRACK_NUM) {
-			$codec->{tracknum} = decode_u(substr($s, 0, $size), $size);
-			$log->debug("tracknum: $codec->{tracknum}");
+			$info->{tracknum} = decode_u(substr($s, 0, $size), $size);
+			$log->info("tracknum: $info->{tracknum}");
 		} elsif	($id eq ID_CODEC) {
-			$codec->{id} = substr $s, 0, $size;
-			$log->info("codec: $codec->{id}");
-			return undef if ($codec->{id} ne "A_VORBIS");
+			$info->{codec}->{id} = substr $s, 0, $size;
+			$log->info("codec: $info->{codec}->{id}");
+			return undef if ($info->{codec}->{id} ne "A_VORBIS");
 		} elsif ($id eq ID_CODEC_PRIVATE) {
-			my $count = decode_u8(substr $s, 0, 1) + 1;
-			my $hdr_size = decode_u8(substr $s, 1, 1);
-			my $set_size = decode_u8(substr $s, 2, 1);
-			$log->info ("codec headers #:$count, hdr:$hdr_size, set:$set_size, total:$size");
-									
-			$codec->{header} = substr $s, 3, $hdr_size;
-			$codec->{setup} = substr $s, 3 + $hdr_size, $set_size;
-			$codec->{comment} = substr $s, 3 + $hdr_size + $set_size, $size - 3 - $set_size - $hdr_size;
+			$private = substr($s, 0, $size);
 		}	
 		$s = substr $s, $size;
-		$len -= $size;
-	} while ($len);
+	} 
+	
+	# codec private data shall only be used once we have found codec
+	my $count = decode_u8(substr $private, 0, 1) + 1;
+	my $hdr_size = decode_u8(substr $private, 1, 1);
+	my $set_size = decode_u8(substr $private, 2, 1);
+	$log->info ("private count $count, hdr: $hdr_size, setup: $set_size, total: ". length($private));
+									
+	# the explanation for the packet length & offsets of codec private data are found here
+	# https://chromium.googlesource.com/webm/bindings/+/fb4fe6519b5812f1fac6ffe1fccf2c82f1ce7fdd/JNI/vorbis/vorbis_encoder.cc
+	$info->{codec}->{header} = substr $private, 3, $hdr_size;
+	$info->{codec}->{setup} = substr $private, 3 + $hdr_size, $set_size;
+	$info->{codec}->{comment} = substr $private, 3 + $hdr_size + $set_size, length($private) - 3 - $set_size - $hdr_size;
 
-	return $codec;
+	return $info;
 }
+
 
 sub extractVorbis {
 	my ($s, $tracknum, $size, $time) = @_;
@@ -432,7 +635,13 @@ sub getEBML {
 	#get the element_id first
 	my $c = decode_u8(substr($$in, 0, 1));
 	
-	for ($len = 1; !($c & 0x80); $len++) { $c <<= 1; }
+	for ($len = 1; !($c & 0x80) && $len <= 4; $len++) { $c <<= 1 }
+	
+	if ($len == 5) {
+		$log->error("wrong len: $len, $c");
+		return undef;
+	}
+	
 	$$id = substr($$in, 0, $len);
 	$$in = substr($$in, $len);
 	$total = $len;
@@ -445,18 +654,25 @@ sub getEBML {
 		$c <<= 1; 
 		$$size = ($$size << 8) + decode_u8(substr($$in, $len-1, 1));
 	}	
-	
+		
 	$$size = ($$size << 8) + decode_u8(substr($$in, $len-1, 1));
 	$$size &= ~(1 << (7*$len));
 	
-	$log->debug("EBML : $$id, size:$$size (tagsize: $total + $len)");
+=comment	
+	my $hex_id;
+	$hex_id = decode_u8($$id) if ($total == 1);
+	$hex_id = decode_u16($$id) if ($total == 2);
+	$hex_id = decode_u24($$id) if ($total == 3);
+	$hex_id = decode_u32($$id) if ($total == 4);
+	printf ("id: %x ", $hex_id);
+=cut	
+	$log->debug("size:$$size (tagsize: $total + $len)");
 	
 	$$in = substr($$in, $len);
 	$total += $len;
 	
 	return $total;
 }
-
 
 sub decode_u8  { unpack('C', $_[0]) }
 sub decode_u16 { unpack('n', $_[0]) }
@@ -470,6 +686,12 @@ sub decode_u {
 	return unpack('N', ("\0" . $_[0]) ) if ($len == 3);
 	return unpack('N', $_[0]) if ($len == 4);
 	return unpack('Q', $_[0]) if ($len == 8);
+	return undef;
+}
+sub decode_f { 
+	my ($s, $len) = @_;
+	return unpack('f', $_[0]) if ($len == 4);
+	return unpack('d', $_[0]) if ($len == 8);
 	return undef;
 }
 
@@ -586,108 +808,107 @@ sub getNextTrack {
                 my %props = map { split(/=/, $_) } split(/&/, $stream);
 
 				# check streams in preferred id order
-                #my @streamOrder = $prefs->get('prefer_lowbitrate') ? (5, 34) : (34, 35, 5);
-				my @streamOrder = (43);
+                my @streamOrder = (43, 44, 45, 46);
 
 			    for my $id (@streamOrder) {
-				$log->info("itag: $props{itag}");
-                if ($id == $props{itag}) {
-					$log->debug("props: $props{url}");
-                    my $url = uri_unescape($props{url});
-					my $rawsig;
-					my $encryptedsig = 0;
+					$log->info("itag: $props{itag}");
+					if ($id == $props{itag}) {
+						$log->debug("props: $props{url}");
+						my $url = uri_unescape($props{url});
+						my $rawsig;
+						my $encryptedsig = 0;
 					
-					if (exists $props{s}) {
-						$rawsig = $props{s};
-						$encryptedsig = 1;
-					} elsif (exists $props{sig}) {
-						$rawsig = $props{sig};
-					} else {
-						$rawsig = $props{signature};
-					}
+						if (exists $props{s}) {
+							$rawsig = $props{s};
+							$encryptedsig = 1;
+						} elsif (exists $props{sig}) {
+							$rawsig = $props{sig};
+						} else {
+							$rawsig = $props{signature};
+						}
 											
-					$log->info("sig $rawsig encrypted $encryptedsig");
+						$log->info("sig $rawsig encrypted $encryptedsig");
 					
-					push @streams, { url => $url, format => $id == 43 ? 'ogg' : 'xxx',
+						push @streams, { url => $url, format => 'ogg',
 								 rawsig => $rawsig, encryptedsig => $encryptedsig };
-				}
-			}
-        }
-
-		# play the first stream
-		if (my $streamInfo = shift @streams) {
-			my $sig;
-			my $proceed = 1;
-					
-			if ($streamInfo->{'encryptedsig'}) {
-				if ($vars{player_url}) {
-					if (Plugins::YouTube::Signature::has_player($vars{player_url})) {
-					    $log->debug("Using cached player $vars{player_url}");
-					    $sig = Plugins::YouTube::Signature::unobfuscate_signature(
-										$vars{player_url}, $streamInfo->{'rawsig'} );
-							
-					    $log->debug("Unobfuscated signature (cached) $sig");
-					} else {
-					    $log->debug("Fetching new player $vars{player_url}");
-						$proceed = 0;
-						
-					    Slim::Networking::SimpleAsyncHTTP->new(
-							sub {
-								my $http = shift;
-								my $jscode = $http->content;
-
-								eval {
-									Plugins::YouTube::Signature::cache_player($vars{player_url}, $jscode);
-									$log->debug("Saved new player $vars{player_url}");
-								};
-								if ($@) {
-									$errorCb->("cannot load player code: $@");
-									return;
-								}
-								my $sig = Plugins::YouTube::Signature::unobfuscate_signature(
-											$vars{player_url}, $streamInfo->{'rawsig'} );
-								$log->debug("Unobfuscated signature $sig");
-								$song->pluginData(streams => \@streams);	
-								$song->pluginData(stream  => $streamInfo->{'url'} . "&signature=" . $sig);
-								$song->pluginData(format  => $streamInfo->{'format'});
-								$class->getMetadataFor($client, $masterUrl, undef, $song);
-								$successCb->();
-							},
-						
-							sub {
-								$log->debug("Cannot fetch player " . $_[1]);
-								$errorCb->("cannot fetch player code");
-							},
-					
-						)->get($vars{player_url});
 					}
-				} else {
-					    $log->debug("No player url to unobfuscat signature");
-						$errorCb->("no player url found");
-						$proceed = 0;
 				}
-				
-			} else {
-				$log->debug("raw signature $sig");
-			    $sig = $streamInfo->{'rawsig'};
 			}
-			
-			if ($proceed) {
-				$song->pluginData(streams => \@streams);	
-				$song->pluginData(stream  => $streamInfo->{'url'} . "&signature=" . $sig);
-				$song->pluginData(format  => $streamInfo->{'format'});
-				$class->getMetadataFor($client, $masterUrl, undef, $song);
-				$successCb->();
-			}	
-			
-		} else { 
-			$errorCb->("no streams found");
-		}
-	},
 
-	sub {
-		$errorCb->($_[1]);
-	},
+			# play the first stream
+			if (my $streamInfo = shift @streams) {
+				my $sig;
+				my $proceed = 1;
+					
+				if ($streamInfo->{'encryptedsig'}) {
+					if ($vars{player_url}) {
+						if (Plugins::YouTube::Signature::has_player($vars{player_url})) {
+							$log->debug("Using cached player $vars{player_url}");
+							$sig = Plugins::YouTube::Signature::unobfuscate_signature(
+											$vars{player_url}, $streamInfo->{'rawsig'} );
+							
+							$log->debug("Unobfuscated signature (cached) $sig");
+						} else {
+							$log->debug("Fetching new player $vars{player_url}");
+							$proceed = 0;
+						
+							Slim::Networking::SimpleAsyncHTTP->new(
+								sub {
+									my $http = shift;
+									my $jscode = $http->content;
+
+									eval {
+										Plugins::YouTube::Signature::cache_player($vars{player_url}, $jscode);
+										$log->debug("Saved new player $vars{player_url}");
+									};
+									if ($@) {
+										$errorCb->("cannot load player code: $@");
+										return;
+									}
+									my $sig = Plugins::YouTube::Signature::unobfuscate_signature(
+												$vars{player_url}, $streamInfo->{'rawsig'} );
+									$log->debug("Unobfuscated signature $sig");
+									$song->pluginData(streams => \@streams);	
+									$song->pluginData(stream  => $streamInfo->{'url'} . "&signature=" . $sig);
+									$song->pluginData(format  => $streamInfo->{'format'});
+									$class->getMetadataFor($client, $masterUrl, undef, $song);
+									$successCb->();
+								},
+						
+								sub {
+									$log->debug("Cannot fetch player " . $_[1]);
+									$errorCb->("cannot fetch player code");
+								},
+					
+							)->get($vars{player_url});
+						}
+					} else {
+							$log->debug("No player url to unobfuscat signature");
+							$errorCb->("no player url found");
+							$proceed = 0;
+					}
+				
+				} else {
+					$log->debug("raw signature $sig");
+					$sig = $streamInfo->{'rawsig'};
+				}
+			
+				if ($proceed) {
+					$song->pluginData(streams => \@streams);	
+					$song->pluginData(stream  => $streamInfo->{'url'} . "&signature=" . $sig);
+					$song->pluginData(format  => $streamInfo->{'format'});
+					$class->getMetadataFor($client, $masterUrl, undef, $song);
+					$successCb->();
+				}	
+			
+			} else { 
+				$errorCb->("no streams found");
+			}
+		},
+
+		sub {
+			$errorCb->($_[1]);
+		},
 
 	)->get($url);
 }
