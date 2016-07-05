@@ -90,7 +90,6 @@ sub open {
 	# used for non blocking I/O
 	${*$sock}{'_sel'} = IO::Select->new($sock);
 	${*$sock}{'song'} = $args->{'song'};
-	${*$sock}{'startTime'} = $args->{'startTime'} || 0;
 				
 	return $sock->request($args);
 }
@@ -101,13 +100,13 @@ sub new {
 	my $args  = shift;
 	my $song       = $args->{'song'};
 	$args->{'url'} = $song->pluginData('stream');
-	my $seekdata   = $song->can('seekdata') ? $song->seekdata : $song->{'seekdata'};
+	my $seekdata = $song->can('seekdata') ? $song->seekdata : $song->{'seekdata'};
+	my $startTime = $seekdata->{'timeOffset'};
   
-	if (my $newtime = $seekdata->{'timeOffset'}) {
-		$song->can('startOffset') ? $song->startOffset($newtime) : $song->{startOffset} = $newtime;
-		$args->{'client'}->master->remoteStreamStartTime(Time::HiRes::time() - $newtime);
+	if ($startTime) {
+		$song->can('startOffset') ? $song->startOffset($startTime) : $song->{startOffset} = $startTime;
+		$args->{'client'}->master->remoteStreamStartTime(Time::HiRes::time() - $startTime);
 		$args->{url} .= "&keepalive=yes";
-		$args->{startTime} = $newtime;
 	}
 	
 	$log->info("url: $args->{url}");
@@ -130,12 +129,12 @@ sub new {
 			'streaming'   => 1,       #  flag for streaming, changes to 0 when input socket closes
 			'streamBytes' => 0,       #  total bytes received for stream
 			'track'		  => undef,	  #  trackinfo
-			'cue'		  => ${*$self}{'startTime'} != 0,		  #  cue required flag
+			'cue'		  => $startTime != 0,		  #  cue required flag
 			'seqnum'	  => 0,		  #  sequence number
 			'offset'      => 0,       #  offset request from stream to be served at next possible opportunity
 			'nextOffset'  => CHUNK_SIZE,       #  offset to apply to next GET
 			'process'	  => 1,		  #  shall sysread data be processed or just forwarded ?
-			'startTime'   => ${*$self}{'startTime'},
+			'startTime'   => $startTime, # not necessary, avoid use in processWebM knows of owner's data
 		};
 	}
 	
@@ -165,15 +164,18 @@ sub request {
 
 
 sub requestString { 
-	my $self = shift; 
+	my ($self, $client, $url, $post, $seekdata) = @_;
 	my $CRLF = "\x0D\x0A";
 	my $v = $self->vars;
 	my $offset = $v->{nextOffset} || 0;
-	my $cue = (defined $v->{cue}) ? $v->{cue} : (${*$self}{startTime} || 0);
+	my $cue = 0;
 	
-	$log->debug("cue: $v->{cue}, ${*$self}{cue}");
-		
-	my @items = split(/$CRLF/, Slim::Player::Protocols::HTTP->requestString(@_));
+	$cue = $seekdata->{timeOffset} if (defined $seekdata);
+	$cue = $v->{cue} if (defined $v->{cue});
+	
+	main::INFOLOG && $log->info("cue: $v->{cue}, time: ", ($seekdata) ? $seekdata->{timeOffset} : "");
+
+	my @items = split(/$CRLF/, Slim::Player::Protocols::HTTP->requestString($client, $url, $post, $seekdata));
 	@items = grep { index($_, "Range:") } @items;
 	if ($cue) { 
 		@items = grep { index($_, "connection:") } @items;
@@ -202,7 +204,7 @@ sub parseHeaders {
 		$header =~ s/\r/\n/g;
 		$header =~ s/\n\n/\n/g;
 		
-		${*$self}{'vars'}->{'contentLength'} = $1 if ( $header =~ /^Content-Length:\s*([0-9]+)/i );
+		${*$self}{'contentLength'} = $1 if ( $header =~ /^Content-Length:\s*([0-9]+)/i );
 		${*$self}{'redirect'} = $1 if ( $header =~ /^Location:\s*(.*)/i );
 	}
 }
@@ -216,6 +218,7 @@ sub getSeekData {
 
 	return { timeOffset => $newtime };
 }
+
 
 sub vars {
 	return ${*{$_[0]}}{'vars'};
@@ -247,7 +250,7 @@ sub sysread {
 		close $fh;
 =cut		
 		
-		$log->info("content length: $v->{contentLength}") if ( $v->{streamBytes} == 0 );
+		$log->info("content length: ${*$self}{'contentLength'}") if ( $v->{streamBytes} == 0 );
 			
 		# process all we have in input buffer
 		$v->{streaming} &&= $self->processWebM && $bytes;
@@ -256,7 +259,7 @@ sub sysread {
 		#$log->info("bytes: $bytes, streamBytes: $v->{streamBytes}");
 		
 		# GET more data if needed, move to a different offset or force finish if we have started from an offset
-		if ( $v->{streamBytes} == $v->{contentLength} ) {
+		if ( $v->{streamBytes} == ${*$self}{contentLength} ) {
 			my $proceed = $v->{cue} || $v->{offset};
 			
 			# Must test offset first as it is not exclusive with cue but takes precedence
@@ -274,7 +277,7 @@ sub sysread {
 
 			if ( $proceed ) {
 				$v->{streamBytes} = 0;
-				$v->{streaming} = 0 if (!$self->request({ url => ${*$self}{url} }));
+				$v->{streaming} = 0 if (!$self->request({ url => ${*$self}{url}, song =>  ${*$self}{song} }));
 				$v->{nextOffset} += CHUNK_SIZE;
 			}	
 			else { $v->{streaming} = 0; }
