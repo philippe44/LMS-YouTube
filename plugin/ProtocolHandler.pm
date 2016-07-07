@@ -12,6 +12,7 @@ use Data::Dumper;
 use File::Spec::Functions;
 use FindBin qw($Bin);
 
+use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::Errno;
@@ -36,6 +37,10 @@ use constant ID_SEEK_POS	=> "\x53\xAC";
 use constant ID_TRACKS 		=> "\x16\x54\xAE\x6B";
 use constant ID_TRACK_ENTRY	=> "\xAE";
 use constant ID_TRACK_NUM	=> "\xD7";
+use constant ID_AUDIO		=> "\xE1";
+use constant ID_SAMPLING_FREQ	=> "\xB5";
+use constant ID_CHANNELS	=> "\x9F";
+use constant ID_BIT_DEPTH	=> "\x62\x64";
 use constant ID_CODEC		=> "\x86";
 use constant ID_CODEC_NAME	=> "\x25\x86\x88";
 use constant ID_CODEC_PRIVATE	=> "\x63\xA2";
@@ -135,6 +140,7 @@ sub new {
 			'nextOffset'  => CHUNK_SIZE,       #  offset to apply to next GET
 			'process'	  => 1,		  #  shall sysread data be processed or just forwarded ?
 			'startTime'   => $startTime, # not necessary, avoid use in processWebM knows of owner's data
+			'metaUpdate'  => 0,		  # need to update metadata like sample rate, size ...
 		};
 	}
 	
@@ -282,8 +288,24 @@ sub sysread {
 			}	
 			else { $v->{streaming} = 0; }
 		}
-	}	
+	}
 	
+	if ( !$v->{metaUpdate} && $v->{track}->{codec} && ${*$self}{song} ) {
+	
+		$v->{metaUpdate} = 1;
+		${*$self}{song}->track->bitrate( $v->{track}->{bitrate} );
+		${*$self}{song}->track->samplerate( $v->{track}->{sampleRate} );
+		${*$self}{song}->track->samplesize( $v->{track}->{sampleSize} );
+		${*$self}{song}->track->channels( $v->{track}->{channels} );
+				
+		#${*$self}{client}->currentPlaylistUpdateTime( Time::HiRes::time() );
+		#Slim::Control::Request::notifyFromArray( ${*$self}{client}, [ 'newmetadata' ] );
+		${*$self}{song}->track->update;
+		
+		$log->info("bitrate: ", $v->{track}->{bitrate});
+		
+	}	
+		
 	#$log->info("loop streamBytes: $v->{streamBytes} inbuf:", length $v->{inBuf}, " outbuf:", length $v->{outBuf});
 		
 	my $len = length($v->{'outBuf'});
@@ -569,6 +591,10 @@ TrackTimecodeScale	3 [23][31][4F] 			f
 MaxBlockAdditionID 	3 [55][EE] 				u
 CodecID 			3 [86					s
 CodecPrivate 		3 [63][A2] 				b
+Audio 				3 [E1]					m
+SamplingFrequency 	4 [B5] 					f
+Channels			4 [9F] 					u
+BitDepth			4 [62][64]				u
 =cut
 sub getTrackInfo {
 	my ($s, $scale) = @_;
@@ -588,7 +614,17 @@ sub getTrackInfo {
 			return undef if ($info->{codec}->{id} ne "A_VORBIS");
 		} elsif ($id eq ID_CODEC_PRIVATE) {
 			$private = substr($s, 0, $size);
-		}	
+		} elsif ($id eq ID_AUDIO) {
+			my $data = substr($s, 0, $size);
+			my ($id, $size);
+			while (length $data) {
+				getEBML(\$data, \$id, \$size);
+				$info->{sampleRate} = decode_f(substr($data, 0, $size), $size) if ($id eq ID_SAMPLING_FREQ);
+				$info->{channels} = decode_u(substr($data, 0, $size), $size) if ($id eq ID_CHANNELS);
+				$info->{sampleSize} = decode_u(substr($data, 0, $size), $size) if ($id eq ID_BIT_DEPTH);
+				$data = substr $data, $size;
+			}
+		}
 		$s = substr $s, $size;
 	} 
 	
@@ -599,11 +635,17 @@ sub getTrackInfo {
 	$log->info ("private count $count, hdr: $hdr_size, setup: $set_size, total: ". length($private));
 									
 	# the explanation for the packet length & offsets of codec private data are found here
-	# https://chromium.googlesource.com/webm/bindings/+/fb4fe6519b5812f1fac6ffe1fccf2c82f1ce7fdd/JNI/vorbis/vorbis_encoder.cc
+	# https://matroska.org/technical/specs/codecid/index.html 
 	$info->{codec}->{header} = substr $private, 3, $hdr_size;
 	$info->{codec}->{setup} = substr $private, 3 + $hdr_size, $set_size;
 	$info->{codec}->{comment} = substr $private, 3 + $hdr_size + $set_size, length($private) - 3 - $set_size - $hdr_size;
-
+	
+	# header contains more accurate information
+	$info->{channels} = decode_u8(substr($info->{codec}->{header}, 11, 1));
+	$info->{sampleRate} = unpack('V', substr($info->{codec}->{header}, 12, 4));
+	$info->{bitrate} = unpack('V', substr($info->{codec}->{header}, 20, 4));
+	$info->{sampleSize} = 16 unless ($info->{sampleSize} == 8);
+			
 	return $info;
 }
 
@@ -737,8 +779,8 @@ sub decode_u {
 }
 sub decode_f { 
 	my ($s, $len) = @_;
-	return unpack('f', $_[0]) if ($len == 4);
-	return unpack('d', $_[0]) if ($len == 8);
+	return unpack('f>', $_[0]) if ($len == 4);
+	return unpack('d>', $_[0]) if ($len == 8);
 	return undef;
 }
 
@@ -980,8 +1022,9 @@ sub getMetadataFor {
 	my $id = $class->getId($url) || return {};
 		
 	if (my $meta = $cache->get("yt:meta-$id")) {
-		$song->track->secs($meta->{'duration'}) if $song;
-				
+	
+		$song->track->secs($meta->{'duration'}) if ($song);
+						
 		Plugins::YouTube::Plugin->updateRecentlyPlayed({
 			url  => $url, 
 			name => $meta->{_fulltitle} || $meta->{title}, 
@@ -1034,26 +1077,9 @@ sub getMetadataFor {
 			_getBulkMetadata($client, $pagingCb, join( ',', @need ));
 		} else {
 			$client->master->pluginData(fetchingYTMeta => 0);
+			$client->currentPlaylistUpdateTime( Time::HiRes::time() );
+			Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );	
 			
-			if ($song) {
-				my $meta = $cache->get("yt:meta-$id");
-				$song->track->secs($meta->{'duration'}) if $meta;
-			}
-		
-			if ($client) {
-				$client->currentPlaylistUpdateTime( Time::HiRes::time() );
-				Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );
-			}	
-			
-			if (my $match = first { /$id/ } @need) { 
-				my $meta = {
-					type	=> 'YouTube',
-					title	=> $url,
-					icon	=> $icon,
-					cover	=> $icon,
-				};	
-				$cache->set("yt:meta-" . $id, $meta, 86400);
-			}
 		} 
 	};
 
@@ -1123,6 +1149,7 @@ sub _getBulkMetadata {
 		
 	}, $ids);
 }
+
 
 sub getIcon {
 	my ( $class, $url ) = @_;
