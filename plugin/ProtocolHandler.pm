@@ -109,7 +109,7 @@ sub new {
 	my $startTime = $seekdata->{'timeOffset'};
   
 	if ($startTime) {
-		$song->can('startOffset') ? $song->startOffset($startTime) : $song->{startOffset} = $startTime;
+		$song->can('startOffset') ? $song->startOffset($startTime) : ($song->{startOffset} = $startTime);
 		$args->{'client'}->master->remoteStreamStartTime(Time::HiRes::time() - $startTime);
 		$args->{url} .= "&keepalive=yes";
 	}
