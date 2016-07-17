@@ -530,8 +530,7 @@ sub albumInfoMenu {
 	my @artists;
 	push @artists, $album->artistsForRoles('ARTIST'), $album->artistsForRoles('ALBUMARTIST');
 	my $artist = $artists[0]->name; 
-	$log->error("($artist)+($albumTitle)");
-
+	
 	if ($albumTitle) {
 		return {
 			type      => 'outline',
