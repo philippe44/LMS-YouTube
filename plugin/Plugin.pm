@@ -73,6 +73,11 @@ sub initPlugin {
 		after => 'bottom',
 		func  => \&webVideoLink,
 	) );
+	
+	Slim::Menu::AlbumInfo->registerInfoProvider( youtube => (
+		after => 'middle',
+		func  => \&albumInfoMenu,
+	) );
 
 	Slim::Menu::ArtistInfo->registerInfoProvider( youtube => (
 		after => 'middle',
@@ -504,14 +509,35 @@ sub trackInfoMenu {
 	my ($client, $url, $track, $remoteMeta) = @_;
 
 	my $artist = ($remoteMeta && $remoteMeta->{artist}) || ($track && $track->artistName) || '';
+	my $album  = ($remoteMeta && $remoteMeta->{album}) || ($track && $track->album && $track->album->name) || '';
 	my $title  = ($remoteMeta && $remoteMeta->{title}) || ($track && $track->title) || '';
 
-	if ($artist || $title) {
+	if ($artist || $title || $album) {
 		return {
 			type      => 'outline',
 			name      => cstring($client, 'PLUGIN_YOUTUBE_ON_YOUTUBE'),
 			url       => \&searchHandler,
-			passthrough => [ { q => "$artist $title" } ], 
+			passthrough => [ { q => "($artist)+($album)+($title)" } ], 
+		};
+	}
+}
+
+sub albumInfoMenu {
+	my ($client, $url, $album, $remoteMeta) = @_;
+
+	my $albumTitle = ($remoteMeta && $remoteMeta->{album}) || ($album && $album->title);
+	
+	my @artists;
+	push @artists, $album->artistsForRoles('ARTIST'), $album->artistsForRoles('ALBUMARTIST');
+	my $artist = $artists[0]->name; 
+	$log->error("($artist)+($albumTitle)");
+
+	if ($albumTitle) {
+		return {
+			type      => 'outline',
+			name      => cstring($client, 'PLUGIN_YOUTUBE_ON_YOUTUBE'),
+			url       => \&searchHandler,
+			passthrough => [ { type => 'video,channel,playlist', q => "($artist)+($albumTitle)" } ], 
 		};
 	}
 }
@@ -526,7 +552,7 @@ sub artistInfoMenu {
 			type      => 'outline',
 			name      => cstring($client, 'PLUGIN_YOUTUBE_ON_YOUTUBE'),
 			url       => \&searchHandler,
-			passthrough => [ { q => $artist } ], 
+			passthrough => [ { type => 'video,channel,playlist', q => "($artist)" } ], 
 		};
 	}
 }

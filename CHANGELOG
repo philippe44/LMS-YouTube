@@ -1,3 +1,6 @@
+0.41
+ - Improve search infoMenu & add by album for "On YouTube"
+ 
 0.40.1
  - Precedence mistake caused an error using newer Perl (Jessie)
 
