@@ -517,7 +517,7 @@ sub trackInfoMenu {
 			type      => 'outline',
 			name      => cstring($client, 'PLUGIN_YOUTUBE_ON_YOUTUBE'),
 			url       => \&searchHandler,
-			passthrough => [ { q => "($artist)+($album)+($title)" } ], 
+			passthrough => [ { q => "($artist)+($title)" } ], 
 		};
 	}
 }
