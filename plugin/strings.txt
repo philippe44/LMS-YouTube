@@ -5,7 +5,16 @@ PLUGIN_YOUTUBE_DESC
 	EN	Play audio from YouTube videos.  WARNING: this plugin will use more network bandwidth than other streaming services as the entire video is being streamed even though only the audio is played.	Updated to API v3
 	
 PLUGIN_YOUTUBE_MISSINGKEY
-	EN	Missing YouTube API key (see settings)
+	EN	Missing YouTube API key, enter in settings). To get a key:
+	EN	- using your gmail account
+	EN	- go to https://console.developers.google.co...utube/overview
+	EN	- click "Create a project" if you don't have any
+	EN	- in the next screen, go to "credentials" 
+	EN	- click on "create credentials", select "API key" and then choose "Browser key"
+	EN	- click "create" and copy the key
+	EN	- go back to https://console.developers.google.co...utube/overview
+	EN	- click "enable"
+	EN	- paste the key in the YT plugin settings
 	
 PLUGIN_YOUTUBE_MISSINGSSL
 	EN	SSL required (try to install it using CPAN and/or on Linux do "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
