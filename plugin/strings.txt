@@ -5,14 +5,14 @@ PLUGIN_YOUTUBE_DESC
 	EN	Play audio from YouTube videos.  WARNING: this plugin will use more network bandwidth than other streaming services as the entire video is being streamed even though only the audio is played.	Updated to API v3
 	
 PLUGIN_YOUTUBE_MISSINGKEY
-	EN	Missing YouTube API key, enter in settings). To get a key:
+	EN	Missing YouTube API key (see settings). To get a key:
 	EN	- using your gmail account
-	EN	- go to https://console.developers.google.co...utube/overview
+	EN	- https://console.developers.google.com/apis/api/youtube/overview
 	EN	- click "Create a project" if you don't have any
 	EN	- in the next screen, go to "credentials" 
 	EN	- click on "create credentials", select "API key" and then choose "Browser key"
 	EN	- click "create" and copy the key
-	EN	- go back to https://console.developers.google.co...utube/overview
+	EN	- go back to https://console.developers.google.com/apis/api/youtube/overview
 	EN	- click "enable"
 	EN	- paste the key in the YT plugin settings
 	
@@ -105,14 +105,14 @@ PLUGIN_YOUTUBE_CACHE_DESC
 PLUGIN_YOUTUBE_CHANNELTAGS
 	EN	Channel identification tags
 
-PLUGIN_YOUTUBE_CHANNELTAGS_DESC
-	EN	To identify channels amongst playlists and videos in a search result, set string or font modifier (eg <b> and </b> for bold) to be added before and after then title
-
 PLUGIN_YOUTUBE_PLAYLISTTAGS
 	EN	Playlist identification tags
+
+PLUGIN_YOUTUBE_PLAYLISTTAGS_DESC
+	EN	To identify playlists items in a search result, set string or font modifier (eg \<b> and \</b> for bold) to be added before and after then title
 	
 PLUGIN_YOUTUBE_CHANNELTAGS_DESC
-	EN	To identify playlists amongst channels and videos in a search result, set string or font modifier (eg <b> and </b> for bold) to be added before and after then title
+	EN	To identify channels items in a search result, set string or font modifier (eg \<b> and \</b> for bold) to be added before and after then title
 	
 PLUGIN_YOUTUBE_PREFIX
 	EN	Prefix

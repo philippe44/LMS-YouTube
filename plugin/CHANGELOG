@@ -1,3 +1,16 @@
+0.42.1
+ - Corrected url in APIkey creation help
+ - Corrected string for Playlist identificator tag
+ 
+0.42.0
+ - Patch according to https://github.com/rg3/youtube-dl/issues/11663
+
+0.41.3
+ - Bubble-help for playlist tag was not set
+
+0.41.2
+ - Minor text corrections
+
 0.41.1
  - add instructions to create a key on the main screen
  

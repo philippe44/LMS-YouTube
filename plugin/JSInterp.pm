@@ -361,7 +361,7 @@ sub extract_object {
     $self->progress($depth, "--", "Extract '$objname'");
 
     if (!($self->{code} =~  /
-            (?:var\s+)?
+            (?<!this\.)
              \Q$objname\E
              \s*=\s*\{
              \s*(([a-zA-Z\$0-9]+\s*:\s*function\(.*?\)\s*\{.*?\}(?:,\s*)?)*)
