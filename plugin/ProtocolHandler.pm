@@ -199,6 +199,7 @@ sub requestString {
 
 sub isAudio { 1 }
 
+sub canDirectStream { return 0; }
 
 sub parseHeaders {
 	my ( $self,  @headers ) = @_;
