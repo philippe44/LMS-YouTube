@@ -1,3 +1,9 @@
+0.50.0
+ - Add access to personal YouTube account
+ 
+0.42.2
+ - Force disable direct streaming (should not be needed)
+
 0.42.1
  - Corrected url in APIkey creation help
  - Corrected string for Playlist identificator tag

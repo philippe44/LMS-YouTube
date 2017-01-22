@@ -45,24 +45,13 @@ sub searchDirect {
 	}, $cb);
 }
 
-sub getVideoCategories {
-	my ( $class, $cb, $quota ) = @_;
+sub getCategories {
+	my ( $class, $type, $cb, $quota, $ttl ) = @_;
 	
-	_pagedCall('videoCategories', {
+	_pagedCall($type, {
 		hl => Slim::Utils::Strings::getLanguage(),
 		# categories don't change that often
-		_cache_ttl => 7 * 86400,
-		quota	   => $quota,
-	}, $cb);
-}
-
-sub getGuideCategories {
-	my ( $class, $cb, $quota ) = @_;
-	
-	_pagedCall('guideCategories', {
-		hl => Slim::Utils::Strings::getLanguage(),
-		# categories don't change that often
-		_cache_ttl => 7 * 86400,
+		_cache_ttl => $ttl || 7 * 86400,
 		quota	   => $quota,
 	}, $cb);
 }
@@ -150,7 +139,7 @@ sub _call {
 				$log->error(Data::Dump::dump($response)) unless main::DEBUGLOG && $log->is_debug;
 				$log->error($@);
 			}
-
+			
 			main::DEBUGLOG && $log->is_debug && warn Data::Dump::dump($result);
 
 			$result ||= {};

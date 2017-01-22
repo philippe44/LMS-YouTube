@@ -20,7 +20,7 @@ sub page {
 }
 
 sub prefs {
-	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix playlist_suffix country max_items APIkey));
+	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix playlist_suffix country max_items APIkey client_id client_secret));
 }
 
 sub handler {
@@ -32,8 +32,9 @@ sub handler {
 		Plugins::YouTube::API::flushCache();
 		Plugins::YouTube::ProtocolHandler::flushCache();
 	}
-=cut	
+=cut
 
+	$params->{authorize} = Plugins::YouTube::Oauth2::authorize();
 	$params->{pref_max_items} = min($params->{pref_max_items}, 500);
 	
 	$callback->($client, $params, $class->SUPER::handler($client, $params), @args);
