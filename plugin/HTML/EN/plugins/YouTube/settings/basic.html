@@ -45,6 +45,9 @@
 	</div>
 	
 	<hr>
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_OAUTHHOWTO" %]
+		<div>[% "PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT" | string %]</div>
+	[% END %]
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_CLIENTID" desc="PLUGIN_YOUTUBE_CLIENTID_DESC" %]
 		<input type="text" class="stdedit" name="pref_client_id" id="client_id" value="[% prefs.client_id %]" size="60">
 	[% END %]
@@ -52,7 +55,7 @@
 		<input type="text" class="stdedit" name="pref_client_secret" id="client_secret" value="[% prefs.client_secret %]" size="25">
 	[% END %]
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_OAUTH" desc="PLUGIN_YOUTUBE_CLIENTOAUTH_DESC" %]
-		<b><a href="[% authorize %]" target="user guide">[% "PLUGIN_YOUTUBE_OAUTHLINK" | string %]</a></b>
+		<b><a href="[% authorize %]" target="none">[% "PLUGIN_YOUTUBE_OAUTHLINK" | string %]</a></b>
 	[% END %]
 		
 
