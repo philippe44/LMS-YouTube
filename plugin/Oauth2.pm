@@ -7,6 +7,7 @@ use Data::Dumper;
 use Slim::Utils::Prefs;
 use Slim::Utils::Log;
 use Slim::Utils::Cache;
+use Slim::Utils::Strings qw(string cstring);
 use JSON::XS::VersionOneAndTwo;
 
 my $log   = logger('plugin.youtube');
@@ -16,18 +17,15 @@ my $cache = Slim::Utils::Cache->new();
 sub oauth2callback {
 	my ( $client, $params, undef, undef, $response ) = @_;
 		
-	$response->add_content( "Hello, world!\n" );
 	$response->content_type( "text/plain" );
 	my $body = $params->{url_query};
 	my ($code) = ( $params->{url_query} =~ /code=(.*)/ );
 	
-	$log->error("code: $code");
-	
-	return \"Authorization failure" if !defined $code;
+	return cstring($client, 'PLUGIN_YOUTUBE_OAUTHFAILED') if !defined $code;
 	
 	getToken($code);
 		
-	return \"Authorization successful";
+	return \cstring($client, 'PLUGIN_YOUTUBE_OAUTHSUCCESS');
 }
 
 sub getToken {
@@ -46,9 +44,7 @@ sub getToken {
 				 "&grant_type=refresh_token";
 	}
 				
-    $log->error($post);
-
-	my $http = Slim::Networking::SimpleAsyncHTTP->new(
+    my $http = Slim::Networking::SimpleAsyncHTTP->new(
 		sub { 
 			my $response = shift;
 			my $result = eval { from_json($response->content) };
@@ -86,7 +82,7 @@ sub getToken {
 
 sub authorize {
 	my $url =	"https://accounts.google.com/o/oauth2/auth?" .
-				"&client_id=" . $prefs->get('client_id') .
+				"client_id=" . $prefs->get('client_id') .
 				"&redirect_uri=http://localhost:9000/plugins/youtube/oauth2callback" .
 				"&scope=https://www.googleapis.com/auth/youtube.readonly&response_type=code&access_type=offline";	
 				

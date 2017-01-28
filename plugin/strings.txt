@@ -169,6 +169,12 @@ PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT
 	EN	<br>- paste "Client ID" and "Client secret" here and click "Apply"
 	EN	<br>- click the link below to authorize the access to your account. You'll be prompted by YouTube
 	EN	<br>- to remove authorizations, go to <a href="https://myaccount.google.com/permissions" target="none">Google Console Permissions</a>	
+	
+PLUGIN_YOUTUBE_OAUTHSUCCESS
+	EN	Authorization Successful
+	
+PLUGIN_YOUTUBE_OAUTHFAILURE
+	EN	Authorization Failed
 
 
 
