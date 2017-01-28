@@ -149,7 +149,16 @@ PLUGIN_YOUTUBE_CLIENTOAUTH_DESC
 	EN	Clearing the access token will force a refresh 
 	
 PLUGIN_YOUTUBE_OAUTHLINK
-	EN	Use this link to authorize your YouTube account
+	EN	Click here to authorize
+	
+PLUGIN_YOUTUBE_GETCODE
+	EN	"Get Code"
+	
+PLUGIN_YOUTUBE_REFRESH
+	EN	"Refresh"
+	
+PLUGIN_YOUTUBE_OAUTHCODE
+	EN	and enter this code
 	
 PLUGIN_YOUTUBE_CLEARTOKEN
 	EN	Clear access token
@@ -160,22 +169,15 @@ PLUGIN_YOUTUBE_OAUTHHOWTO
 PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT
 	EN	- go to <a href="https://console.developers.google.com/apis/credentials?" target="none">Google Console Credentials</a> 
 	EN	and select your YouTube project
-	EN	<br>- select "Create credentials"
-	EN	<br>- select "OAuth client ID"
-	EN	<br>- select "Web application" 
-	EN	<br>- "Name" can be set to anything
-	EN	<br>- "Authorized redirect URI" <b>must</b> be set to http://localhost:9000/plugins/youtube/oauth2callback
-	EN	<br>- click "Create"
+	EN	<br>- select "Create credentials", then "OAuth client ID" and then "Other" 
+	EN	<br>- choose a name or leave the default
+	EN	<br>- click "Create", this will generate a Client ID and Secret
 	EN	<br>- paste "Client ID" and "Client secret" here and click "Apply"
-	EN	<br>- click the link below to authorize the access to your account. You'll be prompted by YouTube
+	EN	<br>- click "Get Code" and if nothing appears to its right, just click "Refresh" or refresh this LMS page
+	EN	<br>- copy the code in red and click "Click here to authorize" link . You'll be prompted by YouTube to enter the code
+	EN	<br>- return to the LMS main screen, you can now use "My Subcriptions" and "My Playlists"
 	EN	<br>- to remove authorizations, go to <a href="https://myaccount.google.com/permissions" target="none">Google Console Permissions</a>	
 	
-PLUGIN_YOUTUBE_OAUTHSUCCESS
-	EN	Authorization Successful
-	
-PLUGIN_YOUTUBE_OAUTHFAILURE
-	EN	Authorization Failed
-
 
 
 	

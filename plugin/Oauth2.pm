@@ -14,52 +14,40 @@ my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
 my $cache = Slim::Utils::Cache->new();
 
-sub oauth2callback {
-	my ( $client, $params, undef, undef, $response ) = @_;
-		
-	$response->content_type( "text/plain" );
-	my $body = $params->{url_query};
-	my ($code) = ( $params->{url_query} =~ /code=(.*)/ );
-	
-	return cstring($client, 'PLUGIN_YOUTUBE_OAUTHFAILED') if !defined $code;
-	
-	getToken($code);
-		
-	return \cstring($client, 'PLUGIN_YOUTUBE_OAUTHSUCCESS');
-}
-
 sub getToken {
-	my $code = shift;
 	my $cb  = shift;
 	my @params = @_;
 	my $post = 	"client_id=" . $prefs->get('client_id') .
-				"&client_secret=" . $prefs->get('client_secret') .
-				"&redirect_uri=http://localhost:9000/plugins/youtube/oauth2callback";
+				"&client_secret=" . $prefs->get('client_secret');
 					
+	my 	$code = $cache->get('yt:device_code');		
+	
 	if (defined $code) {
 		$post .= "&code=$code" .
-				 "&grant_type=authorization_code";
+				 "&grant_type=http://oauth.net/grant_type/device/1.0";
 	} else {
 		$post .= "&refresh_token=" . $prefs->get('refresh_token') .
 				 "&grant_type=refresh_token";
 	}
-				
-    my $http = Slim::Networking::SimpleAsyncHTTP->new(
+	
+	my $http = Slim::Networking::SimpleAsyncHTTP->new(
 		sub { 
 			my $response = shift;
 			my $result = eval { from_json($response->content) };
-			
+						
 			if ($@) {
 				$log->error(Data::Dump::dump($response)) unless main::DEBUGLOG && $log->is_debug;
 				$log->error($@);
 			} else {
 				$cache->set("yt:access_token", $result->{access_token}, $result->{expires_in} - 60);
 				$prefs->set('refresh_token', $result->{refresh_token}) if $result->{refresh_token};
+				
+				$cache->remove('yt:user_code');
+				$cache->remove('yt:verification_url');
+				$cache->remove('yt:device_code');
 			
 				$log->debug("content:", $response->content);
-				$log->info("access_token:", $result->{access_token});
-				$log->info("refresh_token:", $result->{refresh_token}) if $result->{refresh_token};
-				
+								
 				$cb->(@params) if $cb;
 			}
 		},
@@ -80,13 +68,44 @@ sub getToken {
 }
 
 
-sub authorize {
-	my $url =	"https://accounts.google.com/o/oauth2/auth?" .
-				"client_id=" . $prefs->get('client_id') .
-				"&redirect_uri=http://localhost:9000/plugins/youtube/oauth2callback" .
-				"&scope=https://www.googleapis.com/auth/youtube.readonly&response_type=code&access_type=offline";	
-				
-	return $url;				
+sub getCode {
+	my $post =	"client_id=" . $prefs->get('client_id') .
+				"&scope=https://www.googleapis.com/auth/youtube.readonly";	
+	
+	$cache->remove('yt:user_code');
+	$cache->remove('yt:verification_url');
+	$cache->remove('yt:device_code');
+	$cache->remove('yt:access_token');
+						
+	my $http = Slim::Networking::SimpleAsyncHTTP->new(
+		sub { 
+			my $response = shift;
+			my $result = eval { from_json($response->content) };
+						
+			if ($@) {
+				$log->error(Data::Dump::dump($response)) unless main::DEBUGLOG && $log->is_debug;
+				$log->error($@);
+			} else {
+				$cache->set("yt:device_code", $result->{device_code}, $result->{expires_in});
+				$cache->set("yt:verification_url", $result->{verification_url}, $result->{expires_in});
+				$cache->set("yt:user_code", $result->{user_code}, $result->{expires_in});
+									
+				$log->debug("content:", $response->content);
+			}
+		},
+		sub { 
+			$log->error($_[1]);
+		},
+		{
+			timeout => 15,
+		}
+	);
+	
+	$http->post(
+		"https://accounts.google.com/o/oauth2/device/code",
+		'Content-Type' => 'application/x-www-form-urlencoded',
+		$post,
+	);
 }
 
 

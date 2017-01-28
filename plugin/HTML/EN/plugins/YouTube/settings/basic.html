@@ -54,10 +54,20 @@
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_CLIENTSECRET" desc="PLUGIN_YOUTUBE_CLIENTSECRET_DESC" %]
 		<input type="text" class="stdedit" name="pref_client_secret" id="client_secret" value="[% prefs.client_secret %]" size="25">
 	[% END %]
-	[% WRAPPER setting title="PLUGIN_YOUTUBE_OAUTH" desc="PLUGIN_YOUTUBE_CLIENTOAUTH_DESC" %]
-		<b><a href="[% authorize %]" target="none">[% "PLUGIN_YOUTUBE_OAUTHLINK" | string %]</a></b>
-		&nbsp&nbsp<input name="clear_token" type="checkbox">&nbsp[% "PLUGIN_YOUTUBE_CLEARTOKEN" | string %]
-	[% END %]
+		
+	[% IF prefs.client_id && prefs.client_secret %]
+		[% WRAPPER setting title="PLUGIN_YOUTUBE_OAUTH" desc="PLUGIN_YOUTUBE_CLIENTOAUTH_DESC" %]
+			<input name="get_code" type="submit" value=[% "PLUGIN_YOUTUBE_GETCODE" | string %]>
+			<input name="refresh" type="submit" value=[% "PLUGIN_YOUTUBE_REFRESH" | string %]>
+			[% IF user_code %]
+				&nbsp&nbsp<b><a href="[% authorize_link %]" target="none">[% "PLUGIN_YOUTUBE_OAUTHLINK" | string %]</a></b>&nbsp
+				[% "PLUGIN_YOUTUBE_OAUTHCODE" | string %]&nbsp<b><font color=red>[% user_code %]</font></b>
+			[% END %]		
+			[% IF access_token %]
+				&nbsp&nbsp<input name="clear_token" type="checkbox">&nbsp[% "PLUGIN_YOUTUBE_CLEARTOKEN" | string %]
+			[% END %]		
+		[% END %]
+	[% END %]		
 		
 
 [% PROCESS settings/footer.html %]

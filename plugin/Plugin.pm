@@ -69,8 +69,6 @@ sub initPlugin {
 		weight => 10,
 	);
 	
-	Slim::Web::Pages->addPageFunction( 'plugins/youtube/oauth2callback' => \&Plugins::YouTube::Oauth2::oauth2callback );
-
 	Slim::Menu::TrackInfo->registerInfoProvider( youtube => (
 		after => 'middle',
 		func  => \&trackInfoMenu,
@@ -338,7 +336,7 @@ sub subscriptionsHandler {
 	
 	if ( !$cache->get('yt:access_token') ) {
 		$params->{count}--;
-		Plugins::YouTube::Oauth2::getToken(undef, \&subscriptionsHandler, @_);
+		Plugins::YouTube::Oauth2::getToken(\&subscriptionsHandler, @_);
 		return;
 	}	
 	
@@ -369,7 +367,7 @@ sub myPlaylistHandler {
 	
 	if ( !$cache->get('yt:access_token') ) {
 		$params->{count}--;
-		Plugins::YouTube::Oauth2::getToken(undef, \&myPlaylistHandler, @_);
+		Plugins::YouTube::Oauth2::getToken(\&myPlaylistHandler, @_);
 		return;
 	}	
 	

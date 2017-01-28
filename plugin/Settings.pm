@@ -35,10 +35,18 @@ sub handler {
 	}
 =cut
 
-	$params->{authorize} = Plugins::YouTube::Oauth2::authorize();
-	$params->{pref_max_items} = min($params->{pref_max_items}, 500);
-	$cache->remove('yt:access_token') if $params->{clear_token};
+	Plugins::YouTube::Oauth2::getCode if $params->{get_code};
 	
+	$params->{user_code} = $cache->get('yt:user_code');
+	$params->{verification_url} = $cache->get('yt:verification_url');
+	$params->{access_code} = $cache->get('yt:access_code');
+	$params->{authorize_link} = $cache->get('yt:verification_url');
+	$params->{access_token} = $cache->get('yt:access_token');
+	
+	$params->{pref_max_items} = min($params->{pref_max_items}, 500);
+		
+	$cache->remove('yt:access_token') if $params->{clear_token};
+		
 	$callback->($client, $params, $class->SUPER::handler($client, $params), @args);
 }
 
