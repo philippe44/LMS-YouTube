@@ -348,7 +348,7 @@ sub subscriptionsHandler {
 		$cb->( { items => _renderList($_[0]->{items}), 
 				 total => $_[0]->{total} } );
 	}, {
-		_cache_ttl 		=> 300,
+		_cache_ttl 		=> 60,
 		_noKey			=> 1,
 		mine			=> 'true',
 		access_token 	=> $cache->get('yt:access_token'),
@@ -369,13 +369,13 @@ sub myPlaylistHandler {
 	
 	if ( !$cache->get('yt:access_token') ) {
 		$params->{count}--;
-		getToken(undef, \&subscriptionsHandler, @_);
+		Plugins::YouTube::Oauth2::getToken(undef, \&myPlaylistHandler, @_);
 		return;
 	}	
 	
 	delete $params->{count};
 	
-	my $extra_args = { 	_cache_ttl 		=> 300,
+	my $extra_args = { 	_cache_ttl 		=> 60,
 					_noKey			=> 1,
 					mine			=> 'true',
 					access_token 	=> $cache->get('yt:access_token'),
@@ -465,8 +465,7 @@ sub _renderList {
 					suffix => $prefs->get('playlist_suffix') };
 
 	$through ||= {};
-	$log->error("TROUGH", Dumper($through));
-	
+		
 	for my $entry (@{$entries || []}) {
 		my $snippet = $entry->{snippet} || next;
 		my $title = $snippet->{title} || next;

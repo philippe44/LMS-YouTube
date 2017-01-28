@@ -27,7 +27,7 @@ sub oauth2callback {
 	
 	getToken($code);
 		
-	return \"Authorization success";
+	return \"Authorization successful";
 }
 
 sub getToken {

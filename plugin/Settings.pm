@@ -10,6 +10,7 @@ use Slim::Utils::Prefs;
 use Slim::Utils::Log;
 
 my $log   = logger('plugin.youtube');
+my $cache = Slim::Utils::Cache->new();
 
 sub name {
 	return 'PLUGIN_YOUTUBE';
@@ -36,6 +37,7 @@ sub handler {
 
 	$params->{authorize} = Plugins::YouTube::Oauth2::authorize();
 	$params->{pref_max_items} = min($params->{pref_max_items}, 500);
+	$cache->remove('yt:access_token') if $params->{clear_token};
 	
 	$callback->($client, $params, $class->SUPER::handler($client, $params), @args);
 }

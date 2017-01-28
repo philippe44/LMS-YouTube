@@ -56,6 +56,7 @@
 	[% END %]
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_OAUTH" desc="PLUGIN_YOUTUBE_CLIENTOAUTH_DESC" %]
 		<b><a href="[% authorize %]" target="none">[% "PLUGIN_YOUTUBE_OAUTHLINK" | string %]</a></b>
+		&nbsp&nbsp<input name="clear_token" type="checkbox">&nbsp[% "PLUGIN_YOUTUBE_CLEARTOKEN" | string %]
 	[% END %]
 		
 

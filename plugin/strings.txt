@@ -146,24 +146,28 @@ PLUGIN_YOUTUBE_OAUTH
 	
 PLUGIN_YOUTUBE_CLIENTOAUTH_DESC
 	EN	Click on the link to go to google console and authorize the plugin to <b>read</b> your YouTube account
+	EN	Clearing the access token will force a refresh 
 	
 PLUGIN_YOUTUBE_OAUTHLINK
 	EN	Use this link to authorize your YouTube account
+	
+PLUGIN_YOUTUBE_CLEARTOKEN
+	EN	Clear access token
 	
 PLUGIN_YOUTUBE_OAUTHHOWTO
 	EN	How to use personal account
 	
 PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT
-	EN	- go to <a href="https://console.developers.google.com/apis/credentials?" target="none">Google Console Credentials</a>
+	EN	- go to <a href="https://console.developers.google.com/apis/credentials?" target="none">Google Console Credentials</a> 
+	EN	and select your YouTube project
 	EN	<br>- select "Create credentials"
 	EN	<br>- select "OAuth client ID"
 	EN	<br>- select "Web application" 
 	EN	<br>- "Name" can be set to anything
 	EN	<br>- "Authorized redirect URI" <b>must</b> be set to http://localhost:9000/plugins/youtube/oauth2callback
-	EN 	<br>- click "Create"
-	EN	<br>- "Client ID" and "Client secret" must be copy/paste in this LMS/YouTube settings screen
-	EN  <br>- in this screen click "apply"
-	EN	<br>- click the link to authorize the access to your account. You'll be prompted by YouTube
+	EN	<br>- click "Create"
+	EN	<br>- paste "Client ID" and "Client secret" here and click "Apply"
+	EN	<br>- click the link below to authorize the access to your account. You'll be prompted by YouTube
 	EN	<br>- to remove authorizations, go to <a href="https://myaccount.google.com/permissions" target="none">Google Console Permissions</a>	
 
 
