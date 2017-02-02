@@ -1,4 +1,7 @@
-0.50.0
+0.51.0
+ - Handle change in YouTube JS for sig
+
+ 0.50.0
  - Add access to personal YouTube account
  
 0.42.2
