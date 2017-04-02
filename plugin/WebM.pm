@@ -6,11 +6,12 @@ use Data::Dumper;
 
 use Slim::Utils::Log;
 
-use constant MAX_INBUF  => 128*1024;
-use constant MAX_OUTBUF => 4096;
-use constant MAX_READ   => 32768;
+use constant MAX_EBML  => 128*1024;
 use constant EBML_NEED  => 12;
-use constant CHUNK_SIZE => 8192;	# MUST be less than MAX_READ
+
+use constant WEBM_ERROR => 0;
+use constant WEBM_DONE  => 1;
+use constant WEBM_MORE  => 2;
 
 use constant ID_HEADER		=> "\x1A\x45\xDF\xA3";
 use constant ID_SEGMENT		=> "\x18\x53\x80\x67";
@@ -44,36 +45,69 @@ use constant ID_CUE_CLUSTER_POS	=> "\xF1";
 
 my $log   = logger('plugin.youtube');
 
-sub processWebM {
+sub getCues {
 	my ($v) = @_;
+	
+	# just in case caller sends less than EBML_NEED at first call ... stupid but who knows
+	return WEBM_MORE if ($v->{need} > length $v->{inBuf});
+					
+	if ( !defined $v->{id} ) {
+		my $id;
+		my $size;
 		
-	# process all we can ... might be over the MAX_OUTBUF
+		getEBML(\$v->{inBuf}, \$id, \$size);
+					
+		if ($id ne ID_CUES) {
+			$log->error("wrong cues offset" );
+			return WEBM_ERROR;
+		}	
+						
+		$v->{id} = $id;
+		$v->{need} = $size;
+				
+		if ($size > MAX_EBML) {
+			$log->error("EBML too large: $size");
+			return WEBM_ERROR;
+		}
+	}	
+	
+	if ( $v->{need} <= length $v->{inBuf} ) {
+		$v->{outBuf} = substr( $v->{inBuf}, 0, $v->{need} );
+		return WEBM_DONE;
+	}
+	
+	return WEBM_MORE;
+}
+
+
+sub getHeaders {
+	my ($v, $info) = @_;
+	
+	# process all we can
 	while ($v->{need} <= length $v->{inBuf}) {
 		my $id;
 		my $size;
 			
 		# first need to acquired an ID	
-		if (!defined $v->{id}) {
+		if ( !defined $v->{id} ) {
 			$v->{position} += getEBML(\$v->{inBuf}, \$id, \$size);
-							
-			if ($id eq ID_CLUSTER && !defined $v->{track}) {
-				$log->error("no VORBIS codec found");
-				return 0;
-			}
 					
-			# handle all ID's whose size is the whole node and where a next ID is needed
-			if ($id eq ID_SEGMENT || $id eq ID_TRACKS || $id eq ID_CLUSTER) {
-				$v->{segment_offset} = $v->{position} if ($id eq ID_SEGMENT);
-				$log->debug("cluster of $size byte (last audio $v->{timecode} ms)") if ($id eq ID_CLUSTER);
+			if ($id eq ID_CLUSTER) {
+				$log->error("no info found");
+				return WEBM_ERROR;
+			} elsif ($id eq ID_SEGMENT) {
+				$info->{segment_offset} = $v->{position};
 				next;
-			} 
+			} elsif ($id eq ID_TRACKS) {
+				next;
+			}
 			
 			$v->{id} = $id;
 			$v->{need} = $size;
 				
-			if ($size > MAX_INBUF) {
+			if ($size > MAX_EBML) {
 				$log->error("EBML too large: $size");
-				return 0;
+				return WEBM_ERROR;
 			}
 					
 			next;
@@ -82,64 +116,94 @@ sub processWebM {
 		$id = $v->{id};
 		$size = $v->{need};
 		
-		# handle ID's we care		
-		if ($id eq ID_INFO) {
-			$v->{duration} = getInfo(substr($v->{inBuf}, 0, $size), ID_DURATION, "f");
-			$log->info("track duration: $v->{duration}");
-		
-			if ($v->{cue}) {
-				# starting from offset, need to get TRACKS directly
-				$v->{timecode_scale} = getInfo(substr($v->{inBuf}, 0, $size), ID_TIMECODE_SCALE, "u");
-				$log->info("track timecode scale: $v->{timecode_scale}");
-				
-				$v->{offset} = getSeekOffset($v->{seektable}, ID_TRACKS) + $v->{segment_offset};
-				$log->info("tracks offset scale: $v->{offset}");
-			}	
-		} elsif ($id eq ID_SEEKHEAD && $v->{cue}) {
-			# starting from offset, need to get INFO for timecodescale
-			$v->{seektable} = substr $v->{inBuf}, 0, $size;
-			$v->{offset} = getSeekOffset($v->{seektable}, ID_INFO) + $v->{segment_offset};
-			$log->info("info offset: $v->{offset}");
-		} elsif	($id eq ID_TRACK_ENTRY) {
-			my $track =	getTrackInfo(substr $v->{inBuf}, 0, $size);
-			$log->info("start time: $v->{startTime}");
+		# consume branches lower than L1 (item by item)
+		if ($id eq ID_SEEKHEAD) {
+			my $seektable = substr $v->{inBuf}, 0, $size;
+			$info->{offset}->{cues} = getSeekOffset($seektable, ID_CUES) + $info->{segment_offset};
+			$info->{offset}->{tracks} = getSeekOffset($seektable, ID_TRACKS) + $info->{segment_offset};
+			$log->debug("offset: cues=$info->{offset}->{cues}, tracks=$info->{offset}->{tracks}");
+		} elsif ($id eq ID_INFO) {
+			$info->{duration} = getInfo(substr($v->{inBuf}, 0, $size), ID_DURATION, "f");
+			$log->info("track duration: $info->{duration}");
 			
-			if (defined $track) {
-				$v->{track} = $track;
-				$v->{outBuf} .= buildOggPage([$track->{codec}->{header}], 0, 0x02, $v->{seqnum}++);
-				$v->{outBuf} .= buildOggPage([$track->{codec}->{setup}, $track->{codec}->{comment}], 0, 0x00, $v->{seqnum}++);
-				
-				# when starting from offset, need to cue to position
-				if ($v->{cue}) {
-					# got codec, but now needs to cue to the right position
-					$v->{offset} = getSeekOffset($v->{seektable}, ID_CUES) + $v->{segment_offset};
-					$log->info("cues offset: $v->{offset}");
-				}
-			}	
-		} elsif ($id eq ID_TIMECODE) {
-			$v->{timecode} = decode_u(substr($v->{inBuf}, 0, $size), $size);
-			main::DEBUGLOG && $log->debug("timecode: $v->{timecode}");
-		} elsif ($id eq ID_BLOCK || $id eq ID_BLOCK_SIMPLE) {
-			my $time;
-			my $out = extractVorbis(\$v->{inBuf}, $v->{track}->{tracknum}, $size, \$time);
-						
-			if (defined $out) { 
-				$v->{outBuf} .= buildOggPage([$out], $v->{timecode} + $time, 0x00, $v->{seqnum}++);
-			}	
-		} elsif ($id eq ID_CUES && $v->{cue}) {
-			$v->{offset} = getCueOffset($v->{inBuf}, $v->{startTime}*($v->{timecode_scale}/1000000)*1000) + $v->{segment_offset};
-			$v->{cue} = 0;
-			$log->info("1st cluster offset: $v->{offset}");
-		}
+			$info->{timecode_scale} = getInfo(substr($v->{inBuf}, 0, $size), ID_TIMECODE_SCALE, "u");
+			$log->debug("track timecode scale: $info->{timecode_scale}");
+		} elsif	($id eq ID_TRACK_ENTRY) {
+			$info->{track} = getTrackInfo(substr $v->{inBuf}, 0, $size);
+			$info->{offset}->{clusters} = $v->{position} + $size;
+			$log->debug("offset: clusters=$info->{offset}->{clusters}");
+		} 	
 				
 		$v->{inBuf} = substr($v->{inBuf}, $size);
 		$v->{need} = EBML_NEED;
 		$v->{position} += $size;
 		undef $v->{id};
-				
+		
+		return WEBM_DONE if defined $info->{offset} && defined $info->{duration} && defined $info->{track};
 	}	
 	
-	return 1;
+	return WEBM_MORE;
+}
+
+
+sub getAudio {
+	my ($v, $info) = @_;
+		
+	if ( !defined $v->{seqnum} ) {
+		$v->{seqnum} = 0;
+		$v->{outBuf} = buildOggPage( [$info->{track}->{codec}->{header}], 0, 0x02, $v->{seqnum}++ );
+		$v->{outBuf} .= buildOggPage( [$info->{track}->{codec}->{setup}, $info->{track}->{codec}->{comment}], 0, 0x00, $v->{seqnum}++ );
+		$log->debug("starting new audio parsing");
+	}
+	
+	# process all we can
+	while ($v->{need} <= length $v->{inBuf}) {
+		my $id;
+		my $size;
+			
+		# first need to acquired an ID	
+		if ( !defined $v->{id} ) {
+			$v->{position} += getEBML(\$v->{inBuf}, \$id, \$size);
+						
+			# skip id that are not CLUSTER *except* the SEGMENT !
+			$log->info("cluster of $size byte (last audio $v->{timecode} ms)") if ($id eq ID_CLUSTER);
+			next if $id eq ID_CLUSTER || $id eq ID_SEGMENT;
+			
+			$v->{need} = $size;	
+			$v->{id} = $id;
+										
+			if ($size > MAX_EBML) {
+				$log->error("EBML too large: $size");
+				return WEBM_ERROR;
+			}
+					
+			next;
+		}
+		
+		$id = $v->{id};
+		$size = $v->{need};
+						
+		# handle sub-ID's we care		
+		if ($id eq ID_TIMECODE) {
+			$v->{timecode} = decode_u(substr($v->{inBuf}, 0, $size), $size);
+			$log->debug("timecode: $v->{timecode}");
+		} elsif ($id eq ID_BLOCK || $id eq ID_BLOCK_SIMPLE) {
+			my $time;
+			my $out = extractVorbis(\$v->{inBuf}, $info->{track}->{tracknum}, $size, \$time);
+									
+			if (defined $out) { 
+				$v->{outBuf} .= buildOggPage([$out], $v->{timecode} + $time, 0x00, $v->{seqnum}++);
+			}	
+		}	
+						
+		$v->{inBuf} = substr($v->{inBuf}, $size);
+		$v->{need} = EBML_NEED;
+		$v->{position} += $size;
+		undef $v->{id};
+								
+	}	
+	
+	return WEBM_MORE;
 }
 
 
@@ -332,7 +396,7 @@ sub getTrackInfo {
 	my $count = decode_u8(substr $private, 0, 1) + 1;
 	my $hdr_size = decode_u8(substr $private, 1, 1);
 	my $set_size = decode_u8(substr $private, 2, 1);
-	$log->info ("private count $count, hdr: $hdr_size, setup: $set_size, total: ". length($private));
+	$log->debug ("private count $count, hdr: $hdr_size, setup: $set_size, total: ". length($private));
 									
 	# the explanation for the packet length & offsets of codec private data are found here
 	# https://matroska.org/technical/specs/codecid/index.html 
@@ -392,7 +456,10 @@ sub getEBML {
 	
 	if ($len == 5) {
 		$log->error("wrong len: $len, $c");
-		return undef;
+		#arbitrary, but at least won't get stuck in the an infinite loop
+		$len = 1024; 	
+		$$in = substr($$in, $len);
+		return $len;
 	}
 	
 	$$id = substr($$in, 0, $len);

@@ -1,5 +1,5 @@
 package Plugins::YouTube::ProtocolHandler;
-use base qw(IO::Socket::SSL Slim::Formats::RemoteStream);
+use base qw(IO::Handle);
 
 use strict;
 
@@ -11,21 +11,19 @@ use JSON::XS;
 use Data::Dumper;
 use File::Spec::Functions;
 use FindBin qw($Bin);
-use POSIX qw(ceil :errno_h);
 
 use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
-#use Slim::Utils::Errno;
+use Slim::Utils::Errno;
 use Slim::Utils::Cache;
 
 use Plugins::YouTube::Signature;
 use Plugins::YouTube::WebM;
 
-use constant MAX_INBUF  => 128*1024;
-use constant MAX_READ   => 32768;
-use constant EBML_NEED  => 12;
-use constant CHUNK_SIZE => 8192;	# MUST be less than MAX_READ
+use constant MIN_OUT	=> 8192;
+use constant DATA_CHUNK => 65536;	
+use constant HEADER_CHUNK => 8192;
 
 my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
@@ -35,47 +33,17 @@ Slim::Player::ProtocolHandlers->registerHandler('youtube', __PACKAGE__);
 
 sub flushCache { $cache->cleanup(); }
 
-sub open {
-	my $class = shift;
-	my $args  = shift;
-	my $url   = $args->{'url'} || '';
-	
-	$url =~ m|(?:https)://(?:([^\@:]+):?([^\@]*)\@)?([^:/]+):*(\d*)(\S*)|i;
-	my ($server, $port, $path) = ($3, $4 || 443, $5);
-	my $timeout = 10;
-	
-	if ($url !~ /^https/ || !$server || !$port) {
-
-		$log->error("Couldn't find valid protocol, server or port in url: [$url]");
-		return;
-	}
-	
-	$log->info("Opening connection to $url: \n[$server on port $port with path $path with timeout $timeout]");
-
-	my $sock = $class->SUPER::new(
-		Timeout	  => $timeout,
-		PeerAddr => $server,
-		PeerPort => $port,
-		SSL_startHandshake => 1,
-	) or do {
-
-		$log->error("Couldn't create socket binding to $main::localStreamAddr with timeout: $timeout - $!");
-		return undef;
-	};
-
-	# store a IO::Select object in ourself.
-	# used for non blocking I/O
-	${*$sock}{'_sel'} = IO::Select->new($sock);
-	${*$sock}{'song'} = $args->{'song'};
-				
-	return $sock->request($args);
-}
-
-
 sub new {
 	my $class = shift;
 	my $args  = shift;
 	my $song       = $args->{'song'};
+	my $webmInfo = $song->pluginData('webmInfo');
+	my $offset = $webmInfo->{offset}->{clusters};
+	
+	return undef if !defined $webmInfo;
+	
+	$log->debug( Dumper($webmInfo) );
+	
 	$args->{'url'} = $song->pluginData('stream');
 	my $seekdata = $song->can('seekdata') ? $song->seekdata : $song->{'seekdata'};
 	my $startTime = $seekdata->{'timeOffset'};
@@ -83,104 +51,44 @@ sub new {
 	if ($startTime) {
 		$song->can('startOffset') ? $song->startOffset($startTime) : ($song->{startOffset} = $startTime);
 		$args->{'client'}->master->remoteStreamStartTime(Time::HiRes::time() - $startTime);
-		$args->{url} .= "&keepalive=yes";
+		$offset = 0;
 	}
 	
 	$log->info("url: $args->{url}");
-		
-	my $self = $class->open($args);
-		
+	
+	my $self = $class->SUPER::new;
+	
 	if (defined($self)) {
-		${*$self}{'client'}  = $args->{'client'};
-		${*$self}{'song'}    = $args->{'song'};
-		${*$self}{'url'}     = $args->{'url'};
-		${*$self}{'vars'} = {         # variables which hold state for this instance:
-			%{${*$self}{'vars'}},
-			'inBuf'       => '',      #  buffer of received flv packets/partial packets
-			'outBuf'      => '',      #  buffer of processed audio
-			'id'          => undef,   #  last EBML identifier
-			'need'        => Plugins::YouTube::WebM::EBML_NEED,  #  minimum size of data to process from Matroska file
-			'position'    => 0,       #  byte position in Matroska stream/file
-			'streaming'   => 1,       #  flag for streaming, changes to 0 when input socket closes
-			'streamBytes' => 0,       #  total bytes received for stream
-			'track'		  => undef,	  #  trackinfo
-			'cue'		  => $startTime != 0,		  #  cue required flag
-			'seqnum'	  => 0,		  #  sequence number
-			'offset'      => 0,       #  offset request from stream to be served at next possible opportunity
-			'nextOffset'  => Plugins::YouTube::WebM::CHUNK_SIZE,       #  offset to apply to next GET
-			'process'	  => 1,		  #  shall sysread data be processed or just forwarded ?
-			'startTime'   => $startTime, # not necessary, avoid use in processWebM knows of owner's data
-			'metaUpdate'  => 0,		  # need to update metadata like sample rate, size ...
+		${*$self}{'client'}  	= $args->{'client'};
+		${*$self}{'song'}    	= $args->{'song'};
+		${*$self}{'url'}     	= $args->{'url'};
+		${*$self}{'webmInfo'}   = $webmInfo;		
+		${*$self}{'vars'} = {         		# variables which hold state for this instance:
+			'inBuf'       => '',      		# buffer of received data
+			'outBuf'      => '',      		# buffer of processed audio
+			'id'          => undef,   		# last EBML identifier
+			'need'        => Plugins::YouTube::WebM::EBML_NEED,  # minimum size of data to allow processing
+			'position'    => 0,      		# number of bytes processed from buffer since 1st call
+			'offset'      => $offset,  		# offset for next HTTP request
+			'streaming'   => 1,      		# flag for streaming, changes to 0 when all data received
+			'fetching'    => 0,		  		# waiting for HTTP data
 		};
 	}
+	
+	getStartOffset( $args->{url}, $startTime, $webmInfo, sub { ${*$self}{'vars'}->{offset} = shift } ) if !$offset;
 	
 	return $self;
 }
 
 sub formatOverride { 'ogg' }
 
-sub request {
-	my $self = shift;
-	my $args = shift;
-	my $process = ${*$self}{vars}->{process} || 0;
-	my $ret;
-		
-	${*$self}{vars}->{process} = 0;		
-	$ret = $self->SUPER::request($args);
-	${*$self}{vars}->{process} = $process;		
-		
-	return $ret;
-}
-
-
-sub requestString { 
-	my ($self, $client, $url, $post, $seekdata) = @_;
-	my $CRLF = "\x0D\x0A";
-	my $v = $self->vars;
-	my $offset = $v->{nextOffset} || 0;
-	my $cue = 0;
-	
-	$cue = $seekdata->{timeOffset} if (defined $seekdata);
-	$cue = $v->{cue} if (defined $v->{cue});
-	
-	main::INFOLOG && $log->info("cue: $v->{cue}, time: ", ($seekdata) ? $seekdata->{timeOffset} : "");
-
-	my @items = split(/$CRLF/, Slim::Player::Protocols::HTTP->requestString($client, $url, $post, $seekdata));
-	@items = grep { index($_, "Range:") } @items;
-	if ($cue) { 
-		@items = grep { index($_, "connection:") } @items;
-		push @items, 'Connection: Keep-Alive'; 
-		push @items, 'Range: bytes=' . $offset . '-' . ($offset + CHUNK_SIZE - 1);
-	}
-	else { push @items, 'Range: bytes=' . $offset . '-' }
-	
-	my $request = join($CRLF, @items);
-	$request .= $CRLF . $CRLF;
-	
-	return $request;
-}
-
+sub contentType { 'ogg' }
 
 sub isAudio { 1 }
 
 sub isRemote { 1 }
 
 sub canDirectStream { return 0; }
-
-sub parseHeaders {
-	my ( $self,  @headers ) = @_;
-	
-	foreach my $header (@headers) {
-	
-		# Tidy up header to make no stray nulls or \n have been left by caller.
-		$header =~ s/[\0]*$//;
-		$header =~ s/\r/\n/g;
-		$header =~ s/\n\n/\n/g;
-		
-		${*$self}{'contentLength'} = $1 if ( $header =~ /^Content-Length:\s*([0-9]+)/i );
-		${*$self}{'redirect'} = $1 if ( $header =~ /^Location:\s*(.*)/i );
-	}
-}
 
 sub songBytes {}
 
@@ -205,95 +113,57 @@ sub sysread {
 	# return in $_[1]
 	my $maxBytes = $_[2];
 	my $v = $self->vars;
-	my $bytes;
+	my $url = ${*$self}{'url'};
+	my $webmInfo = ${*$self}{'webmInfo'};
 	
-	return $self->SUPER::sysread($_[1], $maxBytes) if (!$v->{process});
+	# means waiting for offset to be set
+	if ( !$v->{offset} ) {
+		$! = EINTR;
+		return undef;
+	}	
 	
-	while (!length($v->{'outBuf'}) && $v->{streaming}) {
+	# need more data
+	if ( length $v->{'outBuf'} < MIN_OUT && !$v->{'fetching'} && $v->{'streaming'} ) {
+		my $range = "bytes=$v->{offset}-" . ($v->{offset} + DATA_CHUNK - 1);
+		
+		$v->{offset} += DATA_CHUNK;
+		$v->{'fetching'} = 1;
+						
+		Slim::Networking::SimpleAsyncHTTP->new(
+			sub {
+				$v->{'inBuf'} .= $_[0]->content;
+				$v->{'fetching'} = 0;
+				$v->{'streaming'} = 0 if length($_[0]->content) < DATA_CHUNK;
+				$log->debug("got chunk length: ", length $_[0]->content, " from ", $v->{offset} - DATA_CHUNK, " for $url");
+			},
 			
-		$bytes = $self->SUPER::sysread($v->{'inBuf'}, MAX_READ, length($v->{'inBuf'}));
-		next if !defined $bytes && ($! == EAGAIN || $! == EWOULDBLOCK);
-		
-		$v->{streaming} = 0 if !defined $bytes;
-				
-=comment				
-		$log->error("processing webM");
-		open (my $fh, '>>', "d:/toto/webm");
-		binmode $fh;
-		print $fh $v->{inBuf};
-		close $fh;
-=cut		
-		
-		$log->info("content length: ${*$self}{'contentLength'}") if ( $v->{streamBytes} == 0 );
+			sub { 
+				$log->warn("error fetching $url");
+				$v->{'inBuf'} = '';
+				$v->{'fetching'} = 0;
+			}, 
 			
-		# process all we have in input buffer
-		$v->{streaming} &&= Plugins::YouTube::WebM::processWebM($v) && $bytes;
-		$v->{streamBytes} += $bytes;
+		)->get($url, 'Range' => $range );
 		
-		#$log->info("bytes: $bytes, streamBytes: $v->{streamBytes}");
-		
-		# GET more data if needed, move to a different offset or force finish if we have started from an offset
-		if ( $v->{streamBytes} == ${*$self}{contentLength} ) {
-			my $proceed = $v->{cue} || $v->{offset};
-			
-			# Must test offset first as it is not exclusive with cue but takes precedence
-			if ( $v->{offset} ) {
-				$v->{position} = $v->{nextOffset} = $v->{offset};
-				$v->{inBuf} = "";
-				$v->{offset} = 0;
-				
-				$v->{need} = EBML_NEED;
-				undef $v->{id};
-				
-				${*$self}{url} =~ s/&keepalive=yes// if ( !$v->{cue} );
-			} 
+	}	
 
-			if ( $proceed ) {
-				$v->{streamBytes} = 0;
-				$v->{streaming} = 0 if (!$self->request({ url => ${*$self}{url}, song =>  ${*$self}{song} }));
-				$v->{nextOffset} += CHUNK_SIZE;
-			}	
-			else { $v->{streaming} = 0; }
-		}
-	}
+	# process all available data	
+	Plugins::YouTube::WebM::getAudio($v, $webmInfo) if length $v->{'inBuf'};
 	
-	#$log->info("loop streamBytes: $v->{streamBytes} inbuf:", length $v->{inBuf}, " outbuf:", length $v->{outBuf});
-		
-	my $len = length($v->{'outBuf'});
-
-	if ($len > 0) {
-
-		my $bytes = min($len, $maxBytes);
-
+	if ( my $bytes = min(length $v->{'outBuf'}, $maxBytes) ) {
 		$_[1] = substr($v->{'outBuf'}, 0, $bytes);
-
 		$v->{'outBuf'} = substr($v->{'outBuf'}, $bytes);
-
 		return $bytes;
-
-	} elsif (!$v->{'streaming'}) {
-
-		$log->info("stream ended $v->{streamBytes} bytes");
-
-		$self->close;
-
-		return 0;
-
-	} elsif (!$self->connected) {
-
-		$log->debug("input socket not connected");
-
-		$self->close;
-
-		return 0;
-
-	} else {
-
-		$! = EWOULDBLOCK;
+	} elsif ( $v->{streaming} ) {
+		$! = EINTR;
 		return undef;
 	}
-}
-
+	
+	# end of streaming
+	$log->info("end streaming: $url");
+	return 0;
+}	
+	
 
 sub getId {
 	my ($class, $url) = @_;
@@ -322,7 +192,6 @@ sub getNextTrack {
 	my $id = $class->getId($masterUrl);
 	my $url = "http://www.youtube.com/watch?v=$id";
 
-	$log->debug('getNextTrack');
 	$log->info("next track id: $id url: $url master: $masterUrl");
 
 	# fetch new url(s)
@@ -415,7 +284,7 @@ sub getNextTrack {
 								}	
 							  } );
 				} else {
-					$log->debug("raw signature $streamInfo->{'rawsig'}");
+					$log->info("raw signature $streamInfo->{'rawsig'}");
 					$song->pluginData(stream  => $streamInfo->{'url'} . "&signature=" . $streamInfo->{'rawsig'});
 					getTrackInfo( $client, $song, $successCb );
 				}
@@ -496,45 +365,102 @@ sub getSignature {
 
 sub getTrackInfo {
 	my ($client, $song, $cb) = @_;
+	my $process;
+	my $info = {};	
+	my $var = {	'inBuf'       => '',
+				'id'          => undef,   
+				'need'        => Plugins::YouTube::WebM::EBML_NEED,  
+				'offset'      => 0,       
+		};
 	
-	Slim::Networking::SimpleAsyncHTTP->new(
-		sub {
-			my $var = {	'inBuf'       => shift->content,
-						'outBuf'      => '',      
-						'id'          => undef,   
-						'need'        => Plugins::YouTube::WebM::EBML_NEED,  
-						'position'    => 0,       
-						'track'		  => undef,	  
-						'cue'		  => 0,		  
-						'seqnum'	  => 0,		  
-						'offset'      => 0,       
-				};
-	
-			Plugins::YouTube::WebM::processWebM($var);
-			
-			$song->track->secs( $var->{duration} / 1000 ) if $var->{duration};
-			
-			if ( defined $var->{track} ) {
-				${song}->track->bitrate( $var->{track}->{bitrate} );
-				${song}->track->samplerate( $var->{track}->{samplerate} );
-				${song}->track->samplesize( $var->{track}->{samplesize} );
-				${song}->track->channels( $var->{track}->{channels} );
-				
-				$log->info( "samplerate: $var->{track}->{samplerate}, bitrate: $var->{track}->{bitrate}" );
-								
-				$client->currentPlaylistUpdateTime( Time::HiRes::time() );
-				Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );	
-			}
-													
-			$cb->();
-		},
+	$process = sub {
+		Slim::Networking::SimpleAsyncHTTP->new(
 		
-		sub {
-			$log->warn("could not get codec info");
-			$cb->();
-		}
-	)->get( $song->pluginData('stream'), 'Range' => 'bytes=0-16384' );
-}	
+			sub {
+				my $content = shift->content;
+								
+				$var->{'inBuf'} .= $content;
+				my $res = Plugins::YouTube::WebM::getHeaders($var, $info);
+				
+				if ( $res eq Plugins::YouTube::WebM::WEBM_MORE ) {
+					return $cb->() if length($content) < HEADER_CHUNK; 
+					
+					$log->debug("paging: $var->{offset}");
+					$var->{offset} += length $content;
+					$process->();
+				} elsif ( $res eq Plugins::YouTube::WebM::WEBM_DONE ) {	
+					$song->track->secs( $info->{'duration'} / 1000 ) if $info->{'duration'};
+					$song->track->bitrate( $info->{'track'}->{'bitrate'} );
+					$song->track->samplerate( $info->{'track'}->{'samplerate'} );
+					$song->track->samplesize( $info->{'track'}->{'samplesize'} );
+					$song->track->channels( $info->{'track'}->{'channels'} );
+				
+					$log->info( "samplerate: $info->{'track'}->{'samplerate'}, bitrate: $info->{'track'}->{'bitrate'}" );
+					$song->pluginData('webmInfo' => $info);
+													
+					$client->currentPlaylistUpdateTime( Time::HiRes::time() );
+					Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );	
+				
+					$cb->();
+				} elsif ( $res eq Plugins::YouTube::WebM::WEBM_ERROR ) {
+					$log->error( "could not get webm headers" );
+					$cb->();
+				}		
+			},
+		
+			sub {
+				$log->warn("could not get codec info");
+				$cb->();
+			}
+		)->get( $song->pluginData('stream'), 'Range' => "bytes=$var->{'offset'}-" . ($var->{'offset'} + HEADER_CHUNK - 1) );
+	 };	
+	
+	$process->();
+}
+
+
+sub getStartOffset {
+	my ($url, $startTime, $info, $cb) = @_;
+	my $process;
+	my $var = {	'inBuf'       => '',
+				'id'          => undef,   
+				'need'        => Plugins::YouTube::WebM::EBML_NEED,  
+				'offset'      => $info->{offset}->{cues},       
+		};
+	
+	$process = sub {
+		Slim::Networking::SimpleAsyncHTTP->new(
+		
+			sub {
+				my $content = shift->content;
+								
+				$var->{'inBuf'} .= $content;
+				my $res = Plugins::YouTube::WebM::getCues($var);
+				
+				if ( $res eq Plugins::YouTube::WebM::WEBM_MORE ) {
+					return $cb->( $info->{offset}->{clusters} ) if length($content) < HEADER_CHUNK; 
+					
+					$log->debug("paging: $var->{offset}");
+					$var->{offset} += length $content;
+					$process->();
+				} elsif ( $res eq Plugins::YouTube::WebM::WEBM_DONE ) {	
+					my $offset = Plugins::YouTube::WebM::getCueOffset($var->{outBuf}, $startTime*($info->{timecode_scale}/1000000)*1000) + $info->{segment_offset};
+					$cb->($offset);
+				} elsif ( $res eq Plugins::YouTube::WebM::WEBM_ERROR ) {
+					$log->warn( "could not find start offset" );
+					$cb->( $info->{offset}->{clusters} );
+				}		
+			},
+		
+			sub {
+				$log->warn( "could not find start offset" );
+				$cb->( $info->{offset}->{clusters} );
+			}
+		)->get( $url, 'Range' => "bytes=$var->{'offset'}-" . ($var->{'offset'} + HEADER_CHUNK - 1) );
+	 };	
+	
+	$process->();
+}
 
 
 sub getMetadataFor {
@@ -650,7 +576,7 @@ sub _getBulkMetadata {
 			}
 	
 			my $duration = $item->{contentDetails}->{duration};
-			main::INFOLOG && $log->info("Duration: $duration");
+			main::DEBUGLOG && $log->debug("Duration: $duration");
 			my ($misc, $hour, $min, $sec) = $duration =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
 			$duration = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
 									
