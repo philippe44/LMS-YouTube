@@ -1,3 +1,19 @@
+0.60.0
+ - Complete rewrite of HTTP streaming & webm parsing, now requesting file by chunks
+ - Solves issue when long streaming end unexpectidly under Windows
+ - Pause can last indefinitively 
+ 
+0.52.1
+ - Avoid infinite locking loop if HTTP error happened before end of track (Windows)
+ - Set duration from metadata if it is not in WebM file
+
+0.52.0
+ - Separate WebM parsing from ProtocolHandler
+ - Get sample rate and bit rate before song starts to accurate PCM transcoding
+ - reorganize signature extraciton for better clarity
+ - Set duration correctly
+ - Remove attempt to read multiple track per url (was broken anyway)
+   
 0.51.2
  - Increase EBML max buffer to 129kB
 
