@@ -5,10 +5,10 @@
     <maxVersion>7.*</maxVersion>
     <minVersion>7.7</minVersion>
   </targetApplication>
-  <name>PLUGIN_YOUTUBE</name>
-  <module>Plugins::YouTube::Plugin</module>
-  <defaultState>enabled</defaultState>
-  <version>0.60.0</version>
   <icon>plugins/YouTube/html/images/youtube.png</icon>
+  <module>Plugins::YouTube::Plugin</module>
+  <name>PLUGIN_YOUTUBE</name>
+  <defaultState>enabled</defaultState>
   <description>PLUGIN_YOUTUBE_DESC</description>
+  <version>0.60.1</version>
 </extensions>
