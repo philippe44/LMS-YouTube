@@ -487,7 +487,7 @@ sub _renderList {
 		} elsif ($entry->{kind} eq 'youtube#channel') {
 			$id = $entry->{id};
 			$kind = 'youtube#guidechannel';
-		} elsif ($entry->{kind} eq 'youtube#playlist') {
+		} elsif ($entry->{kind} eq 'youtube#playlist' || $entry->{kind} eq 'youtube#video') {
 			$id = $entry->{id};
 			$kind = $entry->{kind};
 		}	
