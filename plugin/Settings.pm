@@ -21,7 +21,7 @@ sub page {
 }
 
 sub prefs {
-	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix playlist_suffix country max_items APIkey client_id client_secret));
+	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix playlist_suffix country max_items APIkey client_id client_secret highres_icons));
 }
 
 sub handler {

@@ -12,12 +12,18 @@
 
 	[% END %]
 	
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_ICONRES" desc="PLUGIN_YOUTUBE_ICONRES_DESC" %]
+
+		<input name="pref_highres_icons" type="checkbox" [% IF prefs.pref_highres_icons %] checked [% END %]>
+
+	[% END %]
+	
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_MAXITEMS" desc="PLUGIN_YOUTUBE_MAXITEMS_DESC" %]
 
 		<input type="text" class="stdedit" name="pref_max_items" id="pref_max_items" value="[% prefs.pref_max_items %]" size="5">
 
 	[% END %]
-	
+			
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_COUNTRY" desc="PLUGIN_YOUTUBE_COUNTRY_DESC" %]
 
 		<input type="text" class="stdedit" name="pref_country" id="pref_country" value="[% prefs.pref_country %]" size="2">

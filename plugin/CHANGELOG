@@ -1,5 +1,9 @@
+0.61.0
+ - Choice of icon resolution
+ 
 0.60.1
  - When EBML is wrong, move forward only by the size of a single EBML 
+ - Correct URL/ID direct search  (result was not handled by list manager)
 
 0.60.0
  - Complete rewrite of HTTP streaming & webm parsing, now requesting file by chunks

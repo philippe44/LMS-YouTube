@@ -99,6 +99,13 @@ PLUGIN_YOUTUBE_MAXITEMS
 PLUGIN_YOUTUBE_MAXITEMS_DESC
 	EN	Maximum number of items a search can return
 	
+PLUGIN_YOUTUBE_ICONRES
+	EN	High resolution icons
+
+PLUGIN_YOUTUBE_ICONRES_DESC
+	EN	Select high resolution icons (nicer display with some 3rd party apps like iPeng but requires smore time for 
+	EN	loading long playlist)
+	
 PLUGIN_YOUTUBE_COUNTRY
 	EN	Country for categories
 

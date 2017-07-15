@@ -43,7 +43,8 @@ $prefs->init({
 	APIkey => '', 
 	max_items => 200, 
 	country => setCountry(),
-	cache => 1
+	cache => 1,
+	highres_icons => 0,
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
@@ -543,11 +544,11 @@ sub _renderList {
 
 sub _getImage {
 	my ($imageList) = @_;
-	
+	my @resolution = $prefs->get('highres_icons') ? qw(maxres high medium standard default) : qw(default standard medium high maxres);
 	my $image;
 	
 	if (my $thumbs = $imageList) {
-		foreach ( qw(default maxres standard high medium) ) {
+		foreach ( @resolution ) {
 			last if $image = $thumbs->{$_}->{url};
 		}
 	}
