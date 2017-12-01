@@ -374,7 +374,7 @@ sub extract_object {
     # Currently, it only supports function definitions
     while ($fields =~ /
             ([a-zA-Z\$0-9]+)\s*:\s*function
-            \(([a-z,]+)\){([^}]+)}
+            \(([a-z,]+)\)\{([^}]+)\}
               /xg) {
 	my $key = $1;
 	my $args = $2;
