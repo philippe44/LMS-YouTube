@@ -20,6 +20,10 @@ use strict;
 use warnings;
 use JSON::XS;
 
+use Slim::Utils::Log;
+
+my $log = logger('plugin.youtube');
+
 my @_OPERATORS = (
     ['|', sub { my ($a, $b) = @_; return $a | $b }],
     ['^', sub { my ($a, $b) = @_; return $a ^ $b }],
@@ -357,10 +361,10 @@ sub extract_object {
     $self->progress($depth, "--", "Extract '$objname'");
 
     if (!($self->{code} =~  /
-            (?:var\s+)?
+            (?<!this\.)
              \Q$objname\E
              \s*=\s*\{
-             \s*(([a-zA-Z\$0-9]+\s*:\s*function\(.*?\)\s*\{.*?\})*)
+             \s*(([a-zA-Z\$0-9]+\s*:\s*function\(.*?\)\s*\{.*?\}(?:,\s*)?)*)
             \}\s*;
               /x)) {
 	die "Could not extract JS object '$objname'";
@@ -370,7 +374,7 @@ sub extract_object {
     # Currently, it only supports function definitions
     while ($fields =~ /
             ([a-zA-Z\$0-9]+)\s*:\s*function
-            \(([a-z,]+)\){([^}]+)}
+            \(([a-z,]+)\)\{([^}]+)\}
               /xg) {
 	my $key = $1;
 	my $args = $2;
@@ -385,16 +389,23 @@ sub extract_object {
 sub extract_function {
     my ($self, $depth, $funcname) = @_;
     $self->progress($depth, "--", "Extract $funcname");
+	my $args;
+    my $code;
+	
+	$log->debug("JS function: $funcname $self->{code}");
 
-    if (!($self->{code} =~ /
-                (?:function\s+\Q$funcname\E|[{;]\Q$funcname\E\s*=\s*function)\s*
+# Python version : (?:function\s+%s|[{;,]%s\s*=\s*function|var\s+%s\s*=\s*function)\s*	
+
+	if (($self->{code} =~ /(?:function\s+\Q$funcname\E|[{;,]\s*\Q$funcname\E\s*=\s*function|var\s+\Q$funcname\E\s*=\s*function)\s*
                 \(([^)]*)\)\s*
-                \{([^}]+)\}
-             /x)) {
-	die "Could not find JS function '$funcname'";
+                \{([^}]+)\}/x)) {
+		$args = $1;
+		$code = $2;
+	} else {
+		$log->error("Could not find JS function: $funcname");
+		die "Could not find JS function '$funcname'";
     }
-    my $args = $1;
-    my $code = $2;
+
     $self->progress($depth, "%%", $code);
     $self->progress($depth, "--", "Got $args with code $code");
     my @argnames = split /,/, $args;

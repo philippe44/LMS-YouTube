@@ -1,8 +1,129 @@
+0.61.2
+ - Add "settings" link in plugin page
+ 
+0.61.1
+ - Escape curly bracket in regex is mandatory for Perl 5.26 
+ 
+0.61.0
+ - Choice of icon resolution
+ 
+0.60.1
+ - When EBML is wrong, move forward only by the size of a single EBML 
+ - Correct URL/ID direct search  (result was not handled by list manager)
+
+0.60.0
+ - Complete rewrite of HTTP streaming & webm parsing, now requesting file by chunks
+ - Solves issue when long streaming end unexpectidly under Windows
+ - Pause can last indefinitively 
+ 
+0.52.1
+ - Avoid infinite locking loop if HTTP error happened before end of track (Windows)
+ - Set duration from metadata if it is not in WebM file
+
+0.52.0
+ - Separate WebM parsing from ProtocolHandler
+ - Get sample rate and bit rate before song starts to accurate PCM transcoding
+ - reorganize signature extraciton for better clarity
+ - Set duration correctly
+ - Remove attempt to read multiple track per url (was broken anyway)
+   
+0.51.2
+ - Increase EBML max buffer to 129kB
+
+0.51.0
+ - Handle change in YouTube JS for sig
+
+ 0.50.0
+ - Add access to personal YouTube account
+ 
+0.42.2
+ - Force disable direct streaming (should not be needed)
+
+0.42.1
+ - Corrected url in APIkey creation help
+ - Corrected string for Playlist identificator tag
+ 
+0.42.0
+ - Patch according to https://github.com/rg3/youtube-dl/issues/11663
+
+0.41.3
+ - Bubble-help for playlist tag was not set
+
+0.41.2
+ - Minor text corrections
+
+0.41.1
+ - add instructions to create a key on the main screen
+ 
+0.41
+ - Improve search infoMenu & add by album for "On YouTube"
+ 
+0.40.1
+ - Precedence mistake caused an error using newer Perl (Jessie)
+
+0.40
+ - FLV is deprecated, move to WEBM format
+ - Update JS parsing rule
+ 
+0.38.1
+ - Hash code pattern extraction in video search by ID was only alphanumerical: '-' and '_' are need
+ 
+0.38
+ - Can play the whole result of a search (only video, not channels)
+ - add 'related URL/ID' search
+ - Play URL is accepting full URL or just and ID
+
+0.37.4
+ - Another change in YouTube signature management
+
+0.37.2
+ - Adaptation to YouTube code generation (credit to tgenin)
+ 
+0.37.1
+ - change in signature management
+ 
+0.37
+ - only metadata from active playlist were searched
+
+0.36.1
+ - Addition help in settings to add missing SSL libraries
+
+0.36
+ - Fix constant "plugin updated" message in LMS
+ 
+0.35
+ - Trying to detect if IO::Socket::SSL is available
+ - Favorite returned list was not accepted (blessing problem ?) 
+ 
+0.34.1
+ - url parsing is done inside protocolhandler 
+
+0.34
+ - offer choice to prefix and postfix for Channel and Playlist
+ 
+0.33
+ - Encode search in utf8 to accept multi-byte strings
+ - Remove cache flush, does not work
+ - Channels and Playlists can be added to favorites
+ - Pressing 'play' on guided channels only play video in channels, *not* playlist
+ - Change backend / frontend a bit to factorize similar function 
+ - Skip videos w/o a thumbnail(private/deleted)
+ - Channels are in bold and playlist in italic bold
+ - Add search in everything (channel, playlist and video)
+ - (B) play/add on a channel/playlist was limited to 1st 50 items
+ - (B) on LMS < 7.9 playlist played directly from channel/playlist failed to get metadata
+ 
+0.32
+ - Guided Channels can include Playlists
+
+0.31
+ - add Guided Channels (categories)
+ µ
 0.30
  - Major refactor by Michael
- - Channel/Playlist can be played direclty as playlist
+ - Channel/Playlist can be played directly as playlist
  - Get video icons in the search results
- - Caching of searches 
+ - Caching of searches (cache can be flushed in settings)
  - Get metadata for the whole playlist
  
 0.27
@@ -13,7 +134,7 @@
  - Remove wrong SSL parameter on opening
  
 0.26
- - JSinterpret was using JSON and not JSON:XS which seems to not be available on some linux 
+ - JSinterpret was using JSON and not JSON:XS which seems to not be available on some Linux 
  
 0.25
  - Use JSON::XS so move from_json to json_decode

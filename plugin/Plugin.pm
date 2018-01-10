@@ -7,12 +7,19 @@ package Plugins::YouTube::Plugin;
 use strict;
 use base qw(Slim::Plugin::OPMLBased);
 
+use Data::Dumper;
+use Encode qw(encode decode);
+use JSON::XS::VersionOneAndTwo;
+
 use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Prefs;
 use Slim::Utils::Log;
+use Slim::Utils::Cache;
 
 use Plugins::YouTube::API;
 use Plugins::YouTube::ProtocolHandler;
+use Plugins::YouTube::ListProtocolHandler;
+use Plugins::YouTube::Oauth2;
 
 use constant BASE_URL => 'www.youtube.com/v/';
 use constant STREAM_BASE_URL => 'youtube://' . BASE_URL;
@@ -28,16 +35,29 @@ my	$log = Slim::Utils::Log->addLogCategory({
 });
 
 my $prefs = preferences('plugin.youtube');
+my $cache = Slim::Utils::Cache->new();
 
 $prefs->init({ 
 	prefer_lowbitrate => 0, 
 	recent => [], 
 	APIkey => '', 
 	max_items => 200, 
-	country => Slim::Utils::Strings::getLanguage()
+	country => setCountry(),
+	cache => 1,
+	highres_icons => 0,
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
+my $convertCountry = { EN => 'US' };
+
+sub setCountry {
+	my $lang = Slim::Utils::Strings::getLanguage();
+	
+	$lang = $convertCountry->{$lang} if $convertCountry->{$lang};
+	
+	return $lang;
+}
+
 
 sub initPlugin {
 	my $class = shift;
@@ -49,7 +69,7 @@ sub initPlugin {
 		is_app => 1,
 		weight => 10,
 	);
-
+	
 	Slim::Menu::TrackInfo->registerInfoProvider( youtube => (
 		after => 'middle',
 		func  => \&trackInfoMenu,
@@ -58,6 +78,11 @@ sub initPlugin {
 	Slim::Menu::TrackInfo->registerInfoProvider( youtubevideo => (
 		after => 'bottom',
 		func  => \&webVideoLink,
+	) );
+	
+	Slim::Menu::AlbumInfo->registerInfoProvider( youtube => (
+		after => 'middle',
+		func  => \&albumInfoMenu,
 	) );
 
 	Slim::Menu::ArtistInfo->registerInfoProvider( youtube => (
@@ -70,17 +95,25 @@ sub initPlugin {
 		name  => 'PLUGIN_YOUTUBE',
 		func  => \&searchInfoMenu,
 	) );
-
+	
 	if ( main::WEBUI ) {
 		require Plugins::YouTube::Settings;
 		Plugins::YouTube::Settings->new;
 	}
-
+	
 	for my $recent (reverse @{$prefs->get('recent')}) {
 		$recentlyPlayed{ $recent->{'url'} } = $recent;
 	}
+	
+	$prefs->set('country', $convertCountry->{$prefs->get('country')}) if $convertCountry->{$prefs->get('country')};
+	
+#        |requires Client
+#        |  |is a Query
+#        |  |  |has Tags
+#        |  |  |  |Function to call
+	Slim::Control::Request::addDispatch(['youtube', 'info'], 
+		[1, 1, 1, \&cliInfoQuery]);
 
-	Slim::Control::Request::addDispatch(['youtube', 'info'], [1, 1, 1, \&cliInfoQuery]);
 }
 
 sub shutdownPlugin {
@@ -128,34 +161,50 @@ sub toplevel {
 		return;
 	}
 	
+	if (!Slim::Networking::Async::HTTP::hasSSL() || !eval { require IO::Socket::SSL } ) {
+		$callback->([
+			{ name => cstring($client, 'PLUGIN_YOUTUBE_MISSINGSSL'), type => 'text' },
+		]);
+		return;
+	}
+	
 	$callback->([
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_VIDEOCATEGORIES'), type => 'url', url => \&videoCategoriesHandler },
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_GUIDECATEGORIES'), type => 'url', url => \&guideCategoriesHandler },
 
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_SEARCH'),  type => 'search', url => \&videoSearchHandler },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_VIDEOSEARCH'),  type => 'search', url => \&searchHandler },
 
 		#FIXME: is this always 10 ?
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_MUSICSEARCH'), type => 'search', url => \&videoSearchHandler, passthrough => [ { videoCategoryId => 10 }] },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_MUSICSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { videoCategoryId => 10 } ] },
 
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_CHANNELSEARCH'), type => 'search', url => \&channelSearchHandler },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_CHANNELSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'channel' } ] },
 
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_PLAYLISTSEARCH'), type => 'search', url => \&playlistSearchHandler },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_PLAYLISTSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'playlist' } ] },
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_WHOLE'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'video,channel,playlist' } ] },
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_MYSUBSCRIPTIONS'), type => 'url', url => \&subscriptionsHandler, passthrough => [ { count => 2 } ] },
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_MYPLAYLISTS'), type => 'url', url => \&myPlaylistHandler, passthrough => [ { count => 2 } ] },
 	
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_RECENTLYPLAYED'), url  => \&recentHandler, },
-
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_URL'), type => 'search', url  => \&urlHandler, },
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_URLRELATEDSEARCH'), type => 'search', url => \&relatedURLHandler },
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_RECENTLYPLAYED'), url  => \&recentHandler, },
 	]);
 }
 
 sub urlHandler {
 	my ($client, $cb, $args) = @_;
-	
 	my $url = $args->{search};
 
 	# because search replaces '.' by ' '
 	$url =~ s/ /./g;
 	
 	my $id = Plugins::YouTube::ProtocolHandler->getId($url);
-
+	
 	my $errorItems = { items => [ { 
 		type => 'text',
 		name => cstring($client, 'PLUGIN_YOUTUBE_BADURL'), 
@@ -178,6 +227,41 @@ sub urlHandler {
 	}, $id );
 }
 
+
+sub relatedURLHandler {
+	my ($client, $cb, $args) = @_;
+	my $url = $args->{search};
+	
+	# because search replaces '.' by ' '
+	$url =~ s/ /./g;
+	
+	my $id = Plugins::YouTube::ProtocolHandler->getId($url);
+	
+	my $errorItems = { items => [ { 
+		type => 'text',
+		name => cstring($client, 'PLUGIN_YOUTUBE_BADURL'), 
+	} ] };
+	
+	if (!$id) {
+		$cb->( $errorItems );
+		return;
+	}
+	
+	my $params;
+	
+	$params->{type} = 'video';
+	$params->{relatedToVideoId} = $id;
+	$params->{quota} = defined $args->{index} ? 
+					   ($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
+					   $args->{quantity};
+	
+	Plugins::YouTube::API->search(sub {
+		$cb->( { items => _renderList($_[0]->{items}), 
+				 total => $_[0]->{total} } );
+	}, $params );
+}
+
+
 sub recentHandler {
 	my ($client, $callback, $args) = @_;
 
@@ -196,10 +280,33 @@ sub recentHandler {
 	$callback->({ items => \@menu });
 }
 
-sub videoCategoriesHandler {
-	my ($client, $cb) = @_;
+sub guideCategoriesHandler {
+	my ($client, $cb, $args) = @_;
 	
-	Plugins::YouTube::API->getVideoCategories(sub {
+	Plugins::YouTube::API->getCategories('guideCategories', sub {
+		my $result = shift;
+		
+		my $items = [];
+
+		for my $entry (@{$result->{items} || []}) {
+			my $title = $entry->{snippet}->{title} || next;
+
+			push @$items, {
+				name => $title,
+				type => 'url',
+				url  => \&channelHandler,
+				passthrough => [  { categoryId => $entry->{id} } ],
+			};
+		}
+
+		$cb->( $items );
+	}, $args->{quantity} + $args->{index} || 0 );
+}
+
+sub videoCategoriesHandler {
+	my ($client, $cb, $args) = @_;
+	
+	Plugins::YouTube::API->getCategories('videoCategories', sub {
 		my $result = shift;
 		
 		my $items = [];
@@ -210,116 +317,238 @@ sub videoCategoriesHandler {
 			push @$items, {
 				name => $title,
 				type => 'search',
-				url  => \&videoSearchHandler,
+				url  => \&searchHandler,
 				passthrough => [  { videoCategoryId => $entry->{id} } ],
 			};
 		}
 
 		$cb->( $items );
+	}, $args->{quantity} + $args->{index} || 0 );
+}
+
+
+sub subscriptionsHandler {
+	my ($client, $cb, $args, $params) = @_;
+		
+	if ( !$prefs->get('client_id') || !$params->{count} ) {
+		$cb->( [ { name => cstring($client, 'PLUGIN_YOUTUBE_MISSINGOAUTH'), type => 'text' } ] );;
+		return;
+	}
+	
+	if ( !$cache->get('yt:access_token') ) {
+		$params->{count}--;
+		Plugins::YouTube::Oauth2::getToken(\&subscriptionsHandler, @_);
+		return;
+	}	
+	
+	delete $params->{count};
+	
+	Plugins::YouTube::API->searchDirect('subscriptions', sub {
+		$cb->( { items => _renderList($_[0]->{items}), 
+				 total => $_[0]->{total} } );
+	}, {
+		_cache_ttl 		=> 60,
+		_noKey			=> 1,
+		mine			=> 'true',
+		access_token 	=> $cache->get('yt:access_token'),
+		quota  			=> defined $args->{index} ? 
+						($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
+						$args->{quantity},
 	});
 }
 
-sub videoSearchHandler {
+
+sub myPlaylistHandler {
 	my ($client, $cb, $args, $params) = @_;
 	
-	$params->{q} ||= delete $args->{search} if $args->{search};
+	if ( !$prefs->get('client_id') || !$params->{count} ) {
+		$cb->( [ { name => cstring($client, 'PLUGIN_YOUTUBE_MISSINGOAUTH'), type => 'text' } ] );
+		return;
+	}
 	
-	Plugins::YouTube::API->searchVideos(sub {
-		$cb->( _renderList($_[0]->{items}) );
-	}, $params);
-}
-
-sub channelSearchHandler {
-	my ($client, $cb, $args) = @_;
+	if ( !$cache->get('yt:access_token') ) {
+		$params->{count}--;
+		Plugins::YouTube::Oauth2::getToken(\&myPlaylistHandler, @_);
+		return;
+	}	
 	
-	Plugins::YouTube::API->searchChannels(sub {
-		$cb->( _renderList($_[0]->{items}) );
-	},{
-		q => delete $args->{search}
-	});
-}
-
-sub playlistSearchHandler {
-	my ($client, $cb, $args) = @_;
+	delete $params->{count};
 	
-	Plugins::YouTube::API->searchPlaylists(sub {
-		$cb->( _renderList($_[0]->{items}) );
+	my $extra_args = { 	_cache_ttl 		=> 60,
+					_noKey			=> 1,
+					mine			=> 'true',
+					access_token 	=> $cache->get('yt:access_token'),
+				};	
+				
+	Plugins::YouTube::API->searchDirect('playlists', sub {
+		$cb->( { items => _renderList($_[0]->{items}, $extra_args), 
+				 total => $_[0]->{total} } );
 	}, {
-		q => delete $args->{search}
+		%{$extra_args},
+		quota  			=> defined $args->{index} ? 
+						($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
+						$args->{quantity},
 	});
 }
+
+
+sub searchHandler {
+	my ($client, $cb, $args, $params) = @_;
+	
+	if ($args->{search}) {
+		$args->{search} = encode('utf8', $args->{search});
+		$params->{q} ||= delete $args->{search};
+	}	
+	
+	$params->{quota} = defined $args->{index} ? 
+					   ($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
+					   $args->{quantity};
+					   
+	Plugins::YouTube::API->search(sub {
+		$cb->( { items => _renderList($_[0]->{items}), 
+				 total => $_[0]->{total} } );
+
+	}, $params );
+}
+
+
+sub playlistHandler {
+	my ($client, $cb, $args, $params) = @_;
+	
+	$params ||= {};
+	
+	Plugins::YouTube::API->searchDirect('playlistItems', sub {
+		$cb->( { items => _renderList($_[0]->{items}), 
+				 total => $_[0]->{total} } );
+	}, {
+		%{$params},
+		quota  => defined $args->{index} ? 
+				($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
+				$args->{quantity},
+	});
+}
+
+sub channelHandler {
+	my ($client, $cb, $args, $params) = @_;
+	
+	$params ||= {};
+	
+	Plugins::YouTube::API->searchDirect('channels', sub {
+		$cb->( { items => _renderList($_[0]->{items}), 
+				 total => $_[0]->{total} } );
+	}, {
+		quota  => defined $args->{index} ? 
+				($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
+				$args->{quantity},
+		%{$params},
+	});
+}
+
+sub playAllHandler {
+	my ($client, $cb, $args, $params) = @_;
+	my @list = grep { defined $_->{play} } @{$params->{items} || []};
+	
+	$cb->( { items => \@list, total => scalar @list } );
+}
+
 
 sub _renderList {
-	my ($entries) = @_;
-
+	my ($entries, $through) = @_;
 	my $items = [];
+	my $isTrack = 0;
+	my $id;
+	my $kind;
+	my $chTags	= { prefix => $prefs->get('channel_prefix'), 
+					suffix => $prefs->get('channel_suffix') };
+	my $plTags	= { prefix => $prefs->get('playlist_prefix'), 
+					suffix => $prefs->get('playlist_suffix') };
 
+	$through ||= {};
+		
 	for my $entry (@{$entries || []}) {
 		my $snippet = $entry->{snippet} || next;
 		my $title = $snippet->{title} || next;
 		
 		next unless $entry->{id};
+		next unless $snippet->{thumbnails};
 		
 		my $item = {
 			name => $title,
 			type => 'playlist',
 			image => _getImage($snippet->{thumbnails}),
 		};
-
-		if (!ref $entry->{id} || ($entry->{id}->{kind} && $entry->{id}->{kind} eq 'youtube#video')) {
-			my $id;
-
-			if ($snippet->{id}) {
-				$id = $snippet->{id}->{videoId};
-			}
-			elsif ($snippet->{resourceId}) {
-				$id = $snippet->{resourceId}->{videoId}
-			}
-			elsif (!ref $entry->{id}) {
-				$id = $entry->{id};
-			}
-			elsif ($entry->{id}->{videoId}) {
-				$id = $entry->{id}->{videoId};
-			}
-			
-			if (!$id) {
-				$log->error("Unexpected data: " . Data::Dump::dump($entry));
-				next;
-			}
-			
-			my $url = STREAM_BASE_URL . $id;
-
+		
+		# what is the type of item
+		if ( $entry->{kind} eq 'youtube#searchResult' ) {
+			$id = $entry->{id}->{videoId} || $entry->{id}->{channelId} || $entry->{id}->{playlistId};
+			$kind = $entry->{id}->{kind};
+		} elsif ($entry->{kind} eq 'youtube#subscription' || $entry->{kind} eq 'youtube#playlistItem') {
+			$id = $entry->{snippet}->{resourceId}->{videoId} || $entry->{snippet}->{resourceId}->{channelId} || $entry->{snippet}->{resourceId}->{playlistId};
+			$kind = $entry->{snippet}->{resourceId}->{kind};
+		} elsif ($entry->{kind} eq 'youtube#channel') {
+			$id = $entry->{id};
+			$kind = 'youtube#guidechannel';
+		} elsif ($entry->{kind} eq 'youtube#playlist' || $entry->{kind} eq 'youtube#video') {
+			$id = $entry->{id};
+			$kind = $entry->{kind};
+		}	
+		
+		$log->debug("id:$id, kind:$kind");
+		
+		if (!$id) {
+			$log->error("Unexpected data: " . Data::Dump::dump($entry));
+			next;
+		}
+	 
+		# now organize the item list
+		if ($kind eq 'youtube#guidechannel') {
+			$item->{name} = $chTags->{prefix} . $title . $chTags->{suffix};
+			$item->{passthrough} = [ { channelId => $id, type => 'video,playlist' } ];
+			$item->{url}        = \&searchHandler;
+			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
+			$item->{favorites_type}	= 'audio';
+		} elsif ($kind eq 'youtube#video') {
 			$item->{on_select} = 'play';
-			$item->{play}      = $url;
-		}
-		elsif (my $id = $entry->{id}->{channelId}) {
-			$item->{passthrough} = [ { channelId => $id } ];
-			$item->{url}         = \&videoSearchHandler;
-		}
-		elsif (my $id = $entry->{id}->{playlistId}) {
-			$item->{passthrough} = [ { playlistId => $id } ];
+			$item->{play}      = STREAM_BASE_URL . $id;
+			$isTrack++;
+		} elsif ($kind eq 'youtube#playlist') {
+			$item->{name} = $plTags->{prefix} . $title . $plTags->{suffix};
+			$item->{passthrough} = [ { playlistId => $id, %{$through} } ];
 			$item->{url}         = \&playlistHandler;
-		}
-		else {
-			# no known item type - skip it
+			$item->{favorites_url}	= 'ytplaylist://playlistId=' . $id;
+			$item->{favorites_type}	= 'audio';
+		} elsif ($kind eq 'youtube#channel') {	
+			$item->{name} = $chTags->{prefix} . $title . $chTags->{suffix};
+			$item->{passthrough} = [ { channelId => $id, %{$through} } ];
+			$item->{url}         = \&searchHandler;
+			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
+			$item->{favorites_type}	= 'audio';
+		} else {
 			$log->warn("Unknown item type");
 			main::DEBUGLOG && $log->is_debug && $log->debug(Data::Dump::dump($entry));
 			next;
-		}
-
+		}	
+		
 		push @$items, $item;
 	}
 	
+	unshift @$items, {	name => cstring(undef, 'PLUGIN_YOUTUBE_PLAYALL'),
+						type => 'playlist',
+						image => Plugins::YouTube::Plugin->_pluginDataFor('icon'),
+						passthrough => [ { items => $items } ],
+						url  => \&playAllHandler,
+					} if ($isTrack > 1);	
+		
 	return $items;
 }
 
 sub _getImage {
 	my ($imageList) = @_;
-	
+	my @resolution = $prefs->get('highres_icons') ? qw(maxres high medium standard default) : qw(default standard medium high maxres);
 	my $image;
 	
 	if (my $thumbs = $imageList) {
-		foreach ( qw(maxres standard high medium default) ) {
+		foreach ( @resolution ) {
 			last if $image = $thumbs->{$_}->{url};
 		}
 	}
@@ -327,28 +556,38 @@ sub _getImage {
 	return $image;
 }
 
-sub playlistHandler {
-	my ($client, $cb, $args, $params) = @_;
-	
-	Plugins::YouTube::API->getPlaylist(sub {
-		$cb->( _renderList($_[0]->{items}) );
-	}, {
-		playlistId => $params->{playlistId}
-	});
-}
-
 sub trackInfoMenu {
 	my ($client, $url, $track, $remoteMeta) = @_;
 
 	my $artist = ($remoteMeta && $remoteMeta->{artist}) || ($track && $track->artistName) || '';
+	my $album  = ($remoteMeta && $remoteMeta->{album}) || ($track && $track->album && $track->album->name) || '';
 	my $title  = ($remoteMeta && $remoteMeta->{title}) || ($track && $track->title) || '';
 
-	if ($artist || $title) {
+	if ($artist || $title || $album) {
 		return {
 			type      => 'outline',
 			name      => cstring($client, 'PLUGIN_YOUTUBE_ON_YOUTUBE'),
-			url       => \&videoSearchHandler,
-			passthrough => [ { q => "$artist $title" } ], 
+			url       => \&searchHandler,
+			passthrough => [ { q => "($artist)+($title)" } ], 
+		};
+	}
+}
+
+sub albumInfoMenu {
+	my ($client, $url, $album, $remoteMeta) = @_;
+
+	my $albumTitle = ($remoteMeta && $remoteMeta->{album}) || ($album && $album->title);
+	
+	my @artists;
+	push @artists, $album->artistsForRoles('ARTIST'), $album->artistsForRoles('ALBUMARTIST');
+	my $artist = $artists[0]->name; 
+	
+	if ($albumTitle) {
+		return {
+			type      => 'outline',
+			name      => cstring($client, 'PLUGIN_YOUTUBE_ON_YOUTUBE'),
+			url       => \&searchHandler,
+			passthrough => [ { type => 'video,channel,playlist', q => "($artist)+($albumTitle)" } ], 
 		};
 	}
 }
@@ -362,8 +601,8 @@ sub artistInfoMenu {
 		return {
 			type      => 'outline',
 			name      => cstring($client, 'PLUGIN_YOUTUBE_ON_YOUTUBE'),
-			url       => \&videoSearchHandler,
-			passthrough => [ { q => $artist } ], 
+			url       => \&searchHandler,
+			passthrough => [ { type => 'video,channel,playlist', q => "($artist)" } ], 
 		};
 	}
 }
@@ -407,13 +646,13 @@ sub searchInfoMenu {
 			{
 				name => cstring($client, 'PLUGIN_YOUTUBE_SEARCH'),
 				type => 'link',
-				url  => \&videoSearchHandler, 
+				url  => \&searchHandler, 
 				passthrough => [ { q => $query }]
 			},
 			{
 				name => cstring($client, 'PLUGIN_YOUTUBE_MUSICSEARCH'),
 				type => 'link',
-				url  => \&videoSearchHandler, 
+				url  => \&searchHandler, 
 				passthrough => [ { videoCategoryId => 10, q => $query }]
 			},
 		   ],

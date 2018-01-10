@@ -5,11 +5,29 @@ PLUGIN_YOUTUBE_DESC
 	EN	Play audio from YouTube videos.  WARNING: this plugin will use more network bandwidth than other streaming services as the entire video is being streamed even though only the audio is played.	Updated to API v3
 	
 PLUGIN_YOUTUBE_MISSINGKEY
-	EN	Missing YouTube API key (see settings)
+	EN	Missing YouTube API key (see settings). To get a key:
+	EN	- using your gmail account
+	EN	- https://console.developers.google.com/apis/api/youtube/overview
+	EN	- click "Create a project" if you don't have any
+	EN	- in the next screen, go to "credentials" 
+	EN	- click on "create credentials", select "API key" and then choose "Browser key"
+	EN	- click "create" and copy the key
+	EN	- go back to https://console.developers.google.com/apis/api/youtube/overview
+	EN	- click "enable"
+	EN	- paste the key in the YT plugin settings
 	
-PLUGIN_YOUTUBE_SEARCH
-	EN	YouTube Search
+PLUGIN_YOUTUBE_MISSINGSSL
+	EN	SSL required (try to install it using CPAN and/or on Linux do "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
+	
+PLUGIN_YOUTUBE_MISSINGOAUTH
+	EN	Oauth configuration missing, please see YouTube plugin settings
+	
+PLUGIN_YOUTUBE_NA
+	EN	n/a
 
+PLUGIN_YOUTUBE_VIDEOSEARCH
+	EN	Video Search
+	
 PLUGIN_YOUTUBE_MUSICSEARCH
 	EN	Music Search
 
@@ -19,18 +37,33 @@ PLUGIN_YOUTUBE_CHANNELSEARCH
 PLUGIN_YOUTUBE_PLAYLISTSEARCH
 	EN	Playlist Search
 	
+PLUGIN_YOUTUBE_MYSUBSCRIPTIONS
+	EN	My Subscriptions
+	
+PLUGIN_YOUTUBE_MYPLAYLISTS
+	EN	My Playlists
+
+PLUGIN_YOUTUBE_GUIDECATEGORIES
+	EN	Guided Channels 
+
 PLUGIN_YOUTUBE_VIDEOCATEGORIES
 	EN	Video Categories
-	
-PLUGIN_YOUTUBE_GUIDECATEGORIES
-	EN	Guide Categories
 
 PLUGIN_YOUTUBE_RECENTLYPLAYED
 	EN	Recently Played
-
+	
 PLUGIN_YOUTUBE_URL
-	EN	YouTube URL
+	EN	YouTube URL or Video id
 
+PLUGIN_YOUTUBE_URLRELATEDSEARCH
+	EN	Related to URL or Video id
+	
+PLUGIN_YOUTUBE_WHOLE
+	EN	YouTube Search (everything)
+	
+PLUGIN_YOUTUBE_PLAYALL
+	EN	All Songs
+	
 PLUGIN_YOUTUBE_BADURL
 	EN	Bad YouTube URL
 
@@ -47,16 +80,12 @@ PLUGIN_YOUTUBE_BANNER
 	EN	WARNING
 
 PLUGIN_YOUTUBE_BANNER_TEXT
-	EN	Please note that this plugin streams the entire YouTube video file to playback the audio stream.  This will use use significantly more network bandwidth than audio only streaming.  Please consider this if your internet connection has a usage charge.
-
-PLUGIN_YOUTUBE_PREFER_LOWBITRATE
-	EN	Preferred Streams
-
-PLUGIN_YOUTUBE_LOWRES
-	EN	Prefer Low Resolution
-
-PLUGIN_YOUTUBE_PREFER_LOWBITRATE_DESC
-	EN	Select to prefer lower quality audio from low resolution YouTube videos to use less network bandwidth.
+	EN	Please note that this plugin streams the entire YouTube video file to playback the audio stream.  
+	EN	This will use use significantly more network bandwidth than audio only streaming.  Please consider
+	EN	this if your internet connection has a usage charge.<br>
+	EN	Note that SSL is required, but on some Linux installation, a few libraries are missing. If the plugin
+	EN	does not work, open a command line and run: 
+	EN	"sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl"
 
 PLUGIN_YOUTUBE_APIKEY
 	EN	YouTube API access key.
@@ -70,8 +99,93 @@ PLUGIN_YOUTUBE_MAXITEMS
 PLUGIN_YOUTUBE_MAXITEMS_DESC
 	EN	Maximum number of items a search can return
 	
+PLUGIN_YOUTUBE_ICONRES
+	EN	High resolution icons
+
+PLUGIN_YOUTUBE_ICONRES_DESC
+	EN	Select high resolution icons (nicer display with some 3rd party apps like iPeng but requires smore time for 
+	EN	loading long playlist)
+	
 PLUGIN_YOUTUBE_COUNTRY
 	EN	Country for categories
 
 PLUGIN_YOUTUBE_COUNTRY_DESC
-	EN	Set the 2-letters country use to search available categories
+	EN	Set the 2-letters country used to search available categories
+
+PLUGIN_YOUTUBE_CACHE
+	EN	Flush cache 
+
+PLUGIN_YOUTUBE_CACHE_DESC
+	EN	Search results are cached for a day. Click to flush them
+
+PLUGIN_YOUTUBE_CHANNELTAGS
+	EN	Channel identification tags
+
+PLUGIN_YOUTUBE_PLAYLISTTAGS
+	EN	Playlist identification tags
+
+PLUGIN_YOUTUBE_PLAYLISTTAGS_DESC
+	EN	To identify playlists items in a search result, set string or font modifier (eg \<b> and \</b> for bold) to be added before and after then title
+	
+PLUGIN_YOUTUBE_CHANNELTAGS_DESC
+	EN	To identify channels items in a search result, set string or font modifier (eg \<b> and \</b> for bold) to be added before and after then title
+	
+PLUGIN_YOUTUBE_PREFIX
+	EN	Prefix
+	
+PLUGIN_YOUTUBE_SUFFIX
+	EN	Suffix
+	
+PLUGIN_YOUTUBE_CLIENTID
+	EN	Client ID
+	
+PLUGIN_YOUTUBE_CLIENTID_DESC
+	EN	Client ID as found on your google console page https://console.developers.google.com/apis/dashboard?
+
+PLUGIN_YOUTUBE_CLIENTSECRET
+	EN	Client Secret
+	
+PLUGIN_YOUTUBE_CLIENTSECRET_DESC
+	EN	Client ID as found on your google console page https://console.developers.google.com/apis/dashboard?
+		
+PLUGIN_YOUTUBE_OAUTH
+	EN	Oauth2 authorization
+	
+PLUGIN_YOUTUBE_CLIENTOAUTH_DESC
+	EN	Click on the link to go to google console and authorize the plugin to <b>read</b> your YouTube account
+	EN	Clearing the access token will force a refresh 
+	
+PLUGIN_YOUTUBE_OAUTHLINK
+	EN	Click here to authorize
+	
+PLUGIN_YOUTUBE_GETCODE
+	EN	"Get Code"
+	
+PLUGIN_YOUTUBE_REFRESH
+	EN	"Refresh"
+	
+PLUGIN_YOUTUBE_OAUTHCODE
+	EN	and enter this code
+	
+PLUGIN_YOUTUBE_CLEARTOKEN
+	EN	Clear access token
+	
+PLUGIN_YOUTUBE_OAUTHHOWTO
+	EN	How to use personal account
+	
+PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT
+	EN	- go to <a href="https://console.developers.google.com/apis/credentials?" target="none">Google Console Credentials</a> 
+	EN	and select your YouTube project
+	EN	<br>- select "Create credentials", then "OAuth client ID" and then "Other" 
+	EN	<br>- choose a name or leave the default
+	EN	<br>- click "Create", this will generate a Client ID and Secret
+	EN	<br>- paste "Client ID" and "Client secret" here and click "Apply"
+	EN	<br>- click "Get Code" and if nothing appears to its right, just click "Refresh" or refresh this LMS page
+	EN	<br>- copy the code in red and click "Click here to authorize" link . You'll be prompted by YouTube to enter the code
+	EN	<br>- return to the LMS main screen, you can now use "My Subcriptions" and "My Playlists"
+	EN	<br>- to remove authorizations, go to <a href="https://myaccount.google.com/permissions" target="none">Google Console Permissions</a>	
+	
+
+
+	
+	
