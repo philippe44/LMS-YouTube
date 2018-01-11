@@ -34,26 +34,29 @@ sub search {
 	_pagedCall('search', $args, $cb);
 }
 
+sub redoCall {
+	my ( $class, $cb, $query ) = @_;
+	
+	_pagedCall( $query->{method}, $query->{args}, $cb);
+}
+
 sub searchDirect {
 	my ( $class, $type, $cb, $args ) = @_;
 	
 	$args ||= {};
+	$args->{_noRegion} = 1;
 	
-	_pagedCall( $type, {
-		%{$args},
-		_noRegion 	=> 1,
-	}, $cb);
+	_pagedCall( $type, $args, $cb);
 }
 
 sub getCategories {
-	my ( $class, $type, $cb, $quota, $ttl ) = @_;
+	my ( $class, $type, $cb, $args ) = @_;
 	
-	_pagedCall($type, {
-		hl => Slim::Utils::Strings::getLanguage(),
-		# categories don't change that often
-		_cache_ttl => $ttl || 7 * 86400,
-		quota	   => $quota,
-	}, $cb);
+	$args ||= {};
+	$args->{hl} = Slim::Utils::Strings::getLanguage();
+	$args->{_cache_ttl} = 7 * 86400;
+		
+	_pagedCall($type, $args, $cb);
 }
 
 sub getVideoDetails {
@@ -69,21 +72,48 @@ sub getVideoDetails {
 
 sub _pagedCall {
 	my ( $method, $args, $cb ) = @_;
-	
-	my $wantedItems = min(delete $args->{quota} || $prefs->get('max_items'));
-				
+	my $wantedItems = $args->{_quantity} || $prefs->get('max_items');
+	my $wantedIndex = $args->{_index} || 0;
 	my $items = [];
-		
 	my $pagingCb;
+	my $pageIndex = 0;
+	
+	# memorize the query that will be done to return it to caller
+	my $query = {
+		method 	=> $method,
+		args 	=> {%$args},
+	};
+	
+	# option-1, get everything and let LMS handle offset
+	$wantedItems += $wantedIndex;
+	$wantedIndex = 0;
+	
+	# little hack to allow have the 'play all' at the beginning of each page
+	# $wantedIndex-- if $wantedIndex;
 	
 	$pagingCb = sub {
 		my $results = shift;
 
-		$cb->( { items => undef, total => 0 } ) if ( $results->{error} );
+		if ( $results->{error} ) {
+			$log->error("no results");
+			$cb->( { items => undef, total => 0 } ) if ( $results->{error} );
+		}	
 		
+=comment	
+		# option-2, get the exact range
+		# items are now in the wanted range
+		if ($pageIndex + @{$results->{items}} > $wantedIndex) {
+			# remove offset when we start and don't add more than wanted
+			my $first = scalar @$items ? 0 : $wantedIndex - $pageIndex;
+			my $last = min($first + $wantedItems - scalar(@$items), scalar @{$results->{items}}) - 1;
+			push @$items, @{$results->{items}}[$first..$last];
+		}
+=cut		
 		push @$items, @{$results->{items}};
 		
-		main::INFOLOG && $log->info("We want $wantedItems items, have " . scalar @$items . " so far");
+		$pageIndex += scalar @{$results->{items}};
+			
+		main::INFOLOG && $log->info("We want $wantedItems items from offset ", $wantedIndex, ", have " . scalar @$items . " so far [acquired $pageIndex]");
 		
 		if (@$items < $wantedItems && $results->{nextPageToken}) {
 			$args->{pageToken} = $results->{nextPageToken};
@@ -92,9 +122,9 @@ sub _pagedCall {
 			_call($method, $args, $pagingCb);
 		}
 		else {
-			my $total = min($results->{'pageInfo'}->{'totalResults'} || scalar @$items, $prefs->get('max_items'));
-			main::INFOLOG && $log->info("Got all we wanted. Return " . scalar @$items . " items.");
-			$cb->( { items => $items, total  => $total } );
+			my $total = min($results->{'pageInfo'}->{'totalResults'} || $pageIndex, $prefs->get('max_items'));
+			main::INFOLOG && $log->info("Got all we wanted. Return " . scalar @$items . " items over $total. (YouTube total ", $results->{'pageInfo'}->{'totalResults'} || 'N/A', ")");
+			$cb->( $query, { items => $items, offset => $wantedIndex, total  => $total } );
 		}
 	};
 

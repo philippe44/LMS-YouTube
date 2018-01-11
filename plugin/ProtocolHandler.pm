@@ -580,20 +580,17 @@ sub _getBulkMetadata {
 			my ($misc, $hour, $min, $sec) = $duration =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
 			$duration = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
 									
-			if ($duration && $title) {
-				my $meta = {
-					title    =>	$title,
-					artist   => $artist,
-					duration => $duration,
-					icon     => $icon,
-					cover    => $cover || $icon,
-					type     => 'YouTube',
-					_fulltitle => $fulltitle,
-				};
+			my $meta = {
+				title    =>	$title || '',
+				artist   => $artist,
+				duration => $duration || 0,
+				icon     => $icon,
+				cover    => $cover || $icon,
+				type     => 'YouTube',
+				_fulltitle => $fulltitle,
+			};
 				
-				$cache->set("yt:meta-" . $item->{id}, $meta, 86400);
-		
-			}
+			$cache->set("yt:meta-" . $item->{id}, $meta, 86400);
 		}				
 			
 		$cb->(1) if ($cb);
