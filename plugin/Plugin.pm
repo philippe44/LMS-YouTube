@@ -527,16 +527,21 @@ sub _renderList {
 
 sub _getImage {
 	my ($imageList, $hires) = @_;
-	my @resolution = ($prefs->get('highres_icons') || $hires) ? qw(maxres high medium standard default) : qw(default standard medium high maxres);
-	my $image;
 	
-	if (my $thumbs = $imageList) {
-		foreach ( @resolution ) {
-			last if $image = $thumbs->{$_}->{url};
-		}
-	}
+	$hires ||= $prefs->get('highres_icons');
+
+	my @candidates = map {
+		$_->{url};
+	} sort {
+		# sort by size descending
+		$b->{width} <=> $a->{width};
+	} grep {
+		# sort out images larger than 1000px if highres is disabled
+		$hires ? 1 : $_->{width} < 1000;
+	} values %$imageList;
 	
-	return $image;
+	# return the highest resolution image in our list
+	return shift @candidates;
 }
 
 sub trackInfoMenu {
