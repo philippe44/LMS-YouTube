@@ -8,6 +8,7 @@ use strict;
 use base qw(Slim::Plugin::OPMLBased);
 
 use Data::Dumper;
+use List::Util qw(first);
 use Encode qw(encode decode);
 use JSON::XS::VersionOneAndTwo;
 
@@ -216,10 +217,8 @@ sub urlHandler {
 	}
 				
 	Plugins::YouTube::API->getVideoDetails( sub {
-		my $items = $_[0]->{items};
-		
-		if (scalar @$items) {
-			$cb->( _renderList($items) );
+		if (scalar @{$_[0]->{items}}) {
+			$cb->( _renderList($_[0]) );
 		}
 		else {
 			$cb->( $errorItems );
@@ -247,18 +246,14 @@ sub relatedURLHandler {
 		return;
 	}
 	
-	my $params;
-	
-	$params->{type} = 'video';
-	$params->{relatedToVideoId} = $id;
-	$params->{quota} = defined $args->{index} ? 
-					   ($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
-					   $args->{quantity};
-	
 	Plugins::YouTube::API->search(sub {
-		$cb->( { items => _renderList($_[0]->{items}), 
-				 total => $_[0]->{total} } );
-	}, $params );
+		$cb->( _renderListHead(@_) );
+	}, 	{
+		type 			 => 'video',
+		relatedToVideoId => $id,
+		_index 			 => $args->{index},
+		_quantity 		 => $args->{quantity},
+	});	
 }
 
 
@@ -283,11 +278,12 @@ sub recentHandler {
 sub guideCategoriesHandler {
 	my ($client, $cb, $args) = @_;
 	
+	$log->error("GUIDED CALL");
+	
 	Plugins::YouTube::API->getCategories('guideCategories', sub {
 		my $result = shift;
-		
 		my $items = [];
-
+		
 		for my $entry (@{$result->{items} || []}) {
 			my $title = $entry->{snippet}->{title} || next;
 
@@ -298,17 +294,22 @@ sub guideCategoriesHandler {
 				passthrough => [  { categoryId => $entry->{id} } ],
 			};
 		}
-
-		$cb->( $items );
-	}, $args->{quantity} + $args->{index} || 0 );
+		
+		$log->error("GUIDED", Dumper($items));
+		$result->{items} = $items;
+		
+		$cb->( $result );
+	}, {
+		_index	   => $args->{index},
+		_quantity  => $args->{quantity}, 
+	});	
 }
 
 sub videoCategoriesHandler {
 	my ($client, $cb, $args) = @_;
 	
 	Plugins::YouTube::API->getCategories('videoCategories', sub {
-		my $result = shift;
-		
+		my (undef, $result) = @_;
 		my $items = [];
 
 		for my $entry (@{$result->{items} || []}) {
@@ -321,9 +322,14 @@ sub videoCategoriesHandler {
 				passthrough => [  { videoCategoryId => $entry->{id} } ],
 			};
 		}
-
-		$cb->( $items );
-	}, $args->{quantity} + $args->{index} || 0 );
+		
+		$result->{items} = $items;
+		
+		$cb->( $result );
+	}, {
+		_index	   => $args->{index},
+		_quantity  => $args->{quantity}, 
+	});
 }
 
 
@@ -344,16 +350,14 @@ sub subscriptionsHandler {
 	delete $params->{count};
 	
 	Plugins::YouTube::API->searchDirect('subscriptions', sub {
-		$cb->( { items => _renderList($_[0]->{items}), 
-				 total => $_[0]->{total} } );
+		$cb->( _renderListHead(@_) );
 	}, {
 		_cache_ttl 		=> 60,
 		_noKey			=> 1,
+		_index  		=> $args->{index},
+		_quantity		=> $args->{quantity},
 		mine			=> 'true',
 		access_token 	=> $cache->get('yt:access_token'),
-		quota  			=> defined $args->{index} ? 
-						($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
-						$args->{quantity},
 	});
 }
 
@@ -374,23 +378,22 @@ sub myPlaylistHandler {
 	
 	delete $params->{count};
 	
-	my $extra_args = { 	_cache_ttl 		=> 60,
+	# need to passthrough the personal account items 
+	my $personal = { 	
+					_cache_ttl 		=> 60,
 					_noKey			=> 1,
 					mine			=> 'true',
 					access_token 	=> $cache->get('yt:access_token'),
 				};	
 				
 	Plugins::YouTube::API->searchDirect('playlists', sub {
-		$cb->( { items => _renderList($_[0]->{items}, $extra_args), 
-				 total => $_[0]->{total} } );
+		$cb->( _renderList($_[1], $personal) );
 	}, {
-		%{$extra_args},
-		quota  			=> defined $args->{index} ? 
-						($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
-						$args->{quantity},
+		%{$personal},
+		_index  	=> $args->{index},
+		_quantity 	=> $args->{quantity},
 	});
 }
-
 
 sub searchHandler {
 	my ($client, $cb, $args, $params) = @_;
@@ -400,72 +403,92 @@ sub searchHandler {
 		$params->{q} ||= delete $args->{search};
 	}	
 	
-	$params->{quota} = defined $args->{index} ? 
-					   ($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
-					   $args->{quantity};
+	# workaround due to XMLBrowser management of defeatTTP
+	$cache->set("yt:search-$client", $params->{q}, 60) if defined $params->{q};
+	$params->{q} = $cache->get("yt:search-$client");
+		
+	$params->{_index} = $args->{index};
+	$params->{_quantity} = $args->{quantity};
 					   
 	Plugins::YouTube::API->search(sub {
-		$cb->( { items => _renderList($_[0]->{items}), 
-				 total => $_[0]->{total} } );
-
+		$cb->( _renderListHead(@_) );
 	}, $params );
 }
-
 
 sub playlistHandler {
 	my ($client, $cb, $args, $params) = @_;
 	
-	$params ||= {};
+	$params->{_index} = $args->{index};
+	$params->{_quantity} = $args->{quantity};
 	
 	Plugins::YouTube::API->searchDirect('playlistItems', sub {
-		$cb->( { items => _renderList($_[0]->{items}), 
-				 total => $_[0]->{total} } );
-	}, {
-		%{$params},
-		quota  => defined $args->{index} ? 
-				($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
-				$args->{quantity},
-	});
+		$cb->( _renderListHead(@_) );
+	}, $params);
 }
 
 sub channelHandler {
 	my ($client, $cb, $args, $params) = @_;
 	
 	$params ||= {};
+	$log->error("CHANNEL");
 	
 	Plugins::YouTube::API->searchDirect('channels', sub {
-		$cb->( { items => _renderList($_[0]->{items}), 
-				 total => $_[0]->{total} } );
+		$cb->( _renderList($_[1]) );
 	}, {
-		quota  => defined $args->{index} ? 
-				($args->{index} eq '') ? undef : $args->{quantity} + $args->{index} :
-				$args->{quantity},
+		_index  => $args->{index},
+		_quantity => $args->{quantity},
 		%{$params},
 	});
 }
 
 sub playAllHandler {
 	my ($client, $cb, $args, $params) = @_;
-	my @list = grep { defined $_->{play} } @{$params->{items} || []};
+			
+	$params->{args}->{_index} = 0;
+	$params->{args}->{_quantity} = $prefs->get('max_items');
 	
-	$cb->( { items => \@list, total => scalar @list } );
+	Plugins::YouTube::API->redoCall(sub {
+		my @list = @{_renderList($_[1])->{items}};
+		@list = grep { defined $_->{play} } @list;
+		$cb->( { items => \@list, total => scalar @list } );	
+	}, $params );
 }
 
+sub _renderListHead {
+	# query = { method => (video, channel ...), args => search params for re-use }
+	my $query = shift;
+	my ($result) = @_;
+	
+	# query has been built by API and shall be memorized here
+	$result = _renderList(@_);
+		
+	# only works when we let LMS manage offset
+	unshift @{$result->{items}}, {	name => cstring(undef, 'PLUGIN_YOUTUBE_PLAYALL'),
+					type => 'playlist',
+					image => Plugins::YouTube::Plugin->_pluginDataFor('icon'),
+					passthrough => [ $query ],
+					url  => \&playAllHandler,
+				} if scalar (grep { defined $_->{play} } @{$result->{items}}) > 1;		
+	
+	return $result;
+}
 
 sub _renderList {
-	my ($entries, $through) = @_;
+	# args = { items => YT items, total => YT total, offset => start index }
+	my ($args, $through) = @_;
 	my $items = [];
-	my $isTrack = 0;
 	my $id;
 	my $kind;
+	my $result = {%$args};
 	my $chTags	= { prefix => $prefs->get('channel_prefix'), 
 					suffix => $prefs->get('channel_suffix') };
 	my $plTags	= { prefix => $prefs->get('playlist_prefix'), 
 					suffix => $prefs->get('playlist_suffix') };
-
-	$through ||= {};
 		
-	for my $entry (@{$entries || []}) {
+	$through ||= {};
+	$result->{items} = [];
+	
+	for my $entry (@{$args->{items} || []}) {
 		my $snippet = $entry->{snippet} || next;
 		my $title = $snippet->{title} || next;
 		
@@ -508,9 +531,11 @@ sub _renderList {
 			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
 			$item->{favorites_type}	= 'audio';
 		} elsif ($kind eq 'youtube#video') {
+			# dont't set type to audio to have icons
+			# $item->{type} 	   = 'audio';
 			$item->{on_select} = 'play';
 			$item->{play}      = STREAM_BASE_URL . $id;
-			$isTrack++;
+
 		} elsif ($kind eq 'youtube#playlist') {
 			$item->{name} = $plTags->{prefix} . $title . $plTags->{suffix};
 			$item->{passthrough} = [ { playlistId => $id, %{$through} } ];
@@ -529,17 +554,10 @@ sub _renderList {
 			next;
 		}	
 		
-		push @$items, $item;
+		push $result->{items}, $item;
 	}
-	
-	unshift @$items, {	name => cstring(undef, 'PLUGIN_YOUTUBE_PLAYALL'),
-						type => 'playlist',
-						image => Plugins::YouTube::Plugin->_pluginDataFor('icon'),
-						passthrough => [ { items => $items } ],
-						url  => \&playAllHandler,
-					} if ($isTrack > 1);	
 		
-	return $items;
+	return $result;
 }
 
 sub _getImage {

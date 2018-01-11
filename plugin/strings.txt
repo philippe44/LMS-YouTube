@@ -62,7 +62,7 @@ PLUGIN_YOUTUBE_WHOLE
 	EN	YouTube Search (everything)
 	
 PLUGIN_YOUTUBE_PLAYALL
-	EN	All Songs
+	EN	All tracks
 	
 PLUGIN_YOUTUBE_BADURL
 	EN	Bad YouTube URL

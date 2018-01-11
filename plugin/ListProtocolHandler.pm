@@ -26,25 +26,27 @@ sub overridePlayback {
 	if ($type eq 'channelId') {
 	
 		Plugins::YouTube::API->search( sub {
-			createPlaylist($client, Plugins::YouTube::Plugin::_renderList($_[0]->{items})); }, 
+				createPlaylist( $client, Plugins::YouTube::Plugin::_renderList($_[1]) ); 
+			}, 
 			{ channelId => $id, type => 'video' } );
 			
 	} elsif ($type eq 'playlistId') {
 	
 		Plugins::YouTube::API->searchDirect( 'playlistItems', sub {
-			createPlaylist($client, Plugins::YouTube::Plugin::_renderList($_[0]->{items})); }, 
-			{ playlistId => $id } );
-			
+				createPlaylist( $client, Plugins::YouTube::Plugin::_renderList($_[1]) ); 
+			}, 
+			{ playlistId => $id }
+		);
 	}
 			
 	return 1;
 }
 
 sub createPlaylist {
-	my ( $client, $items ) = @_;
+	my ( $client, $args ) = @_;
 	my @tracks;
 		
-	for my $item (@{$items}) {
+	for my $item (@{$args->{items}}) {
 		push @tracks, Slim::Schema->updateOrCreate( {
 				'url'        => $item->{play} });
 	}

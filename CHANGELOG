@@ -1,3 +1,9 @@
+0.62.0
+ - "All tracks" is realy all tracks, not just current page
+ - correct an infinite loop bug on tracks with no duration / no title
+ - refactoring
+ - workaround for LMS defeatTTP not sending search value (cache last search for 60s)
+ 
 0.61.2
  - Add "settings" link in plugin page
  
