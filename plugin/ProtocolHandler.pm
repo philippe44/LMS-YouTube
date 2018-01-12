@@ -472,9 +472,17 @@ sub getMetadataFor {
 	my $id = $class->getId($url) || return {};
 		
 	if (my $meta = $cache->get("yt:meta-$id")) {
-	
 		my $song = $client->playingSong();
-		$song->track->secs( $meta->{duration} ) if $song && $song->currentTrack()->url eq $url;
+		
+		if ($song && $song->currentTrack()->url eq $url) {
+			$song->track->secs( $meta->{duration} ) if $song && $song->currentTrack()->url eq $url;
+			if (defined $meta->{_thumbnails}) {
+				$meta->{cover} = $meta->{icon} = Plugins::YouTube::Plugin::_getImage($meta->{_thumbnails}, 1);				
+				delete $meta->{_thumbnails};
+				$cache->set("yt:meta-$id", $meta);
+				$log->info("updating thumbnail cache with hires $meta->{cover}");
+			}
+		}	
 											
 		Plugins::YouTube::Plugin->updateRecentlyPlayed({
 			url  => $url, 
@@ -498,9 +506,9 @@ sub getMetadataFor {
 	}
 	
 	# Go fetch metadata for all tracks on the playlist without metadata
-	my $pagingCb;
+	my $pageCall;
 
-	$pagingCb = sub {
+	$pageCall = sub {
 		my ($status) = @_;
 		my @need;
 		
@@ -508,7 +516,7 @@ sub getMetadataFor {
 			my $trackURL = blessed($track) ? $track->url : $track;
 			if ( $trackURL =~ m{youtube:/*(.+)} ) {
 				my $trackId = $class->getId($trackURL);
-				if ( $trackId && !$cache->get("yt:meta-$trackId") && $trackId != $id ) {
+				if ( $trackId && !$cache->get("yt:meta-$trackId") ) {
 					push @need, $trackId;
 				}
 				elsif (!$trackId) {
@@ -519,16 +527,13 @@ sub getMetadataFor {
 				last if (scalar @need >= 50);
 			}
 		}
-		
-		if ( main::INFOLOG && $log->is_info ) {
-			$log->info( "Need to fetch metadata for: " . join( ', ', @need ) );
-		}
-				
-		if (scalar @need && $status) {
-			_getBulkMetadata($client, $pagingCb, join( ',', @need ));
+						
+		if (scalar @need && !defined $status) {
+			my $list = join( ',', @need );
+			main::INFOLOG && $log->is_info && $log->info( "Need to fetch metadata for: $list");
+			_getBulkMetadata($client, $pageCall, $list);
 		} else {
 			$client->master->pluginData(fetchingYTMeta => 0);
-			
 			$client->currentPlaylistUpdateTime( Time::HiRes::time() );
 			Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );	
 		} 
@@ -536,12 +541,10 @@ sub getMetadataFor {
 
 	$client->master->pluginData(fetchingYTMeta => 1);
 	
-	# Need to start with current $id in case there is no YT active playlist
-	_getBulkMetadata($client, undef, $id);
-	
-	# Then check the playlist (or terminate if empty)
-	$pagingCb->(1);
-	
+	# get the one item if playlist empty
+	if ( Slim::Player::Playlist::count($client) ) { $pageCall->() }
+	else { _getBulkMetadata($client, undef, $id) }
+		
 	return {	
 			type	=> 'YouTube',
 			title	=> $url,
@@ -556,9 +559,9 @@ sub _getBulkMetadata {
 	Plugins::YouTube::API->getVideoDetails( sub {
 		my $result = shift;
 		
-		if (!$result || $result->{error} || !$result->{pageInfo}->{totalResults} ) {
+		if ( !$result || $result->{error} || !$result->{pageInfo}->{totalResults} || !scalar @{$result->{items}} ) {
 			$log->error($result->{error} || 'Failed to grab track information');
-			$cb->(0) if ($cb);
+			$cb->(0) if defined $cb;
 			return;
 		}
 		
@@ -588,12 +591,13 @@ sub _getBulkMetadata {
 				cover    => $cover || $icon,
 				type     => 'YouTube',
 				_fulltitle => $fulltitle,
+				_thumbnails => $snippet->{thumbnails},
 			};
 				
 			$cache->set("yt:meta-" . $item->{id}, $meta, 86400);
 		}				
 			
-		$cb->(1) if ($cb);
+		$cb->() if defined $cb;
 		
 	}, $ids);
 }

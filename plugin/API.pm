@@ -8,8 +8,6 @@ use JSON::XS::VersionOneAndTwo;
 use List::Util qw(min max);
 use URI::Escape qw(uri_escape uri_escape_utf8);
 
-use Data::Dumper;
-
 use constant API_URL => 'https://www.googleapis.com/youtube/v3/';
 use constant DEFAULT_CACHE_TTL => 24 * 3600;
 
@@ -32,12 +30,6 @@ sub search {
 	$args->{relevanceLanguage} = Slim::Utils::Strings::getLanguage();
 	
 	_pagedCall('search', $args, $cb);
-}
-
-sub redoCall {
-	my ( $class, $cb, $query ) = @_;
-	
-	_pagedCall( $query->{method}, $query->{args}, $cb);
 }
 
 sub searchDirect {
@@ -72,24 +64,15 @@ sub getVideoDetails {
 
 sub _pagedCall {
 	my ( $method, $args, $cb ) = @_;
-	my $wantedItems = $args->{_quantity} || $prefs->get('max_items');
+	my $wantedItems = min($args->{_quantity} || $prefs->get('max_items'), $prefs->get('max_items'));
 	my $wantedIndex = $args->{_index} || 0;
-	my $items = [];
+	my @items;
 	my $pagingCb;
 	my $pageIndex = 0;
 	
-	# memorize the query that will be done to return it to caller
-	my $query = {
-		method 	=> $method,
-		args 	=> {%$args},
-	};
-	
-	# option-1, get everything and let LMS handle offset
+	# option 1, get everything and let LMS handle offset
 	$wantedItems += $wantedIndex;
 	$wantedIndex = 0;
-	
-	# little hack to allow have the 'play all' at the beginning of each page
-	# $wantedIndex-- if $wantedIndex;
 	
 	$pagingCb = sub {
 		my $results = shift;
@@ -100,8 +83,10 @@ sub _pagedCall {
 		}	
 		
 =comment	
-		# option-2, get the exact range
+		# option 2, get the exact range
 		# items are now in the wanted range
+		# this should be done by a splice of the array once we got everything 
+		# rather than this contorded way which does not improve anything
 		if ($pageIndex + @{$results->{items}} > $wantedIndex) {
 			# remove offset when we start and don't add more than wanted
 			my $first = scalar @$items ? 0 : $wantedIndex - $pageIndex;
@@ -109,13 +94,13 @@ sub _pagedCall {
 			push @$items, @{$results->{items}}[$first..$last];
 		}
 =cut		
-		push @$items, @{$results->{items}};
+		push @items, @{$results->{items}};
 		
 		$pageIndex += scalar @{$results->{items}};
 			
-		main::INFOLOG && $log->info("We want $wantedItems items from offset ", $wantedIndex, ", have " . scalar @$items . " so far [acquired $pageIndex]");
+		main::INFOLOG && $log->info("We want $wantedItems items from offset ", $wantedIndex, ", have " . scalar @items . " so far [acquired $pageIndex]");
 		
-		if (@$items < $wantedItems && $results->{nextPageToken}) {
+		if (@items < $wantedItems && $results->{nextPageToken}) {
 			$args->{pageToken} = $results->{nextPageToken};
 			main::INFOLOG && $log->info("Get next page using token " . $args->{pageToken});
 
@@ -123,8 +108,8 @@ sub _pagedCall {
 		}
 		else {
 			my $total = min($results->{'pageInfo'}->{'totalResults'} || $pageIndex, $prefs->get('max_items'));
-			main::INFOLOG && $log->info("Got all we wanted. Return " . scalar @$items . " items over $total. (YouTube total ", $results->{'pageInfo'}->{'totalResults'} || 'N/A', ")");
-			$cb->( $query, { items => $items, offset => $wantedIndex, total  => $total } );
+			main::INFOLOG && $log->info("Got all we wanted. Return " . scalar @items . " items over $total. (YouTube total ", $results->{'pageInfo'}->{'totalResults'} || 'N/A', ")");
+			$cb->( { items => \@items, offset => $wantedIndex, total  => $total } );
 		}
 	};
 

@@ -26,14 +26,14 @@ sub overridePlayback {
 	if ($type eq 'channelId') {
 	
 		Plugins::YouTube::API->search( sub {
-				createPlaylist( $client, Plugins::YouTube::Plugin::_renderList($_[1]) ); 
+				createPlaylist( $client, Plugins::YouTube::Plugin::_renderList($_[0]) ); 
 			}, 
 			{ channelId => $id, type => 'video' } );
 			
 	} elsif ($type eq 'playlistId') {
 	
 		Plugins::YouTube::API->searchDirect( 'playlistItems', sub {
-				createPlaylist( $client, Plugins::YouTube::Plugin::_renderList($_[1]) ); 
+				createPlaylist( $client, Plugins::YouTube::Plugin::_renderList($_[0]) ); 
 			}, 
 			{ playlistId => $id }
 		);
