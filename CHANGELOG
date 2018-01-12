@@ -1,3 +1,9 @@
+0.63.0
+ - use LMS "All Songs" built-in feature
+ - update icon to hires automatically when playing
+ - correct infinite metadata search loop with faulty videos (result=1 but items=[])
+ - allow play all in contextMenu
+ 
 0.62.0
  - "All tracks" is realy all tracks, not just current page
  - correct an infinite loop bug on tracks with no duration / no title
