@@ -22,7 +22,7 @@ use Plugins::YouTube::Signature;
 use Plugins::YouTube::WebM;
 
 use constant MIN_OUT	=> 8192;
-use constant DATA_CHUNK => 65536;	
+use constant DATA_CHUNK => 128*1024;	
 use constant HEADER_CHUNK => 8192;
 
 my $log   = logger('plugin.youtube');
