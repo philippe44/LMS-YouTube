@@ -1,3 +1,7 @@
+0.63.1
+ - better hires icons selection (and hires by defaul)
+ - clean debug stences
+  
 0.63.0
  - use LMS "All Songs" built-in feature
  - update icon to hires automatically when playing

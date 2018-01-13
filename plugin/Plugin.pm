@@ -44,7 +44,7 @@ $prefs->init({
 	max_items => 200, 
 	country => setCountry(),
 	cache => 1,
-	highres_icons => 0,
+	highres_icons => 1,
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
