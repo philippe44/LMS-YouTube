@@ -22,7 +22,7 @@ use Plugins::YouTube::Signature;
 use Plugins::YouTube::WebM;
 
 use constant MIN_OUT	=> 8192;
-use constant DATA_CHUNK => 65536;	
+use constant DATA_CHUNK => 128*1024;	
 use constant HEADER_CHUNK => 8192;
 
 my $log   = logger('plugin.youtube');
@@ -42,7 +42,7 @@ sub new {
 	
 	return undef if !defined $webmInfo;
 	
-	$log->debug( Dumper($webmInfo) );
+	main::DEBUGLOG && $log->is_debug && $log->debug( Dumper($webmInfo) );
 	
 	$args->{'url'} = $song->pluginData('stream');
 	my $seekdata = $song->can('seekdata') ? $song->seekdata : $song->{'seekdata'};
@@ -54,7 +54,7 @@ sub new {
 		$offset = 0;
 	}
 	
-	$log->info("url: $args->{url}");
+	main::INFOLOG && $log->is_info && $log->info("url: $args->{url}");
 	
 	my $self = $class->SUPER::new;
 	
@@ -134,7 +134,7 @@ sub sysread {
 				$v->{'inBuf'} .= $_[0]->content;
 				$v->{'fetching'} = 0;
 				$v->{'streaming'} = 0 if length($_[0]->content) < DATA_CHUNK;
-				$log->debug("got chunk length: ", length $_[0]->content, " from ", $v->{offset} - DATA_CHUNK, " for $url");
+				main::DEBUGLOG && $log->is_debug && $log->debug("got chunk length: ", length $_[0]->content, " from ", $v->{offset} - DATA_CHUNK, " for $url");
 			},
 			
 			sub { 
@@ -160,7 +160,7 @@ sub sysread {
 	}
 	
 	# end of streaming
-	$log->info("end streaming: $url");
+	main::INFOLOG && $log->is_info && $log->info("end streaming: $url");
 	return 0;
 }	
 	
@@ -192,7 +192,7 @@ sub getNextTrack {
 	my $id = $class->getId($masterUrl);
 	my $url = "http://www.youtube.com/watch?v=$id";
 
-	$log->info("next track id: $id url: $url master: $masterUrl");
+	main::INFOLOG && $log->is_info && $log->info("next track id: $id url: $url master: $masterUrl");
 
 	# fetch new url(s)
 	Slim::Networking::SimpleAsyncHTTP->new(
@@ -232,10 +232,10 @@ sub getNextTrack {
 
                 # Replace known unicode characters
                 $vars{url_encoded_fmt_stream_map} =~ s/\\u0026/\&/g;
-                $log->debug("url_encoded_fmt_stream_map: $vars{url_encoded_fmt_stream_map}");
+                main::DEBUGLOG && $log->is_debug && $log->debug("url_encoded_fmt_stream_map: $vars{url_encoded_fmt_stream_map}");
             }
 						
-			$log->debug($vars{url_encoded_fmt_stream_map});
+			main::DEBUGLOG && $log->is_debug && $log->debug($vars{url_encoded_fmt_stream_map});
 			
 			# find the streams
 			my $streamInfo;
@@ -249,7 +249,7 @@ sub getNextTrack {
                 next unless $id = first { $_ == $props{itag} } (43, 44, 45, 46);
 				next unless !defined $streamInfo || $id < $streamInfo->{'id'};
 
-			    $log->info("itag: $props{itag}, props: $props{url}");
+			    main::INFOLOG && $log->is_info && $log->info("itag: $props{itag}, props: $props{url}");
 						
 				my $url = uri_unescape($props{url});
 				my $rawsig;
@@ -264,7 +264,7 @@ sub getNextTrack {
 					$rawsig = $props{signature};
 				}
 											
-				$log->info("sig $rawsig encrypted $encryptedsig");
+				main::INFOLOG && $log->is_info && $log->info("sig $rawsig encrypted $encryptedsig");
 					
 				$streamInfo = { id => $id, url => $url, rawsig => $rawsig, encryptedsig => $encryptedsig };
 			}
@@ -284,7 +284,7 @@ sub getNextTrack {
 								}	
 							  } );
 				} else {
-					$log->info("raw signature $streamInfo->{'rawsig'}");
+					main::INFOLOG && $log->is_info && $log->info("raw signature $streamInfo->{'rawsig'}");
 					$song->pluginData(stream  => $streamInfo->{'url'} . "&signature=" . $streamInfo->{'rawsig'});
 					getTrackInfo( $client, $song, $successCb );
 				}
@@ -318,7 +318,7 @@ sub getSignature {
 		}
 	}
 					
-	$log->debug("player_url: $player_url");
+	main::DEBUGLOG && $log->is_debug && $log->debug("player_url: $player_url");
 		
 	if ( !$player_url ) {
 		$log->error("no player url to unobfuscate signature");
@@ -328,10 +328,10 @@ sub getSignature {
 		
 	if ( Plugins::YouTube::Signature::has_player($player_url) ) {
 		my $sig = Plugins::YouTube::Signature::unobfuscate_signature( $player_url, $rawsig );
-		$log->debug("cached player $ player_url, unobfuscated signature (cached) $sig");
+		main::DEBUGLOG && $log->is_debug && $log->debug("cached player $ player_url, unobfuscated signature (cached) $sig");
 		$cb->($sig, $player_url);
 	} else {
-		$log->debug("Fetching new player $player_url");
+		main::DEBUGLOG && $log->is_debug && $log->debug("Fetching new player $player_url");
 		Slim::Networking::SimpleAsyncHTTP->new(
 			sub {
 				my $http = shift;
@@ -339,7 +339,7 @@ sub getSignature {
 
 				eval {
 					Plugins::YouTube::Signature::cache_player($player_url, $jscode);
-					$log->debug("Saved new player $player_url");
+					main::DEBUGLOG && $log->is_debug && $log->debug("Saved new player $player_url");
 					};
 						
 				if ($@) {
@@ -349,7 +349,7 @@ sub getSignature {
 				}	
 					
 				my $sig = Plugins::YouTube::Signature::unobfuscate_signature( $player_url, $rawsig );
-				$log->debug("cached player $ player_url, unobfuscated signature (cached) $sig");
+				main::DEBUGLOG && $log->is_debug && $log->debug("cached player $ player_url, unobfuscated signature (cached) $sig");
 				$cb->($sig, $player_url);
 			},
 						
@@ -385,7 +385,7 @@ sub getTrackInfo {
 				if ( $res eq Plugins::YouTube::WebM::WEBM_MORE ) {
 					return $cb->() if length($content) < HEADER_CHUNK; 
 					
-					$log->debug("paging: $var->{offset}");
+					main::DEBUGLOG && $log->is_debug && $log->debug("paging: $var->{offset}");
 					$var->{offset} += length $content;
 					$process->();
 				} elsif ( $res eq Plugins::YouTube::WebM::WEBM_DONE ) {	
@@ -395,7 +395,7 @@ sub getTrackInfo {
 					$song->track->samplesize( $info->{'track'}->{'samplesize'} );
 					$song->track->channels( $info->{'track'}->{'channels'} );
 				
-					$log->info( "samplerate: $info->{'track'}->{'samplerate'}, bitrate: $info->{'track'}->{'bitrate'}" );
+					main::INFOLOG && $log->is_info && $log->info( "samplerate: $info->{'track'}->{'samplerate'}, bitrate: $info->{'track'}->{'bitrate'}" );
 					$song->pluginData('webmInfo' => $info);
 													
 					$client->currentPlaylistUpdateTime( Time::HiRes::time() );
@@ -440,7 +440,7 @@ sub getStartOffset {
 				if ( $res eq Plugins::YouTube::WebM::WEBM_MORE ) {
 					return $cb->( $info->{offset}->{clusters} ) if length($content) < HEADER_CHUNK; 
 					
-					$log->debug("paging: $var->{offset}");
+					main::DEBUGLOG && $log->is_debug && $log->debug("paging: $var->{offset}");
 					$var->{offset} += length $content;
 					$process->();
 				} elsif ( $res eq Plugins::YouTube::WebM::WEBM_DONE ) {	
@@ -467,7 +467,7 @@ sub getMetadataFor {
 	my ($class, $client, $url) = @_;
 	my $icon = $class->getIcon();
 	
-	main::DEBUGLOG && $log->debug("getmetadata: $url");
+	main::DEBUGLOG && $log->is_debug && $log->debug("getmetadata: $url");
 				
 	my $id = $class->getId($url) || return {};
 		
@@ -480,7 +480,7 @@ sub getMetadataFor {
 				$meta->{cover} = $meta->{icon} = Plugins::YouTube::Plugin::_getImage($meta->{_thumbnails}, 1);				
 				delete $meta->{_thumbnails};
 				$cache->set("yt:meta-$id", $meta);
-				$log->info("updating thumbnail cache with hires $meta->{cover}");
+				main::INFOLOG && $log->is_info && $log->info("updating thumbnail cache with hires $meta->{cover}");
 			}
 		}	
 											
@@ -490,13 +490,13 @@ sub getMetadataFor {
 			icon => $meta->{icon},
 		});
 
-		main::DEBUGLOG && $log->debug("cache hit: $id");
+		main::DEBUGLOG && $log->is_debug && $log->debug("cache hit: $id");
 		
 		return $meta;
 	}
 	
 	if ($client->master->pluginData('fetchingYTMeta')) {
-		$log->debug("already fetching metadata: $id");
+		main::DEBUGLOG && $log->is_debug && $log->debug("already fetching metadata: $id");
 		return {	
 			type	=> 'YouTube',
 			title	=> $url,
@@ -579,7 +579,7 @@ sub _getBulkMetadata {
 			}
 	
 			my $duration = $item->{contentDetails}->{duration};
-			main::DEBUGLOG && $log->debug("Duration: $duration");
+			main::DEBUGLOG && $log->is_debug && $log->debug("Duration: $duration");
 			my ($misc, $hour, $min, $sec) = $duration =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
 			$duration = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
 									

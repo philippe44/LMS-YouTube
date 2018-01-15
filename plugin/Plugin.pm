@@ -44,7 +44,7 @@ $prefs->init({
 	max_items => 200, 
 	country => setCountry(),
 	cache => 1,
-	highres_icons => 0,
+	highres_icons => 1,
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
@@ -426,8 +426,7 @@ sub channelHandler {
 	my ($client, $cb, $args, $params) = @_;
 	
 	$params ||= {};
-	$log->error("CHANNEL");
-	
+		
 	Plugins::YouTube::API->searchDirect('channels', sub {
 		$cb->( _renderList($_[0]) );
 	}, {
@@ -478,7 +477,7 @@ sub _renderList {
 			$kind = $entry->{kind};
 		}	
 		
-		$log->debug("id:$id, kind:$kind");
+		main::DEBUGLOG && $log->is_debug && $log->debug("id:$id, kind:$kind");
 		
 		if (!$id) {
 			$log->error("Unexpected data: " . Data::Dump::dump($entry));
@@ -525,6 +524,7 @@ sub _renderList {
 	return $args;
 }
 
+=comment
 sub _getImage {
 	my ($imageList, $hires) = @_;
 	my @resolution = ($prefs->get('highres_icons') || $hires) ? qw(maxres high medium standard default) : qw(default standard medium high maxres);
@@ -538,6 +538,20 @@ sub _getImage {
 	
 	return $image;
 }
+=cut
+
+sub _getImage {
+	my ($imageList, $hires) = @_;
+	my @candidates = map {
+ 		$_->{url};
+ 	} sort {
+ 		# sort by size descending
+ 		$b->{width} <=> $a->{width};
+ 	} values %$imageList;
+	
+	# return either the highest or lowest resolution
+	return ($hires || $prefs->get('highres_icons')) ? $candidates[0] : $candidates[-1];
+} 
 
 sub trackInfoMenu {
 	my ($client, $url, $track, $remoteMeta) = @_;
