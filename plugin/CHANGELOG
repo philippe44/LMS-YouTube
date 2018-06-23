@@ -1,3 +1,8 @@
+0.63.2
+ - ogg granule was in ms instead of samples and using 32 bist only
+ - detect if 64 bits integer are available
+ - timecodescale was not taken into account
+  
 0.63.1
  - better hires icons selection (and hires by defaul)
  - clean debug stences
@@ -10,7 +15,7 @@
  - allow play all in contextMenu
  
 0.62.0
- - "All tracks" is realy all tracks, not just current page
+ - "All tracks" is really all tracks, not just current page
  - correct an infinite loop bug on tracks with no duration / no title
  - refactoring
  - workaround for LMS defeatTTP not sending search value (cache last search for 60s)
