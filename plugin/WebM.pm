@@ -1,8 +1,7 @@
 package Plugins::YouTube::WebM;
 
 use strict;
-
-use Data::Dumper;
+use Config;
 
 use Slim::Utils::Log;
 
@@ -123,11 +122,10 @@ sub getHeaders {
 			$info->{offset}->{tracks} = getSeekOffset($seektable, ID_TRACKS) + $info->{segment_offset};
 			$log->debug("offset: cues=$info->{offset}->{cues}, tracks=$info->{offset}->{tracks}");
 		} elsif ($id eq ID_INFO) {
-			$info->{duration} = getInfo(substr($v->{inBuf}, 0, $size), ID_DURATION, "f");
-			$log->info("track duration: $info->{duration}");
-			
-			$info->{timecode_scale} = getInfo(substr($v->{inBuf}, 0, $size), ID_TIMECODE_SCALE, "u");
+			$info->{timecode_scale} = getInfo(substr($v->{inBuf}, 0, $size), ID_TIMECODE_SCALE, "u") || 1000000;
 			$log->debug("track timecode scale: $info->{timecode_scale}");
+			$info->{duration} = getInfo(substr($v->{inBuf}, 0, $size), ID_DURATION, "f") / (1000000 / $info->{timecode_scale});
+			$log->info("track duration: $info->{duration}");
 		} elsif	($id eq ID_TRACK_ENTRY) {
 			$info->{track} = getTrackInfo(substr $v->{inBuf}, 0, $size);
 			$info->{offset}->{clusters} = $v->{position} + $size;
@@ -192,7 +190,8 @@ sub getAudio {
 			my $out = extractVorbis(\$v->{inBuf}, $info->{track}->{tracknum}, $size, \$time);
 									
 			if (defined $out) { 
-				$v->{outBuf} .= buildOggPage([$out], $v->{timecode} + $time, 0x00, $v->{seqnum}++);
+				my $pos = ($v->{timecode} + $time) * $info->{track}->{samplerate} / ($info->{timecode_scale} / 1000);
+				$v->{outBuf} .= buildOggPage([$out], $pos, 0x00, $v->{seqnum}++);
 			}	
 		}	
 						
@@ -213,7 +212,7 @@ TimecodeScale 	2 [2A][D7][B1] 		f
 sub getInfo {
 	my ($s, $tag, $fmt) = @_;
 	my ($id, $size);
-		
+	
 	while (length $s) {
 			
 		getEBML(\$s, \$id, \$size);
@@ -312,13 +311,13 @@ sub getCueOffset {
 
 
 sub buildOggPage {
-	my ($packets, $time, $flags, $seq) = @_;
+	my ($packets, $granule, $flags, $seq) = @_;
 	my $count = 0;
 	my $data = "";
 	
 	# 0-3:pattern 4:vers 5:flags 6-13:granule 14-17:serial num 18-21:seqno 22-25:CRC 26:Nseq 27...:segtable
 	my $page = ("OggS" . "\x00" . pack("C", $flags) . 
-				pack("V", $time) . "\x00\x00\x00\x00" . 
+				($Config{ivsize} == 8 ? pack("Q", $granule) : (pack("V", int ($granule)) . pack("V", int ($granule/4294967296)))) . 
 				"\x01\x00\x00\x00" . pack("V", $seq) . 
 				"\x00\x00\x00\x00" . "\x00"
 				);
@@ -443,6 +442,7 @@ sub extractVorbis {
 	return substr($$s, $len + 2 + 1, $size - ($len + 2 + 1));
 }
 
+
 sub getEBML {
 	my $in = shift;
 	my $id = shift;
@@ -541,7 +541,11 @@ sub decode_u {
 	return unpack('n', $_[0]) if ($len == 2);
 	return unpack('N', ("\0" . $_[0]) ) if ($len == 3);
 	return unpack('N', $_[0]) if ($len == 4);
-	return unpack('N', substr($_[0], 0, 4))*0x100000000 + unpack('N', substr($_[0], 4, 4)) if ($len == 8);
+	if ($len == 8) {
+		return unpack('Q', substr($_[0], 0, 8)) if $Config{ivsize} == 8;
+		$log->error("can't unpack 64 bits integer, using 32 bits LSB");
+		return unpack('N', substr($_[0], 4, 4));
+	} 
 	return undef;
 }
 sub decode_f { 
@@ -550,8 +554,6 @@ sub decode_f {
 	return unpack('d>', $_[0]) if ($len == 8);
 	return undef;
 }
-
-
 
 
 1;
