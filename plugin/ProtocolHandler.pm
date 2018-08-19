@@ -105,7 +105,7 @@ sub vars {
 	return ${*{$_[0]}}{'vars'};
 }
 
-
+my $nextWarning = 0;
 sub sysread {
 	use bytes;
 
@@ -136,9 +136,17 @@ sub sysread {
 				$v->{'streaming'} = 0 if length($_[0]->content) < DATA_CHUNK;
 				main::DEBUGLOG && $log->is_debug && $log->debug("got chunk length: ", length $_[0]->content, " from ", $v->{offset} - DATA_CHUNK, " for $url");
 			},
-			
-			sub { 
-				$log->warn("error fetching $url");
+
+			sub {
+				if (main::DEBUGLOG && $log->is_debug) {
+					$log->debug("error fetching $url")
+				}
+				# only log error every x seconds - it's too noisy for regular use
+				elsif (time() > $nextWarning) {
+					$log->warn("error fetching $url");
+					$nextWarning = time() + 10;
+				}
+
 				$v->{'inBuf'} = '';
 				$v->{'fetching'} = 0;
 			}, 
