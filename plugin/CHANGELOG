@@ -1,3 +1,6 @@
+0.64.0
+ - silence sysread errors
+
 0.63.2
  - ogg granule was in ms instead of samples and using 32 bist only
  - detect if 64 bits integer are available
