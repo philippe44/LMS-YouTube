@@ -191,6 +191,7 @@ sub getId {
 	return undef;
 }
 
+use Data::Dumper;
 
 # fetch the YouTube player url and extract a playable stream
 sub getNextTrack {
@@ -207,54 +208,28 @@ sub getNextTrack {
 
 		sub {
 			my $http = shift;
-			my $varsBlock;
+			my $streams;
+			
+			$streams = $1 if $http->content =~ /\"url_encoded_fmt_stream_map\":\"(.*?)\"/;
+			$streams .= ",$1" if $http->content =~ /\"adaptive_fmts\":\"(.*?)\"/;
 
-			# parse html to find the flash variables block
-			my $p = HTML::Parser->new(api_version => 3,
-				start_h => [
-					sub {
-						my $tag = shift;
-						my $attr = shift;
-						if ($tag eq 'embed' && $attr->{'type'} eq "application/x-shockwave-flash") {
-							$varsBlock = $attr->{flashvars};
-						}
-					},
-					"tagname,attr"
-				],
-			);
-
-			$p->parse($http->content);
-
-			# decode into playable streams
-			my %vars;
-			my %streams;
-			my @streams;
-
-			for my $var (split(/&/, $varsBlock)) {
-				my ($k, $v) = $var =~ /(.*)=(.*)/;
-				$vars{$k} = $v;
-			}
-
-            if (!defined $vars{url_encoded_fmt_stream_map}) {
-                ($vars{url_encoded_fmt_stream_map}) = ($http->content =~ /\"url_encoded_fmt_stream_map\":\"(.*?)\"/);
-
-                # Replace known unicode characters
-                $vars{url_encoded_fmt_stream_map} =~ s/\\u0026/\&/g;
-                main::DEBUGLOG && $log->is_debug && $log->debug("url_encoded_fmt_stream_map: $vars{url_encoded_fmt_stream_map}");
-            }
-						
-			main::DEBUGLOG && $log->is_debug && $log->debug($vars{url_encoded_fmt_stream_map});
+            # Replace known unicode characters
+            $streams =~ s/\\u0026/\&/g;
+            			
+			main::DEBUGLOG && $log->is_debug && $log->debug($streams);
 			
 			# find the streams
 			my $streamInfo;
 			
-			for my $stream (split(/,/, $vars{url_encoded_fmt_stream_map})) {
+			for my $stream (split(/,/, $streams)) {
 				my $id;
 				no strict 'subs';
-                my %props = map { split(/=/, $_) } split(/&/, $stream);
-
+                my %props = map { $_ =~ /=(.+)/ ? split(/=/, $_) : () } split(/&/, $stream);
+				
+				main::DEBUGLOG && $log->is_debug && $log->debug("STREAM", $stream);
+						
 				# check streams in preferred id order
-                next unless $id = first { $_ == $props{itag} } (43, 44, 45, 46);
+                next unless $id = first { $_ == $props{itag} } (43, 44, 45, 46, 171);
 				next unless !defined $streamInfo || $id < $streamInfo->{'id'};
 
 			    main::INFOLOG && $log->is_info && $log->info("itag: $props{itag}, props: $props{url}");
@@ -280,7 +255,7 @@ sub getNextTrack {
 			if (defined $streamInfo) {
 							
 				if ( $streamInfo->{'encryptedsig'} ) {
-					getSignature($vars{player_url}, $http->content, $streamInfo->{'rawsig'}, 
+					getSignature($http->content, $streamInfo->{'rawsig'}, 
 							  sub {
 								my $sig = shift;
 									
@@ -311,24 +286,19 @@ sub getNextTrack {
 
 
 sub getSignature {
-	my ($player_url, $content, $rawsig, $cb) = @_;
+	my ($content, $rawsig, $cb) = @_;
 							
-	if ( !defined $player_url ) {
-		($player_url) = ($content =~ /"assets":.+?"js":\s*("[^"]+")/);
+	(my $player_url) = ($content =~ /"assets":.+?"js":\s*("[^"]+")/);
 						
-		if ( $player_url ) { 
-			$player_url = JSON::XS->new->allow_nonref(1)->decode($player_url);
-			if ( $player_url  =~ m,^//, ) {
-				$player_url = "https:" . $player_url;
-			} elsif ($player_url =~ m,^/,) {
-				$player_url = "https://www.youtube.com" . $player_url;
-			}
+	if ( $player_url ) { 
+		$player_url = JSON::XS->new->allow_nonref(1)->decode($player_url);
+		if ( $player_url  =~ m,^//, ) {
+			$player_url = "https:" . $player_url;
+		} elsif ($player_url =~ m,^/,) {
+			$player_url = "https://www.youtube.com" . $player_url;
 		}
-	}
-					
-	main::DEBUGLOG && $log->is_debug && $log->debug("player_url: $player_url");
-		
-	if ( !$player_url ) {
+		main::DEBUGLOG && $log->is_debug && $log->debug("player_url: $player_url");
+	} else {
 		$log->error("no player url to unobfuscate signature");
 		$cb->(undef);
 		return;
