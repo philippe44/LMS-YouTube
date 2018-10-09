@@ -21,7 +21,7 @@ sub page {
 }
 
 sub prefs {
-	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix playlist_suffix country max_items APIkey client_id client_secret highres_icons));
+	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix playlist_suffix country max_items APIkey client_id client_secret highres_icons live_delay live_edge));
 }
 
 sub handler {
@@ -44,6 +44,7 @@ sub handler {
 	$params->{access_token} = $cache->get('yt:access_token');
 	
 	$params->{pref_max_items} = min($params->{pref_max_items}, 500);
+	$params->{live_delay} = max($params->{live_delay}, 30);
 		
 	$cache->remove('yt:access_token') if $params->{clear_token};
 		

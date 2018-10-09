@@ -1,3 +1,7 @@
+0.80.0.0
+ - add DASH and mp4 support
+ - FIXME: 64 bits are local order 'Q' is not suitable
+  
 0.70.0
  - new html format, audio only file
  

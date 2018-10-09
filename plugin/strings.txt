@@ -37,6 +37,9 @@ PLUGIN_YOUTUBE_CHANNELSEARCH
 PLUGIN_YOUTUBE_PLAYLISTSEARCH
 	EN	Playlist Search
 	
+PLUGIN_YOUTUBE_LIVEVIDEOSEARCH
+	EN	Live Video Search	
+	
 PLUGIN_YOUTUBE_MYSUBSCRIPTIONS
 	EN	My Subscriptions
 	
@@ -136,8 +139,17 @@ PLUGIN_YOUTUBE_PREFIX
 PLUGIN_YOUTUBE_SUFFIX
 	EN	Suffix
 	
-PLUGIN_YOUTUBE_CLIENTID
-	EN	Client ID
+PLUGIN_YOUTUBE_LIVEOPTIONS
+	EN	Live stream options
+	
+PLUGIN_YOUTUBE_LIVEOPTIONSDESC
+	EN	Options for live streams. Set 'Play Edge' to play the live edge with 'Delay' is the buffering time. 
+	
+PLUGIN_YOUTUBE_LIVEEDGE
+	EN	Play Edge with
+	
+PLUGIN_YOUTUBE_LIVEDELAY
+	EN	seconds delay
 	
 PLUGIN_YOUTUBE_CLIENTID_DESC
 	EN	Client ID as found on your google console page https://console.developers.google.com/apis/dashboard?

@@ -226,3 +226,4 @@ repo*.xml
 *.diff
 /.gitignore
 /doc
+/test

@@ -1,16 +1,38 @@
 package Plugins::YouTube::ProtocolHandler;
+
+# (c) 2018, philippe_44@outlook.com
+#
+# Released under GPLv2
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
 use base qw(IO::Handle);
 
 use strict;
 
 use List::Util qw(min max first);
 use HTML::Parser;
+use HTTP::Date;
+use URI;
 use URI::Escape;
 use Scalar::Util qw(blessed);
 use JSON::XS;
 use Data::Dumper;
 use File::Spec::Functions;
 use FindBin qw($Bin);
+use XML::Simple;
 
 use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Log;
@@ -20,10 +42,10 @@ use Slim::Utils::Cache;
 
 use Plugins::YouTube::Signature;
 use Plugins::YouTube::WebM;
+use Plugins::YouTube::M4a;
 
 use constant MIN_OUT	=> 8192;
 use constant DATA_CHUNK => 128*1024;	
-use constant HEADER_CHUNK => 8192;
 
 my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
@@ -33,18 +55,38 @@ Slim::Player::ProtocolHandlers->registerHandler('youtube', __PACKAGE__);
 
 sub flushCache { $cache->cleanup(); }
 
+=comment
+There is a voluntaty 'confusion' between codecs and streaming formats 
+(regular http or dash). As we only support ogg with webm and aac with
+dash, this is not a problem at this point, although not very elegant.
+This only works because it seems that YT, when using webm and dash (171)
+does not build a mpd file but instead uses regular webm. It might be due
+to http://wiki.webmproject.org/adaptive-streaming/webm-dash-specification
+but I'm not sure at that point. Anyway, the dash webm format used in codec 
+171, probably because there is a single stream, does not need a different
+handling than normal webm
+=cut
+
+my $getProperties  = { 'ogg' => \&Plugins::YouTube::WebM::getProperties, 'aac' => \&Plugins::YouTube::M4a::getProperties };
+my $getAudio 	   = { 'ogg' => \&Plugins::YouTube::WebM::getAudio, 'aac' => \&Plugins::YouTube::M4a::getAudio };
+my $getStartOffset = { 'ogg' => \&Plugins::YouTube::WebM::getStartOffset, 'aac' => \&Plugins::YouTube::M4a::getStartOffset };
+
 sub new {
 	my $class = shift;
 	my $args  = shift;
-	my $song       = $args->{'song'};
-	my $webmInfo = $song->pluginData('webmInfo');
-	my $offset = $webmInfo->{offset}->{clusters};
+	my $song  = $args->{'song'};
+	my $offset;
+	my $props = $song->pluginData('props');
 	
-	return undef if !defined $webmInfo;
+	return undef if !defined $props;
 	
-	main::DEBUGLOG && $log->is_debug && $log->debug( Dumper($webmInfo) );
+	main::DEBUGLOG && $log->is_debug && $log->debug( Dumper($props) );
 	
-	$args->{'url'} = $song->pluginData('stream');
+	# set offset depending on format
+	$offset = $props->{'liveOffset'} if $props->{'liveOffset'} && $prefs->get('live_edge');
+	$offset = $props->{offset}->{clusters} if $props->{offset}->{clusters}; 
+					
+	$args->{'url'} = $song->pluginData('baseURL');
 	my $seekdata = $song->can('seekdata') ? $song->seekdata : $song->{'seekdata'};
 	my $startTime = $seekdata->{'timeOffset'};
   
@@ -59,36 +101,52 @@ sub new {
 	my $self = $class->SUPER::new;
 	
 	if (defined($self)) {
-		${*$self}{'client'}  	= $args->{'client'};
-		${*$self}{'song'}    	= $args->{'song'};
-		${*$self}{'url'}     	= $args->{'url'};
-		${*$self}{'webmInfo'}   = $webmInfo;		
-		${*$self}{'vars'} = {         		# variables which hold state for this instance:
+		${*$self}{'client'} = $args->{'client'};
+		${*$self}{'song'}   = $args->{'song'};
+		${*$self}{'url'}    = $args->{'url'};
+		${*$self}{'props'}  = $props;		
+		${*$self}{'vars'}   = {        		# variables which hold state for this instance:
 			'inBuf'       => '',      		# buffer of received data
 			'outBuf'      => '',      		# buffer of processed audio
-			'id'          => undef,   		# last EBML identifier
-			'need'        => Plugins::YouTube::WebM::EBML_NEED,  # minimum size of data to allow processing
-			'position'    => 0,      		# number of bytes processed from buffer since 1st call
-			'offset'      => $offset,  		# offset for next HTTP request
 			'streaming'   => 1,      		# flag for streaming, changes to 0 when all data received
 			'fetching'    => 0,		  		# waiting for HTTP data
+			'offset'      => $offset,  		# offset for next HTTP request in webm/stream or segment index in dash
 		};
 	}
 	
-	getStartOffset( $args->{url}, $startTime, $webmInfo, sub { ${*$self}{'vars'}->{offset} = shift } ) if !$offset;
+	# set starting offset (bytes or index, depending on streaming format)
+	$getStartOffset->{$props->{'format'}}($args->{url}, $startTime, $props, sub { ${*$self}{'vars'}->{offset} = shift }) if !$offset;
+	
+	# set timer for updating the MPD if needed (dash)
+	Slim::Utils::Timers::setTimer($self, time() + $props->{'updatePeriod'}, \&updateMPD) if $props->{'updatePeriod'};
+	
+	$song->startOffset($props->{'timeShiftDepth'} - $prefs->get('live_delay')) if $props->{'timeShiftDepth'} && $prefs->get('live_edge');		
 	
 	return $self;
 }
 
-sub formatOverride { 'ogg' }
+sub close {
+	my $self = shift;
+	
+	main::INFOLOG && $log->is_info && $log->info("killing MPD update timer");
+	Slim::Utils::Timers::killTimers($self, \&updateMPD);
+	
+	$self->SUPER::close(@_);
+}
 
-sub contentType { 'ogg' }
+sub formatOverride { 
+	return $_[1]->pluginData('props')->{'format'};
+}
+
+sub contentType { 
+	return ${*{$_[0]}}{'props'}->{'format'};
+}
 
 sub isAudio { 1 }
 
 sub isRemote { 1 }
 
-sub canDirectStream { return 0; }
+sub canDirectStream { 0 }
 
 sub songBytes {}
 
@@ -96,16 +154,15 @@ sub canSeek { 1 }
 
 sub getSeekData {
 	my ($class, $client, $song, $newtime) = @_;
-
 	return { timeOffset => $newtime };
 }
-
 
 sub vars {
 	return ${*{$_[0]}}{'vars'};
 }
 
 my $nextWarning = 0;
+
 sub sysread {
 	use bytes;
 
@@ -113,28 +170,59 @@ sub sysread {
 	# return in $_[1]
 	my $maxBytes = $_[2];
 	my $v = $self->vars;
-	my $url = ${*$self}{'url'};
-	my $webmInfo = ${*$self}{'webmInfo'};
+	my $baseURL = ${*$self}{'url'};
+	my $props = ${*$self}{'props'};
 	
-	# means waiting for offset to be set
-	if ( !$v->{offset} ) {
-		$! = EINTR;
-		return undef;
+	$v->{'offset'} ||= 0;
+		
+	if (!$v->{'fetching'} && !$v->{'init'} && $props->{'initializeURL'}) {
+	
+		$v->{'fetching'} = 1;
+		$v->{'init'} = 1;
+		
+		main::INFOLOG && $log->is_info && $log->info("fetching initialization URL $baseURL$props->{'initializeURL'}");
+		
+		Slim::Networking::SimpleAsyncHTTP->new(
+			sub {
+				$v->{'inBuf'} = $_[0]->content;
+				$v->{'fetching'} = 0;
+			},
+
+			sub {
+				$log->warn("error fetching initialization for $baseURL");
+				$v->{'fetching'} = 0;
+			}, 
+			
+		)->get($baseURL . $props->{'initializeURL'});
 	}	
-	
+		
 	# need more data
 	if ( length $v->{'outBuf'} < MIN_OUT && !$v->{'fetching'} && $v->{'streaming'} ) {
-		my $range = "bytes=$v->{offset}-" . ($v->{offset} + DATA_CHUNK - 1);
+		my $url = $baseURL;
+		my @range;
 		
-		$v->{offset} += DATA_CHUNK;
+		if ( $props->{'segmentURL'} ) {
+			$url .= ${$props->{'segmentURL'}}[$v->{'offset'}]->{'media'};		
+			$v->{'offset'}++;
+		} else {
+			@range = ( 'Range', "bytes=$v->{offset}-" . ($v->{offset} + DATA_CHUNK - 1) );
+			$v->{offset} += DATA_CHUNK;
+		}	
+				
 		$v->{'fetching'} = 1;
-						
+				
 		Slim::Networking::SimpleAsyncHTTP->new(
 			sub {
 				$v->{'inBuf'} .= $_[0]->content;
 				$v->{'fetching'} = 0;
-				$v->{'streaming'} = 0 if length($_[0]->content) < DATA_CHUNK;
-				main::DEBUGLOG && $log->is_debug && $log->debug("got chunk length: ", length $_[0]->content, " from ", $v->{offset} - DATA_CHUNK, " for $url");
+				if ( $props->{'segmentURL'} ) {
+					$v->{'streaming'} = 0 if $v->{'offset'} == @{$props->{'segmentURL'}};
+					main::DEBUGLOG && $log->is_debug && $log->debug("got chunk $v->{'offset'} length: ", length $_[0]->content, " for $url");
+					#$log->error("got chunk $v->{'offset'} length: ", length $_[0]->content, " for $url");
+				} else {
+					$v->{'streaming'} = 0 if length($_[0]->content) < DATA_CHUNK;
+					main::DEBUGLOG && $log->is_debug && $log->debug("got chunk length: ", length $_[0]->content, " from ", $v->{offset} - DATA_CHUNK, " for $url");
+				}		
 			},
 
 			sub {
@@ -151,27 +239,25 @@ sub sysread {
 				$v->{'fetching'} = 0;
 			}, 
 			
-		)->get($url, 'Range' => $range );
-		
+		)->get($url, @range);
 	}	
 
 	# process all available data	
-	Plugins::YouTube::WebM::getAudio($v, $webmInfo) if length $v->{'inBuf'};
+	$getAudio->{$props->{'format'}}($v, $props) if length $v->{'inBuf'};
 	
 	if ( my $bytes = min(length $v->{'outBuf'}, $maxBytes) ) {
 		$_[1] = substr($v->{'outBuf'}, 0, $bytes);
 		$v->{'outBuf'} = substr($v->{'outBuf'}, $bytes);
 		return $bytes;
-	} elsif ( $v->{streaming} ) {
+	} elsif ( $v->{'streaming'} || $props->{'updatePeriod'} ) {
 		$! = EINTR;
 		return undef;
-	}
+	}	
 	
 	# end of streaming
-	main::INFOLOG && $log->is_info && $log->info("end streaming: $url");
+	main::INFOLOG && $log->is_info && $log->info("end streaming");
 	return 0;
-}	
-	
+}
 
 sub getId {
 	my ($class, $url) = @_;
@@ -191,16 +277,15 @@ sub getId {
 	return undef;
 }
 
-use Data::Dumper;
-
 # fetch the YouTube player url and extract a playable stream
 sub getNextTrack {
 	my ($class, $song, $successCb, $errorCb) = @_;
-	my $client = $song->master();
 	my $masterUrl = $song->track()->url;
 	my $id = $class->getId($masterUrl);
 	my $url = "http://www.youtube.com/watch?v=$id";
-
+	my @allow = ( [43, 'ogg'], [44, 'ogg'], [45, 'ogg'], [46, 'ogg'] );
+	my @allowDASH = ( [171, 'ogg'], [140, 'aac'], [139, 'aac'] );
+				  
 	main::INFOLOG && $log->is_info && $log->info("next track id: $id url: $url master: $masterUrl");
 
 	# fetch new url(s)
@@ -208,109 +293,316 @@ sub getNextTrack {
 
 		sub {
 			my $http = shift;
-			my $streams;
+									
+			main::DEBUGLOG && $log->is_debug && $log->debug($http->content);
 			
-			$streams = $1 if $http->content =~ /\"url_encoded_fmt_stream_map\":\"(.*?)\"/;
-			$streams .= ",$1" if $http->content =~ /\"adaptive_fmts\":\"(.*?)\"/;
-
-            # Replace known unicode characters
-            $streams =~ s/\\u0026/\&/g;
-            			
+			my ($streams) = $http->content =~ /\"url_encoded_fmt_stream_map\":\"(.*?)\"/;
+			$streams =~ s/\\u0026/\&/g;
+			
+			my ($dashmpd) = $http->content =~ /\"dashmpd\":\"(.*?)\"/;
+			$dashmpd =~ s/\\u0026/\&/g;
+			$dashmpd =~ s/\\//g;
+			            			
 			main::DEBUGLOG && $log->is_debug && $log->debug($streams);
 			
-			# find the streams
-			my $streamInfo;
+			# first try non-DASH streams;
+			main::INFOLOG && $log->is_info && $log->info("trying regular streams");
+			my $streamInfo = getStream($streams, \@allow);
 			
-			for my $stream (split(/,/, $streams)) {
-				my $id;
-				no strict 'subs';
-                my %props = map { $_ =~ /=(.+)/ ? split(/=/, $_) : () } split(/&/, $stream);
-				
-				main::DEBUGLOG && $log->is_debug && $log->debug("STREAM", $stream);
-						
-				# check streams in preferred id order
-                next unless $id = first { $_ == $props{itag} } (43, 44, 45, 46, 171);
-				next unless !defined $streamInfo || $id < $streamInfo->{'id'};
-
-			    main::INFOLOG && $log->is_info && $log->info("itag: $props{itag}, props: $props{url}");
-						
-				my $url = uri_unescape($props{url});
-				my $rawsig;
-				my $encryptedsig = 0;
-					
-				if (exists $props{s}) {
-					$rawsig = $props{s};
-					$encryptedsig = 1;
-				} elsif (exists $props{sig}) {
-					$rawsig = $props{sig};
-				} else {
-					$rawsig = $props{signature};
+			# then DASH streams
+			if (!$streamInfo) {
+				main::INFOLOG && $log->is_info && $log->info("no stream found, trying DASH");
+				if ($dashmpd) {
+					getMPD($dashmpd, \@allowDASH, sub {
+								my $props = shift;
+								$song->pluginData(props => $props);
+								$song->pluginData(baseURL  => $props->{'baseURL'});
+								$getProperties->{$props->{'format'}}($song, $props, $successCb);
+							} );
+				} else {	
+					($streams) = $http->content =~ /\"adaptive_fmts\":\"(.*?)\"/;
+					$streams =~ s/\\u0026/\&/g;
+					$streamInfo = getStream($streams, \@allowDASH);
 				}
-											
-				main::INFOLOG && $log->is_info && $log->info("sig $rawsig encrypted $encryptedsig");
-					
-				$streamInfo = { id => $id, url => $url, rawsig => $rawsig, encryptedsig => $encryptedsig };
-			}
-
-			if (defined $streamInfo) {
-							
-				if ( $streamInfo->{'encryptedsig'} ) {
-					getSignature($http->content, $streamInfo->{'rawsig'}, 
-							  sub {
+			} 	
+			
+			# process non-DASH streams
+			if ($streamInfo) {
+					getSignature($http->content, $streamInfo->{'sig'}, $streamInfo->{'encrypted'}, sub {
 								my $sig = shift;
-									
 								if (defined $sig) {
-									$song->pluginData(stream  => $streamInfo->{'url'} . "&signature=" . $sig);
-									getTrackInfo( $client, $song, $successCb );
-								} else {	
-									$errorCb->("signature problem");
+									my $props = { format => $streamInfo->{'format'} };
+									main::DEBUGLOG && $log->is_debug && $log->debug("unobfuscated signature $sig");
+									$song->pluginData(props => $props);
+									$song->pluginData(baseURL  => $streamInfo->{'url'} . "&signature=" . $sig);
+									$getProperties->{$props->{'format'}}($song, $props, $successCb);
+								} else {
+									$errorCb->();
 								}	
-							  } );
-				} else {
-					main::INFOLOG && $log->is_info && $log->info("raw signature $streamInfo->{'rawsig'}");
-					$song->pluginData(stream  => $streamInfo->{'url'} . "&signature=" . $streamInfo->{'rawsig'});
-					getTrackInfo( $client, $song, $successCb );
-				}
-		
-			} else { 
-				$errorCb->("no streams found");
-			}
+							});
+			} elsif (!$dashmpd) {
+				$log->error("no stream/DASH found ");
+				$errorCb->();
+			}	
+
 		},
 		
 		sub {
 			$errorCb->($_[1]);
-		},
-				
+		},		
+					
 	)->get($url);
 }
 
-
-sub getSignature {
-	my ($content, $rawsig, $cb) = @_;
-							
-	(my $player_url) = ($content =~ /"assets":.+?"js":\s*("[^"]+")/);
+sub getStream {
+	my ($streams, $allow) = @_;
+	my $streamInfo;
+	my $selected;
+			
+	for my $stream (split(/,/, $streams)) {
+		my $index;
+		no strict 'subs';
+        my %props = map { $_ =~ /=(.+)/ ? split(/=/, $_) : () } split(/&/, $stream);
+				
+		main::DEBUGLOG && $log->is_debug && $log->debug($stream);
 						
-	if ( $player_url ) { 
-		$player_url = JSON::XS->new->allow_nonref(1)->decode($player_url);
-		if ( $player_url  =~ m,^//, ) {
-			$player_url = "https:" . $player_url;
-		} elsif ($player_url =~ m,^/,) {
-			$player_url = "https://www.youtube.com" . $player_url;
+		# check streams in preferred id order
+        next unless ($index) = grep { $$allow[$_][0] == $props{itag} } (0 .. @$allow-1);
+		main::INFOLOG && $log->is_info && $log->info("found matching format $props{itag}");
+		next unless !defined $streamInfo || $index < $selected;
+
+		main::INFOLOG && $log->is_info && $log->info("itag: $props{itag}, props: $props{url}");
+						
+		my $url = uri_unescape($props{url});
+		my $sig;
+		my $encrypted = 0;
+					
+		if (exists $props{s}) {
+			$sig = $props{s};
+			$encrypted = 1;
+		} elsif (exists $props{sig}) {
+			$sig = $props{sig};
+		} elsif (exists $props{signature}) {
+			$sig = $props{signature};
+		} else {
+			$sig = '';
 		}
-		main::DEBUGLOG && $log->is_debug && $log->debug("player_url: $player_url");
-	} else {
-		$log->error("no player url to unobfuscate signature");
-		$cb->(undef);
-		return;
+											
+		main::INFOLOG && $log->is_info && $log->info("selected $$allow[$index][1] sig $sig encrypted $encrypted");
+							
+		$streamInfo = { url => $url, sig => $sig, encrypted => $encrypted, format => $$allow[$index][1] };
+		$selected = $index;
 	}
 		
+	return $streamInfo;
+}
+
+sub getMPD {
+	my ($dashmpd, $allow, $cb) = @_;
+	
+	# get MPD file
+	Slim::Networking::SimpleAsyncHTTP->new(
+
+		sub {
+			my $http = shift;
+			my $selIndex;
+			my ($selRepres, $selAdapt);
+			my $mpd = XMLin( $http->content, KeyAttr => [], ForceContent => 1, ForceArray => [ 'AdaptationSet', 'Representation', 'Period' ] );
+			my $period = $mpd->{'Period'}[0];
+			my $adaptationSet = $period->{'AdaptationSet'}; 
+			
+			$log->error("Only one period supported") if @{$mpd->{'Period'}} != 1;
+						
+			#$log->error(Dumper($mpd));
+																		
+			# find suitable format, first preferred
+			foreach my $adaptation (@$adaptationSet) {
+				if ($adaptation->{'mimeType'} eq 'audio/mp4') {
+																											
+					foreach my $representation (@{$adaptation->{'Representation'}}) {
+						next unless my ($index) = grep { $$allow[$_][0] == $representation->{'id'} } (0 .. @$allow-1);
+						main::INFOLOG && $log->is_info && $log->info("found matching format $representation->{'id'}");
+						next unless !defined $selIndex || $index < $selIndex;
+												
+						$selIndex = $index;
+						$selRepres = $representation;
+						$selAdapt = $adaptation;
+					}	
+				}	
+			}
+			
+			main::INFOLOG && $log->is_info && $log->info("selected $selRepres->{'id'}");
+			
+			my $timeShiftDepth	= $selRepres->{'SegmentList'}->{'timeShiftBufferDepth'} // 
+								  $selAdapt->{'SegmentList'}->{'timeShiftBufferDepth'} // 
+								  $period->{'SegmentList'}->{'timeShiftBufferDepth'} // 
+								  $mpd->{'timeShiftBufferDepth'};
+			my ($misc, $hour, $min, $sec) = $timeShiftDepth =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:([+-]?([0-9]*[.])?[0-9]+)S)?/;
+			$timeShiftDepth	= ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
+					
+			($misc, $hour, $min, $sec) = $mpd->{'minimumUpdatePeriod'} =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:([+-]?([0-9]*[.])?[0-9]+)S)?/;
+			my $updatePeriod = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
+			$updatePeriod = min($updatePeriod * 10, $timeShiftDepth / 2) if $timeShiftDepth && !$prefs->get('live_edge');
+						
+			my $duration = $mpd->{'mediaPresentationDuration'};
+			($misc, $hour, $min, $sec) = $duration =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:([+-]?([0-9]*[.])?[0-9]+)S)?/;
+			$duration = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
+									
+			my $scaleDuration	= $selRepres->{'SegmentList'}->{'duration'} // 
+								  $selAdapt->{'SegmentList'}->{'duration'} //
+								  $period->{'SegmentList'}->{'duration'};
+			my $timescale 		= $selRepres->{'SegmentList'}->{'timescale'} // 
+								  $selAdapt->{'SegmentList'}->{'timescale'} //
+								  $period->{'SegmentList'}->{'timescale'};
+				
+			$duration = $scaleDuration / $timescale if $scaleDuration;		
+			
+			main::INFOLOG && $log->is_info && $log->info("MPD update period $updatePeriod, timeshift $timeShiftDepth, duration $duration");
+												
+			my $props = {
+					format 			=> $$allow[$selIndex][1],
+					updatePeriod	=> $updatePeriod,
+					baseURL 		=> $selRepres->{'BaseURL'}->{'content'} // 
+									   $selAdapt->{'BaseURL'}->{'content'} // 
+									   $period->{'BaseURL'}->{'content'} // 
+									   $mpd->{'BaseURL'}->{'content'},
+					segmentTimeline => $selRepres->{'SegmentList'}->{'SegmentTimeline'}->{'S'} // 
+									   $selAdapt->{'SegmentList'}->{'SegmentTimeline'}->{'S'} //
+									   $period->{'SegmentList'}->{'SegmentTimeline'}->{'S'},
+					segmentURL		=> $selRepres->{'SegmentList'}->{'SegmentURL'} // 
+									   $selAdapt->{'SegmentList'}->{'SegmentURL'} // 
+									   $period->{'SegmentList'}->{'SegmentURL'},
+					initializeURL	=> $selRepres->{'SegmentList'}->{'Initialization'}->{'sourceURL'} // 
+									   $selAdapt->{'SegmentList'}->{'Initialization'}->{'sourceURL'} // 
+									   $period->{'SegmentList'}->{'Initialization'}->{'sourceURL'},
+					startNumber		=> $selRepres->{'SegmentList'}->{'startNumber'} // 
+									   $selAdapt->{'SegmentList'}->{'startNumber'} // 
+									   $period->{'SegmentList'}->{'startNumber'},
+					samplingRate	=> $selRepres->{'audioSamplingRate'} // 
+									   $selAdapt->{'audioSamplingRate'},
+					channels		=> $selRepres->{'AudioChannelConfiguration'}->{'value'} // 
+									   $selAdapt->{'AudioChannelConfiguration'}->{'value'},
+					bandwidth		=> $selRepres->{'bandwidth'},
+					duration		=> $duration,
+					timescale		=> $timescale || 1,
+					timeShiftDepth	=> $timeShiftDepth,
+					mpd				=> { url => $dashmpd, type => $mpd->{'type'}, 
+										 adaptId => $selAdapt->{'id'}, represId => $selRepres->{'id'}, 
+									},	 
+				};	
+				
+			# calculate live edge
+			if ($updatePeriod && $prefs->get('live_edge') && $props->{'segmentTimeline'}) {
+				my $index = scalar @{$props->{'segmentTimeline'}} - 1;
+				my $delay = $prefs->get('live_delay');
+	
+				while ($delay > 0 && $index > 0) {
+					$delay -= ${$props->{'segmentTimeline'}}[$index]->{'d'} / $props->{'timescale'};
+					$index--;
+				}	
+				
+				$props->{'liveOffset'} = $index;
+				main::INFOLOG && $log->is_info && $log->info("live edge $index/", scalar @{$props->{'segmentTimeline'}});
+			}	
+								
+			$cb->($props);
+		},
+		
+		sub {
+			$log->error("cannot get MPD file $dashmpd");
+			$cb->();
+		},		
+					
+	)->get($dashmpd);
+}
+
+sub updateMPD {
+	my $self = shift;
+	my $v = $self->vars;
+	my $props = ${*$self}{'props'};
+	
+	return unless $props && $props->{'updatePeriod'};
+		
+	# get MPD file
+	Slim::Networking::SimpleAsyncHTTP->new(
+
+		sub {
+			my $http = shift;
+			my $mpd = XMLin( $http->content, KeyAttr => [], ForceContent => 1, ForceArray => [ 'AdaptationSet', 'Representation', 'Period' ] );
+			my $period = $mpd->{'Period'}[0];
+			
+			$log->error("Only one period supported") if @{$mpd->{'Period'}} != 1;
+			
+			my ($selAdapt) = grep { $_->{'id'} == $props->{'mpd'}->{'adaptId'} } @{$period->{'AdaptationSet'}}; 
+			my ($selRepres) = grep { $_->{'id'} == $props->{'mpd'}->{'represId'} } @{$selAdapt->{'Representation'}}; 
+			
+			#$log->error("UPDATEMPD ", Dumper($selRepres));
+						
+			my $startNumber = $selRepres->{'SegmentList'}->{'startNumber'} // 
+							  $selAdapt->{'SegmentList'}->{'startNumber'} // 
+						   	  $period->{'SegmentList'}->{'startNumber'};
+							  
+			my ($misc, $hour, $min, $sec) = $mpd->{'minimumUpdatePeriod'} =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:([+-]?([0-9]*[.])?[0-9]+)S)?/;
+			my $updatePeriod = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
+			$updatePeriod = min($updatePeriod * 10, $props->{'timeShiftDepth'} / 2) if $props->{'timeShiftDepth'} && !$prefs->get('live_edge');
+			
+			main::INFOLOG && $log->is_info && $log->info("offset ajustement ", $startNumber - $props->{'startNumber'}, ", update period $updatePeriod");			
+			$v->{'offset'} -= $startNumber - $props->{'startNumber'};	
+						
+			$props->{'startNumber'} = $startNumber;
+			$props->{'updatePeriod'} = $updatePeriod;
+			$props->{'segmentTimeline'} = $selRepres->{'SegmentList'}->{'SegmentTimeline'}->{'S'} // 
+										  $selAdapt->{'SegmentList'}->{'SegmentTimeline'}->{'S'} //
+										  $period->{'SegmentList'}->{'SegmentTimeline'}->{'S'};
+			$props->{'segmentURL'} = $selRepres->{'SegmentList'}->{'SegmentURL'} // 
+									 $selAdapt->{'SegmentList'}->{'SegmentURL'} // 
+									 $period->{'SegmentList'}->{'SegmentURL'};
+			
+			$v->{'streaming'} = 1 if $v->{'offset'} != @{$props->{'segmentURL'}};
+			Slim::Utils::Timers::setTimer($self, time() + $updatePeriod, \&updateMPD); 
+		},
+		
+		sub {
+			$log->error("cannot update MPD file $props->{'mpd'}->{'url'}");
+		},		
+					
+	)->get($props->{'mpd'}->{'url'});
+	
+}
+
+sub getSignature {
+	my ($content, $sig, $encrypted, $cb) = @_;
+		
+	# signature is not encrypted	
+	if ( !$encrypted ) {
+		$cb->($sig);
+		return;
+	}
+	
+	# get the player's url
+	my ($player_url) = ($content =~ /"assets":.+?"js":\s*("[^"]+")/);
+	
+	if ( !$player_url ) { 
+		$log->error("no player url to unobfuscate signature");
+		$cb->();
+		return;
+	}	
+	
+	$player_url = JSON::XS->new->allow_nonref(1)->decode($player_url);
+	if ( $player_url  =~ m,^//, ) {
+		$player_url = "https:" . $player_url;
+	} elsif ($player_url =~ m,^/,) {
+		$player_url = "https://www.youtube.com" . $player_url;
+	}
+	main::DEBUGLOG && $log->is_debug && $log->debug("player_url: $player_url");
+	
+	# is signature cached 
 	if ( Plugins::YouTube::Signature::has_player($player_url) ) {
-		my $sig = Plugins::YouTube::Signature::unobfuscate_signature( $player_url, $rawsig );
-		main::DEBUGLOG && $log->is_debug && $log->debug("cached player $ player_url, unobfuscated signature (cached) $sig");
-		$cb->($sig, $player_url);
+		$cb->(Plugins::YouTube::Signature::unobfuscate_signature($player_url, $sig));
 	} else {
 		main::DEBUGLOG && $log->is_debug && $log->debug("Fetching new player $player_url");
 		Slim::Networking::SimpleAsyncHTTP->new(
+	
 			sub {
 				my $http = shift;
 				my $jscode = $http->content;
@@ -322,124 +614,20 @@ sub getSignature {
 						
 				if ($@) {
 					$log->error("cannot load player code: $@");
-					$cb->(undef);
-					return;
+					$cb->();
+				} else {
+					$cb->(Plugins::YouTube::Signature::unobfuscate_signature($player_url, $sig));
 				}	
-					
-				my $sig = Plugins::YouTube::Signature::unobfuscate_signature( $player_url, $rawsig );
-				main::DEBUGLOG && $log->is_debug && $log->debug("cached player $ player_url, unobfuscated signature (cached) $sig");
-				$cb->($sig, $player_url);
 			},
 						
 			sub {
-				$cb->errorCb->("Cannot fetch player " . $_[1]);
-				$cb->(undef);
+				$log->error->("Cannot fetch player");
+				$cb->();
 			},
-					
+	
 		)->get($player_url);
 	}	
 }	
-
-
-sub getTrackInfo {
-	my ($client, $song, $cb) = @_;
-	my $process;
-	my $info = {};	
-	my $var = {	'inBuf'       => '',
-				'id'          => undef,   
-				'need'        => Plugins::YouTube::WebM::EBML_NEED,  
-				'offset'      => 0,       
-		};
-	
-	$process = sub {
-		Slim::Networking::SimpleAsyncHTTP->new(
-		
-			sub {
-				my $content = shift->content;
-								
-				$var->{'inBuf'} .= $content;
-				my $res = Plugins::YouTube::WebM::getHeaders($var, $info);
-				
-				if ( $res eq Plugins::YouTube::WebM::WEBM_MORE ) {
-					return $cb->() if length($content) < HEADER_CHUNK; 
-					
-					main::DEBUGLOG && $log->is_debug && $log->debug("paging: $var->{offset}");
-					$var->{offset} += length $content;
-					$process->();
-				} elsif ( $res eq Plugins::YouTube::WebM::WEBM_DONE ) {	
-					$song->track->secs( $info->{'duration'} / 1000 ) if $info->{'duration'};
-					$song->track->bitrate( $info->{'track'}->{'bitrate'} );
-					$song->track->samplerate( $info->{'track'}->{'samplerate'} );
-					$song->track->samplesize( $info->{'track'}->{'samplesize'} );
-					$song->track->channels( $info->{'track'}->{'channels'} );
-				
-					main::INFOLOG && $log->is_info && $log->info( "samplerate: $info->{'track'}->{'samplerate'}, bitrate: $info->{'track'}->{'bitrate'}" );
-					$song->pluginData('webmInfo' => $info);
-													
-					$client->currentPlaylistUpdateTime( Time::HiRes::time() );
-					Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );	
-				
-					$cb->();
-				} elsif ( $res eq Plugins::YouTube::WebM::WEBM_ERROR ) {
-					$log->error( "could not get webm headers" );
-					$cb->();
-				}		
-			},
-		
-			sub {
-				$log->warn("could not get codec info");
-				$cb->();
-			}
-		)->get( $song->pluginData('stream'), 'Range' => "bytes=$var->{'offset'}-" . ($var->{'offset'} + HEADER_CHUNK - 1) );
-	 };	
-	
-	$process->();
-}
-
-
-sub getStartOffset {
-	my ($url, $startTime, $info, $cb) = @_;
-	my $process;
-	my $var = {	'inBuf'       => '',
-				'id'          => undef,   
-				'need'        => Plugins::YouTube::WebM::EBML_NEED,  
-				'offset'      => $info->{offset}->{cues},       
-		};
-	
-	$process = sub {
-		Slim::Networking::SimpleAsyncHTTP->new(
-		
-			sub {
-				my $content = shift->content;
-								
-				$var->{'inBuf'} .= $content;
-				my $res = Plugins::YouTube::WebM::getCues($var);
-				
-				if ( $res eq Plugins::YouTube::WebM::WEBM_MORE ) {
-					return $cb->( $info->{offset}->{clusters} ) if length($content) < HEADER_CHUNK; 
-					
-					main::DEBUGLOG && $log->is_debug && $log->debug("paging: $var->{offset}");
-					$var->{offset} += length $content;
-					$process->();
-				} elsif ( $res eq Plugins::YouTube::WebM::WEBM_DONE ) {	
-					my $offset = Plugins::YouTube::WebM::getCueOffset($var->{outBuf}, $startTime*($info->{timecode_scale}/1000000)*1000) + $info->{segment_offset};
-					$cb->($offset);
-				} elsif ( $res eq Plugins::YouTube::WebM::WEBM_ERROR ) {
-					$log->warn( "could not find start offset" );
-					$cb->( $info->{offset}->{clusters} );
-				}		
-			},
-		
-			sub {
-				$log->warn( "could not find start offset" );
-				$cb->( $info->{offset}->{clusters} );
-			}
-		)->get( $url, 'Range' => "bytes=$var->{'offset'}-" . ($var->{'offset'} + HEADER_CHUNK - 1) );
-	 };	
-	
-	$process->();
-}
-
 
 sub getMetadataFor {
 	my ($class, $client, $url) = @_;

@@ -1,9 +1,32 @@
 package Plugins::YouTube::WebM;
 
+# (c) 2018, philippe_44@outlook.com
+#
+# Released under GPLv2
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
 use strict;
 use Config;
 
 use Slim::Utils::Log;
+use Slim::Utils::Cache;
+
+my $cache = Slim::Utils::Cache->new;
+
+use constant HEADER_CHUNK => 8192;
 
 use constant MAX_EBML  => 128*1024;
 use constant EBML_NEED  => 12;
@@ -80,7 +103,7 @@ sub getCues {
 
 
 sub getHeaders {
-	my ($v, $info) = @_;
+	my ($v, $props) = @_;
 	
 	# process all we can
 	while ($v->{need} <= length $v->{inBuf}) {
@@ -95,7 +118,7 @@ sub getHeaders {
 				$log->error("no info found");
 				return WEBM_ERROR;
 			} elsif ($id eq ID_SEGMENT) {
-				$info->{segment_offset} = $v->{position};
+				$props->{segment_offset} = $v->{position};
 				next;
 			} elsif ($id eq ID_TRACKS) {
 				next;
@@ -118,18 +141,18 @@ sub getHeaders {
 		# consume branches lower than L1 (item by item)
 		if ($id eq ID_SEEKHEAD) {
 			my $seektable = substr $v->{inBuf}, 0, $size;
-			$info->{offset}->{cues} = getSeekOffset($seektable, ID_CUES) + $info->{segment_offset};
-			$info->{offset}->{tracks} = getSeekOffset($seektable, ID_TRACKS) + $info->{segment_offset};
-			$log->debug("offset: cues=$info->{offset}->{cues}, tracks=$info->{offset}->{tracks}");
+			$props->{offset}->{cues} = getSeekOffset($seektable, ID_CUES) + $props->{segment_offset};
+			$props->{offset}->{tracks} = getSeekOffset($seektable, ID_TRACKS) + $props->{segment_offset};
+			$log->debug("offset: cues=$props->{offset}->{cues}, tracks=$props->{offset}->{tracks}");
 		} elsif ($id eq ID_INFO) {
-			$info->{timecode_scale} = getInfo(substr($v->{inBuf}, 0, $size), ID_TIMECODE_SCALE, "u") || 1000000;
-			$log->debug("track timecode scale: $info->{timecode_scale}");
-			$info->{duration} = getInfo(substr($v->{inBuf}, 0, $size), ID_DURATION, "f") / (1000000 / $info->{timecode_scale});
-			$log->info("track duration: $info->{duration}");
+			$props->{timecode_scale} = getInfo(substr($v->{inBuf}, 0, $size), ID_TIMECODE_SCALE, "u") || 1000000;
+			$log->debug("track timecode scale: $props->{timecode_scale}");
+			$props->{duration} = getInfo(substr($v->{inBuf}, 0, $size), ID_DURATION, "f") / (1000000 / $props->{timecode_scale});
+			$log->info("track duration: $props->{duration}");
 		} elsif	($id eq ID_TRACK_ENTRY) {
-			$info->{track} = getTrackInfo(substr $v->{inBuf}, 0, $size);
-			$info->{offset}->{clusters} = $v->{position} + $size;
-			$log->debug("offset: clusters=$info->{offset}->{clusters}");
+			$props->{track} = getTrackInfo(substr $v->{inBuf}, 0, $size);
+			$props->{offset}->{clusters} = $v->{position} + $size;
+			$log->debug("offset: clusters=$props->{offset}->{clusters}");
 		} 	
 				
 		$v->{inBuf} = substr($v->{inBuf}, $size);
@@ -137,7 +160,7 @@ sub getHeaders {
 		$v->{position} += $size;
 		undef $v->{id};
 		
-		return WEBM_DONE if defined $info->{offset} && defined $info->{duration} && defined $info->{track};
+		return WEBM_DONE if defined $props->{offset} && defined $props->{duration} && defined $props->{track};
 	}	
 	
 	return WEBM_MORE;
@@ -145,12 +168,15 @@ sub getHeaders {
 
 
 sub getAudio {
-	my ($v, $info) = @_;
+	my ($v, $props) = @_;
+	
+	$v->{need}		//= EBML_NEED;		# number of bytes in buffr to allow processing
+	$v->{position}	//= 0;      		# number of bytes processed from buffer since 1st call
 		
 	if ( !defined $v->{seqnum} ) {
 		$v->{seqnum} = 0;
-		$v->{outBuf} = buildOggPage( [$info->{track}->{codec}->{header}], 0, 0x02, $v->{seqnum}++ );
-		$v->{outBuf} .= buildOggPage( [$info->{track}->{codec}->{setup}, $info->{track}->{codec}->{comment}], 0, 0x00, $v->{seqnum}++ );
+		$v->{outBuf} = buildOggPage( [$props->{track}->{codec}->{header}], 0, 0x02, $v->{seqnum}++ );
+		$v->{outBuf} .= buildOggPage( [$props->{track}->{codec}->{setup}, $props->{track}->{codec}->{comment}], 0, 0x00, $v->{seqnum}++ );
 		$log->debug("starting new audio parsing");
 	}
 	
@@ -187,10 +213,10 @@ sub getAudio {
 			$log->debug("timecode: $v->{timecode}");
 		} elsif ($id eq ID_BLOCK || $id eq ID_BLOCK_SIMPLE) {
 			my $time;
-			my $out = extractVorbis(\$v->{inBuf}, $info->{track}->{tracknum}, $size, \$time);
+			my $out = extractVorbis(\$v->{inBuf}, $props->{track}->{tracknum}, $size, \$time);
 									
 			if (defined $out) { 
-				my $pos = ($v->{timecode} + $time) * $info->{track}->{samplerate} / ($info->{timecode_scale} / 1000);
+				my $pos = ($v->{timecode} + $time) * $props->{track}->{samplerate} / ($props->{timecode_scale} / 1000);
 				$v->{outBuf} .= buildOggPage([$out], $pos, 0x00, $v->{seqnum}++);
 			}	
 		}	
@@ -542,7 +568,7 @@ sub decode_u {
 	return unpack('N', ("\0" . $_[0]) ) if ($len == 3);
 	return unpack('N', $_[0]) if ($len == 4);
 	if ($len == 8) {
-		return unpack('Q', substr($_[0], 0, 8)) if $Config{ivsize} == 8;
+		#return unpack('Q', substr($_[0], 0, 8)) if $Config{ivsize} == 8;
 		$log->error("can't unpack 64 bits integer, using 32 bits LSB");
 		return unpack('N', substr($_[0], 4, 4));
 	} 
@@ -553,6 +579,110 @@ sub decode_f {
 	return unpack('f>', $_[0]) if ($len == 4);
 	return unpack('d>', $_[0]) if ($len == 8);
 	return undef;
+}
+
+
+sub getStartOffset {
+	my ($url, $startTime, $props, $cb) = @_;
+	my $process;
+	my $var = {	'inBuf'       => '',
+				'id'          => undef,   
+				'need'        => EBML_NEED,  
+				'offset'      => $props->{offset}->{cues},       
+		};
+	
+	$process = sub {
+		Slim::Networking::SimpleAsyncHTTP->new(
+		
+			sub {
+				my $content = shift->content;
+								
+				$var->{'inBuf'} .= $content;
+				my $res = getCues($var);
+				
+				if ( $res eq WEBM_MORE ) {
+					return $cb->( $props->{offset}->{clusters} ) if length($content) < HEADER_CHUNK; 
+					
+					main::DEBUGLOG && $log->is_debug && $log->debug("paging: $var->{offset}");
+					$var->{offset} += length $content;
+					$process->();
+				} elsif ( $res eq WEBM_DONE ) {	
+					my $offset = getCueOffset($var->{outBuf}, $startTime*($props->{timecode_scale}/1000000)*1000) + $props->{segment_offset};
+					$cb->($offset);
+				} elsif ( $res eq WEBM_ERROR ) {
+					$log->warn( "could not find start offset" );
+					$cb->( $props->{offset}->{clusters} );
+				}		
+			},
+		
+			sub {
+				$log->warn( "could not find start offset" );
+				$cb->( $props->{offset}->{clusters} );
+			}
+		)->get( $url, 'Range' => "bytes=$var->{'offset'}-" . ($var->{'offset'} + HEADER_CHUNK - 1) );
+	 };	
+	
+	$process->();
+}
+
+sub getProperties {
+	my ($song, $props, $cb) = @_;
+	my $client = $song->master();
+	my $process;
+	my $var = {	'inBuf'       => '',
+				'id'          => undef,   
+				'need'        => EBML_NEED,  
+				'offset'      => 0,       
+		};
+	
+	$process = sub {
+		Slim::Networking::SimpleAsyncHTTP->new(
+		
+			sub {
+				my $content = shift->content;
+								
+				$var->{'inBuf'} .= $content;
+				my $res = getHeaders($var, $props);
+				
+				if ( $res eq WEBM_MORE ) {
+					return $cb->() if length($content) < HEADER_CHUNK; 
+					
+					main::DEBUGLOG && $log->is_debug && $log->debug("paging: $var->{offset}");
+					$var->{offset} += length $content;
+					$process->();
+				} elsif ( $res eq WEBM_DONE ) {	
+					$song->track->secs( $props->{'duration'} / 1000 ) if $props->{'duration'};
+					$song->track->bitrate( $props->{'track'}->{'bitrate'} );
+					$song->track->samplerate( $props->{'track'}->{'samplerate'} );
+					$song->track->samplesize( $props->{'track'}->{'samplesize'} );
+					$song->track->channels( $props->{'track'}->{'channels'} );
+					
+					my $id = Plugins::YouTube::ProtocolHandler->getId($song->track()->url);
+					if (my $meta = $cache->get("yt:meta-$id")) {
+						$meta->{type} = "YouTube (ogg\@$props->{'track'}->{'samplerate'}Hz)";
+						$cache->set("yt:meta-$id", $meta);
+					}
+				
+					main::INFOLOG && $log->is_info && $log->info( "samplerate: $props->{'track'}->{'samplerate'}, bitrate: $props->{'track'}->{'bitrate'}" );
+											
+					$client->currentPlaylistUpdateTime( Time::HiRes::time() );
+					Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );	
+									
+					$cb->();
+				} elsif ( $res eq WEBM_ERROR ) {
+					$log->error( "could not get webm headers" );
+					$cb->();
+				}		
+			},
+		
+			sub {
+				$log->warn("could not get codec info");
+				$cb->();
+			}
+		)->get( $song->pluginData('baseURL'), 'Range' => "bytes=$var->{'offset'}-" . ($var->{'offset'} + HEADER_CHUNK - 1) );
+	 };	
+	
+	$process->();
 }
 
 

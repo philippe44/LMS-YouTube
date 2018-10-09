@@ -45,6 +45,8 @@ $prefs->init({
 	country => setCountry(),
 	cache => 1,
 	highres_icons => 1,
+	live_delay => 60,
+	live_edge => 1,
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
@@ -174,7 +176,7 @@ sub toplevel {
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_GUIDECATEGORIES'), type => 'url', url => \&guideCategoriesHandler },
 
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_VIDEOSEARCH'),  type => 'search', url => \&searchHandler },
-
+		
 		#FIXME: is this always 10 ?
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_MUSICSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { videoCategoryId => 10 } ] },
 
@@ -183,6 +185,8 @@ sub toplevel {
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_PLAYLISTSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'playlist' } ] },
 		
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_WHOLE'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'video,channel,playlist' } ] },
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_LIVEVIDEOSEARCH'),  type => 'search', url => \&searchHandler, passthrough => [ { eventType => 'live' } ] },
 		
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_MYSUBSCRIPTIONS'), type => 'url', url => \&subscriptionsHandler, passthrough => [ { count => 2 } ] },
 		
