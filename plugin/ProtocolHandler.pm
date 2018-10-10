@@ -95,8 +95,7 @@ sub new {
 	main::DEBUGLOG && $log->is_debug && $log->debug( Dumper($props) );
 	
 	my $live_edge = $prefs->get('live_edge') && !$song->pluginData('live_ignore');
-	$song->pluginData(live_ignore => 0);
-	
+		
 	# set offset depending on format
 	$offset = $props->{'liveOffset'} if $props->{'liveOffset'} && $live_edge;
 	$offset = $props->{offset}->{clusters} if $props->{offset}->{clusters}; 
@@ -271,8 +270,15 @@ sub sysread {
 		return undef;
 	}	
 	
-	# end of streaming
+	# end of streaming and make sure timer is not running
 	main::INFOLOG && $log->is_info && $log->info("end streaming");
+	
+	if ($props->{'updatePeriod'}) {
+		main::INFOLOG && $log->is_info && $log->info("killing MPD update timer");
+		Slim::Utils::Timers::killTimers($self, \&updateMPD);
+		$props->{'updatePeriod'} = 0;
+	}
+	
 	return 0;
 }
 
@@ -561,7 +567,8 @@ sub updateMPD {
 							  
 			my ($misc, $hour, $min, $sec) = $mpd->{'minimumUpdatePeriod'} =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:([+-]?([0-9]*[.])?[0-9]+)S)?/;
 			my $updatePeriod = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
-			$updatePeriod = min($updatePeriod * 10, $props->{'timeShiftDepth'} / 2) if $updatePeriod && $props->{'timeShiftDepth'} && !$prefs->get('live_edge');
+			$updatePeriod = min($updatePeriod * 10, $props->{'timeShiftDepth'} / 2) if $updatePeriod && $props->{'timeShiftDepth'} && 
+																					   (!$prefs->get('live_edge') || ${*$self}{'song'}->pluginData('live_ignore'));
 			
 			main::INFOLOG && $log->is_info && $log->info("offset $v->{'offset'} adjustement ", $startNumber - $props->{'startNumber'}, ", update period $updatePeriod");			
 			$v->{'offset'} -= $startNumber - $props->{'startNumber'};	
