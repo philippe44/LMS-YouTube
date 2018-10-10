@@ -143,10 +143,11 @@ PLUGIN_YOUTUBE_LIVEOPTIONS
 	EN	Live stream options
 	
 PLUGIN_YOUTUBE_LIVEOPTIONSDESC
-	EN	Options for live streams. Set 'Play Edge' to play the live edge with 'Delay' is the buffering time. 
+	EN	Options for live streams. Set 'Play live edge' to play the live edge and set a delay for proper buffering (>30s). When pressing 'rew', playback
+	EN	wil restart from oldest buffered position (timeshift)
 	
 PLUGIN_YOUTUBE_LIVEEDGE
-	EN	Play Edge with
+	EN	Play live edge with
 	
 PLUGIN_YOUTUBE_LIVEDELAY
 	EN	seconds delay

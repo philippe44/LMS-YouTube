@@ -71,6 +71,18 @@ my $getProperties  = { 'ogg' => \&Plugins::YouTube::WebM::getProperties, 'aac' =
 my $getAudio 	   = { 'ogg' => \&Plugins::YouTube::WebM::getAudio, 'aac' => \&Plugins::YouTube::M4a::getAudio };
 my $getStartOffset = { 'ogg' => \&Plugins::YouTube::WebM::getStartOffset, 'aac' => \&Plugins::YouTube::M4a::getStartOffset };
 
+sub canDoAction {
+    my ( $class, $client, $url, $action ) = @_;
+    
+	main::INFOLOG && $log->is_info && $log->info( "action=$action" );
+	
+	# if restart, restart from beginning (stop being live edge)
+	$client->playingSong()->pluginData(live_ignore => 1) if $action eq 'rew' && $client->isPlaying(1);
+		
+	return 1;
+}
+
+
 sub new {
 	my $class = shift;
 	my $args  = shift;
@@ -82,10 +94,13 @@ sub new {
 	
 	main::DEBUGLOG && $log->is_debug && $log->debug( Dumper($props) );
 	
+	my $live_edge = $prefs->get('live_edge') && !$song->pluginData('live_ignore');
+	$song->pluginData(live_ignore => 0);
+	
 	# set offset depending on format
-	$offset = $props->{'liveOffset'} if $props->{'liveOffset'} && $prefs->get('live_edge');
+	$offset = $props->{'liveOffset'} if $props->{'liveOffset'} && $live_edge;
 	$offset = $props->{offset}->{clusters} if $props->{offset}->{clusters}; 
-					
+						
 	$args->{'url'} = $song->pluginData('baseURL');
 	my $seekdata = $song->can('seekdata') ? $song->seekdata : $song->{'seekdata'};
 	my $startTime = $seekdata->{'timeOffset'};
@@ -120,7 +135,7 @@ sub new {
 	# set timer for updating the MPD if needed (dash)
 	Slim::Utils::Timers::setTimer($self, time() + $props->{'updatePeriod'}, \&updateMPD) if $props->{'updatePeriod'};
 	
-	$song->startOffset($props->{'timeShiftDepth'} - $prefs->get('live_delay')) if $props->{'timeShiftDepth'} && $prefs->get('live_edge');		
+	$song->startOffset($props->{'timeShiftDepth'}) if $props->{'timeShiftDepth'} && !$live_edge;
 	
 	return $self;
 }
@@ -128,8 +143,10 @@ sub new {
 sub close {
 	my $self = shift;
 	
-	main::INFOLOG && $log->is_info && $log->info("killing MPD update timer");
-	Slim::Utils::Timers::killTimers($self, \&updateMPD);
+	if (${*$self}{'props'}->{'updatePeriod'}) {
+		main::INFOLOG && $log->is_info && $log->info("killing MPD update timer");
+		Slim::Utils::Timers::killTimers($self, \&updateMPD);
+	}	
 	
 	$self->SUPER::close(@_);
 }
@@ -313,7 +330,7 @@ sub getNextTrack {
 			if (!$streamInfo) {
 				main::INFOLOG && $log->is_info && $log->info("no stream found, trying DASH");
 				if ($dashmpd) {
-					getMPD($dashmpd, \@allowDASH, sub {
+					getMPD($song, $dashmpd, \@allowDASH, sub {
 								my $props = shift;
 								$song->pluginData(props => $props);
 								$song->pluginData(baseURL  => $props->{'baseURL'});
@@ -398,7 +415,7 @@ sub getStream {
 }
 
 sub getMPD {
-	my ($dashmpd, $allow, $cb) = @_;
+	my ($song, $dashmpd, $allow, $cb) = @_;
 	
 	# get MPD file
 	Slim::Networking::SimpleAsyncHTTP->new(
@@ -442,7 +459,7 @@ sub getMPD {
 					
 			($misc, $hour, $min, $sec) = $mpd->{'minimumUpdatePeriod'} =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:([+-]?([0-9]*[.])?[0-9]+)S)?/;
 			my $updatePeriod = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
-			$updatePeriod = min($updatePeriod * 10, $timeShiftDepth / 2) if $timeShiftDepth && !$prefs->get('live_edge');
+			$updatePeriod = min($updatePeriod * 10, $timeShiftDepth / 2) if $updatePeriod && $timeShiftDepth && !$prefs->get('live_edge');
 						
 			my $duration = $mpd->{'mediaPresentationDuration'};
 			($misc, $hour, $min, $sec) = $duration =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:([+-]?([0-9]*[.])?[0-9]+)S)?/;
@@ -544,9 +561,9 @@ sub updateMPD {
 							  
 			my ($misc, $hour, $min, $sec) = $mpd->{'minimumUpdatePeriod'} =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:([+-]?([0-9]*[.])?[0-9]+)S)?/;
 			my $updatePeriod = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
-			$updatePeriod = min($updatePeriod * 10, $props->{'timeShiftDepth'} / 2) if $props->{'timeShiftDepth'} && !$prefs->get('live_edge');
+			$updatePeriod = min($updatePeriod * 10, $props->{'timeShiftDepth'} / 2) if $updatePeriod && $props->{'timeShiftDepth'} && !$prefs->get('live_edge');
 			
-			main::INFOLOG && $log->is_info && $log->info("offset ajustement ", $startNumber - $props->{'startNumber'}, ", update period $updatePeriod");			
+			main::INFOLOG && $log->is_info && $log->info("offset $v->{'offset'} adjustement ", $startNumber - $props->{'startNumber'}, ", update period $updatePeriod");			
 			$v->{'offset'} -= $startNumber - $props->{'startNumber'};	
 						
 			$props->{'startNumber'} = $startNumber;

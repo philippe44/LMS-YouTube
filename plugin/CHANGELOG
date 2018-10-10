@@ -1,7 +1,8 @@
-0.80.0.0
+0.80.0
  - add DASH and mp4 support
- - use 'Q>' for unpacking network order bytes
-  
+ - (1) use 'Q>' for unpacking network order bytes
+ - (2) 'rew' restart from beginning of stream
+ 
 0.70.0
  - new html format, audio only file
  
