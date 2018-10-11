@@ -77,7 +77,7 @@ sub canDoAction {
 	main::INFOLOG && $log->is_info && $log->info( "action=$action" );
 	
 	# if restart, restart from beginning (stop being live edge)
-	$client->playingSong()->pluginData(live_ignore => 1) if $action eq 'rew' && $client->isPlaying(1);
+	$client->playingSong()->pluginData('props')->{'liveOffset'} = 0 if $action eq 'rew' && $client->isPlaying(1);
 		
 	return 1;
 }
@@ -94,10 +94,8 @@ sub new {
 	
 	main::DEBUGLOG && $log->is_debug && $log->debug( Dumper($props) );
 	
-	my $live_edge = $prefs->get('live_edge') && !$song->pluginData('live_ignore');
-		
 	# set offset depending on format
-	$offset = $props->{'liveOffset'} if $props->{'liveOffset'} && $live_edge;
+	$offset = $props->{'liveOffset'} if $props->{'liveOffset'};
 	$offset = $props->{offset}->{clusters} if $props->{offset}->{clusters}; 
 						
 	$args->{'url'} = $song->pluginData('baseURL');
@@ -132,15 +130,24 @@ sub new {
 	$getStartOffset->{$props->{'format'}}($args->{url}, $startTime, $props, sub { ${*$self}{'vars'}->{offset} = shift }) if !$offset;
 	
 	# set timer for updating the MPD if needed (dash)
+	${*$self}{'active'}  = 1;		
 	Slim::Utils::Timers::setTimer($self, time() + $props->{'updatePeriod'}, \&updateMPD) if $props->{'updatePeriod'};
 	
-	$song->startOffset($props->{'timeShiftDepth'}) if $props->{'timeShiftDepth'} && !$live_edge;
+	# for live stream, always set duration to timeshift depth
+	if ($props->{'timeShiftDepth'}) {
+		# only set offset when missing startTime or not starting from live edge
+		$song->startOffset($props->{'timeShiftDepth'} - $prefs->get('live_delay')) unless $startTime || !$props->{'liveOffset'};
+		$song->duration($props->{'timeShiftDepth'});
+		$props->{'startOffset'} = $song->startOffset;
+	}	
 	
 	return $self;
 }
 
 sub close {
 	my $self = shift;
+	
+	${*$self}{'active'} = 0;		
 	
 	if (${*$self}{'props'}->{'updatePeriod'}) {
 		main::INFOLOG && $log->is_info && $log->info("killing MPD update timer");
@@ -213,10 +220,11 @@ sub sysread {
 	}	
 		
 	# need more data
+	$log->error("f:$v->{'fetching'} v:$v->{'streaming'}");
 	if ( length $v->{'outBuf'} < MIN_OUT && !$v->{'fetching'} && $v->{'streaming'} ) {
 		my $url = $baseURL;
 		my @range;
-		
+						
 		if ( $props->{'segmentURL'} ) {
 			$url .= ${$props->{'segmentURL'}}[$v->{'offset'}]->{'media'};		
 			$v->{'offset'}++;
@@ -234,10 +242,10 @@ sub sysread {
 				if ( $props->{'segmentURL'} ) {
 					$v->{'streaming'} = 0 if $v->{'offset'} == @{$props->{'segmentURL'}};
 					main::DEBUGLOG && $log->is_debug && $log->debug("got chunk $v->{'offset'} length: ", length $_[0]->content, " for $url");
-					#$log->error("got chunk $v->{'offset'} length: ", length $_[0]->content, " for $url");
+					$log->error("got chunk $v->{'offset'} length: ", length $_[0]->content, " for $url");
 				} else {
-					$v->{'streaming'} = 0 if length($_[0]->content) < DATA_CHUNK;
 					main::DEBUGLOG && $log->is_debug && $log->debug("got chunk length: ", length $_[0]->content, " from ", $v->{offset} - DATA_CHUNK, " for $url");
+					$v->{'streaming'} = 0 if length($_[0]->content) < DATA_CHUNK;
 				}		
 			},
 
@@ -259,8 +267,10 @@ sub sysread {
 	}	
 
 	# process all available data	
+	$log->error("starting audio process");
 	$getAudio->{$props->{'format'}}($v, $props) if length $v->{'inBuf'};
-	
+	$log->error("done");
+		
 	if ( my $bytes = min(length $v->{'outBuf'}, $maxBytes) ) {
 		$_[1] = substr($v->{'outBuf'}, 0, $bytes);
 		$v->{'outBuf'} = substr($v->{'outBuf'}, $bytes);
@@ -272,12 +282,7 @@ sub sysread {
 	
 	# end of streaming and make sure timer is not running
 	main::INFOLOG && $log->is_info && $log->info("end streaming");
-	
-	if ($props->{'updatePeriod'}) {
-		main::INFOLOG && $log->is_info && $log->info("killing MPD update timer");
-		Slim::Utils::Timers::killTimers($self, \&updateMPD);
-		$props->{'updatePeriod'} = 0;
-	}
+	$props->{'updatePeriod'} = 0;
 	
 	return 0;
 }
@@ -336,7 +341,7 @@ sub getNextTrack {
 			if (!$streamInfo) {
 				main::INFOLOG && $log->is_info && $log->info("no stream found, trying DASH");
 				if ($dashmpd) {
-					getMPD($song, $dashmpd, \@allowDASH, sub {
+					getMPD($dashmpd, \@allowDASH, sub {
 								my $props = shift;
 								$song->pluginData(props => $props);
 								$song->pluginData(baseURL  => $props->{'baseURL'});
@@ -421,7 +426,7 @@ sub getStream {
 }
 
 sub getMPD {
-	my ($song, $dashmpd, $allow, $cb) = @_;
+	my ($dashmpd, $allow, $cb) = @_;
 	
 	# get MPD file
 	Slim::Networking::SimpleAsyncHTTP->new(
@@ -543,8 +548,9 @@ sub updateMPD {
 	my $self = shift;
 	my $v = $self->vars;
 	my $props = ${*$self}{'props'};
+	my $song = ${*$self}{'song'};
 	
-	return unless $props && $props->{'updatePeriod'};
+	return unless ${*$self}{'active'} && $props && $props->{'updatePeriod'} && $song->isActive;
 		
 	# get MPD file
 	Slim::Networking::SimpleAsyncHTTP->new(
@@ -567,8 +573,7 @@ sub updateMPD {
 							  
 			my ($misc, $hour, $min, $sec) = $mpd->{'minimumUpdatePeriod'} =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:([+-]?([0-9]*[.])?[0-9]+)S)?/;
 			my $updatePeriod = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
-			$updatePeriod = min($updatePeriod * 10, $props->{'timeShiftDepth'} / 2) if $updatePeriod && $props->{'timeShiftDepth'} && 
-																					   (!$prefs->get('live_edge') || ${*$self}{'song'}->pluginData('live_ignore'));
+			$updatePeriod = min($updatePeriod * 10, $props->{'timeShiftDepth'} / 2) if $updatePeriod && $props->{'timeShiftDepth'} && !$props->{'liveOffset'};
 			
 			main::INFOLOG && $log->is_info && $log->info("offset $v->{'offset'} adjustement ", $startNumber - $props->{'startNumber'}, ", update period $updatePeriod");			
 			$v->{'offset'} -= $startNumber - $props->{'startNumber'};	
@@ -583,7 +588,10 @@ sub updateMPD {
 									 $period->{'SegmentList'}->{'SegmentURL'};
 			
 			$v->{'streaming'} = 1 if $v->{'offset'} != @{$props->{'segmentURL'}};
-			Slim::Utils::Timers::setTimer($self, time() + $updatePeriod, \&updateMPD); 
+			Slim::Utils::Timers::setTimer($self, time() + $updatePeriod, \&updateMPD);
+
+			# UI displayed position is startOffset + elapsed so that it appeared fixed
+			$song->startOffset( $props->{'startOffset'} - $song->master->songElapsedSeconds);
 		},
 		
 		sub {
