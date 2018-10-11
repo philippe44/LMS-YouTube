@@ -108,7 +108,7 @@ sub getAudio {
 		
 		if ($v->{mdat}) {
 			my $esds = $v->{'moov'}->{'trak'}->{'mdia'}->{'minf'}->{'stbl'}->{'stsd'}->{'entries'}->{'mp4a'}->{'esds'};	
-			$v->{outBuf} .= convertDashSegtoADTS($esds, $v->{mdat}->{data}, $v->{'moof'}->{'traf'}->{'trun'}, $v->{'moof'}->{'traf'}->{'tfhd'});
+			$v->{outBuf} .= convertDashSegtoADTS($esds, $v->{mdat}->{data}, $v->{'moof'}->{'traf'});
 			main::DEBUGLOG && $log->is_debug && $log->debug("extracted ", length $v->{mdat}->{data}, " bytes, out ", length $v->{outBuf});
 			$v->{mdat} = undef;
 		}	
@@ -418,13 +418,13 @@ sub mp4esdsToADTSHeader {
 }	
 
 sub convertDashSegtoADTS{
-	my ($mp4esds, $dashsegment, $mp4trun, $mp4tfhd) = @_;
+	my ($mp4esds, $dashsegment, $traf) = @_;
 	my $segpos = 0;
-	my $sample_count = $mp4trun->{'sample_count'};
+	my $sample_count = $traf->{'trun'}->{'sample_count'};
 	my $adtssegment ='';
 	
-	foreach my $sample (@{$mp4trun->{'samples'}}) {
-		my $sample_size = $sample->{'sample_size'} || $mp4tfhd->{'default_sample_size'};
+	foreach my $sample (@{$traf->{'trun'}->{'samples'}}) {
+		my $sample_size = $sample->{'sample_size'} || $traf->{'tfhd'}->{'default_sample_size'};
 		$adtssegment .= mp4esdsToADTSHeader($mp4esds, $sample_size);
 		$adtssegment .= substr($dashsegment,$segpos, $sample_size);
 		$segpos += $sample_size;
