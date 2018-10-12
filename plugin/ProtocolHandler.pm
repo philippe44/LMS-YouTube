@@ -220,7 +220,6 @@ sub sysread {
 	}	
 		
 	# need more data
-	$log->error("f:$v->{'fetching'} v:$v->{'streaming'}");
 	if ( length $v->{'outBuf'} < MIN_OUT && !$v->{'fetching'} && $v->{'streaming'} ) {
 		my $url = $baseURL;
 		my @range;
@@ -242,7 +241,6 @@ sub sysread {
 				if ( $props->{'segmentURL'} ) {
 					$v->{'streaming'} = 0 if $v->{'offset'} == @{$props->{'segmentURL'}};
 					main::DEBUGLOG && $log->is_debug && $log->debug("got chunk $v->{'offset'} length: ", length $_[0]->content, " for $url");
-					$log->error("got chunk $v->{'offset'} length: ", length $_[0]->content, " for $url");
 				} else {
 					main::DEBUGLOG && $log->is_debug && $log->debug("got chunk length: ", length $_[0]->content, " from ", $v->{offset} - DATA_CHUNK, " for $url");
 					$v->{'streaming'} = 0 if length($_[0]->content) < DATA_CHUNK;
@@ -267,9 +265,7 @@ sub sysread {
 	}	
 
 	# process all available data	
-	$log->error("starting audio process");
 	$getAudio->{$props->{'format'}}($v, $props) if length $v->{'inBuf'};
-	$log->error("done");
 		
 	if ( my $bytes = min(length $v->{'outBuf'}, $maxBytes) ) {
 		$_[1] = substr($v->{'outBuf'}, 0, $bytes);
@@ -550,6 +546,7 @@ sub updateMPD {
 	my $props = ${*$self}{'props'};
 	my $song = ${*$self}{'song'};
 	
+	# try many ways to detect inactive song - seems that the timer is "difficult" to stop
 	return unless ${*$self}{'active'} && $props && $props->{'updatePeriod'} && $song->isActive;
 		
 	# get MPD file

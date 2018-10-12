@@ -2,6 +2,7 @@
  - add DASH and mp4 support
  - (1) use 'Q>' for unpacking network order bytes
  - (2) 'rew' restart from beginning of stream
+ - (3) start from anywhere in timeshift buffer
  
 0.70.0
  - new html format, audio only file
