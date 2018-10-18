@@ -196,6 +196,8 @@ sub toplevel {
 		
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_URLRELATEDSEARCH'), type => 'search', url => \&relatedURLHandler },
 		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_PLAYLISTID'), type => 'search', url  => \&playlistIdHandler, },
+		
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_RECENTLYPLAYED'), url  => \&recentHandler, },
 	]);
 }
@@ -257,6 +259,33 @@ sub relatedURLHandler {
 		_index 			 => $args->{index},
 		_quantity 		 => $args->{quantity},
 	});	
+}
+
+
+sub playlistIdHandler {
+	my ($client, $cb, $args) = @_;
+	my $url = $args->{search};
+
+	# because search replaces '.' by ' '
+	$url =~ s/ /./g;
+	my ($id) = $url =~ /list=([^&]+)/;
+	$id ||= $url;
+	
+	if (!$id) {
+		$cb->( { items => [ { 
+			type => 'text',
+			name => cstring($client, 'PLUGIN_YOUTUBE_BADURL'), 
+			} ] } );
+		return;
+	}
+				
+	Plugins::YouTube::API->searchDirect('playlists', sub {
+		$cb->( _renderList($_[0] ) );
+	}, {
+		id 		=> $id,
+		_index  	=> $args->{index},
+		_quantity 	=> $args->{quantity},
+	});
 }
 
 
