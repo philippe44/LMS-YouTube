@@ -278,13 +278,13 @@ sub playlistIdHandler {
 			} ] } );
 		return;
 	}
-				
-	Plugins::YouTube::API->searchDirect('playlists', sub {
-		$cb->( _renderList($_[0] ) );
-	}, {
-		id 		=> $id,
+	
+	Plugins::YouTube::API->searchDirect( 'playlistItems', sub {
+			$cb->( _renderList($_[0]) ); 
+	},{ 
 		_index  	=> $args->{index},
 		_quantity 	=> $args->{quantity},
+		playlistId  => $id ,
 	});
 }
 

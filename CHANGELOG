@@ -1,3 +1,6 @@
+0.82.0
+ - playlist search by id return directly video items, saving one click
+ 
 0.81.0
  - add search by playlist id
  
