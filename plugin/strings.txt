@@ -155,6 +155,9 @@ PLUGIN_YOUTUBE_LIVEEDGE
 PLUGIN_YOUTUBE_LIVEDELAY
 	EN	seconds delay
 	
+PLUGIN_YOUTUBE_CLIENTID
+	EN	Client ID
+	
 PLUGIN_YOUTUBE_CLIENTID_DESC
 	EN	Client ID as found on your google console page https://console.developers.google.com/apis/dashboard?
 

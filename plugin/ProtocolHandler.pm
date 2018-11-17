@@ -101,11 +101,11 @@ sub new {
 	$args->{'url'} = $song->pluginData('baseURL');
 	my $seekdata = $song->can('seekdata') ? $song->seekdata : $song->{'seekdata'};
 	my $startTime = $seekdata->{'timeOffset'};
-  
+	  
 	if ($startTime) {
 		$song->can('startOffset') ? $song->startOffset($startTime) : ($song->{startOffset} = $startTime);
 		$args->{'client'}->master->remoteStreamStartTime(Time::HiRes::time() - $startTime);
-		$offset = 0;
+		$offset = undef;
 	}
 	
 	main::INFOLOG && $log->is_info && $log->info("url: $args->{url}");
@@ -126,9 +126,13 @@ sub new {
 		};
 	}
 	
-	# set starting offset (bytes or index, depending on streaming format)
-	$getStartOffset->{$props->{'format'}}($args->{url}, $startTime, $props, sub { ${*$self}{'vars'}->{offset} = shift }) if !$offset;
-	
+	# set starting offset (bytes or index) if not defined yet
+	$getStartOffset->{$props->{'format'}}($args->{url}, $startTime, $props, sub { 
+			${*$self}{'vars'}->{offset} = shift;
+			$log->info("starting from offset ", ${*$self}{'vars'}->{offset}); 
+		} 
+	) if !defined $offset;
+		
 	# set timer for updating the MPD if needed (dash)
 	${*$self}{'active'}  = 1;		
 	Slim::Utils::Timers::setTimer($self, time() + $props->{'updatePeriod'}, \&updateMPD) if $props->{'updatePeriod'};
@@ -196,7 +200,11 @@ sub sysread {
 	my $baseURL = ${*$self}{'url'};
 	my $props = ${*$self}{'props'};
 	
-	$v->{'offset'} ||= 0;
+	# means waiting for offset to be set
+	if ( !defined $v->{offset} ) {
+		$! = EINTR;
+		return undef;
+	}
 		
 	if (!$v->{'fetching'} && !$v->{'init'} && $props->{'initializeURL'}) {
 	

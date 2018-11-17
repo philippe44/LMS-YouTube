@@ -1,3 +1,10 @@
+0.83.1
+ - offset was not set before sysread started (race condition) when startime was set
+ 
+0.83.0
+ - add back ClientID string
+ - additional signature
+ 
 0.82.0
  - playlist search by id return directly video items, saving one click
  
