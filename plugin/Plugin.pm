@@ -158,7 +158,7 @@ sub toplevel {
 	
 	if (!$prefs->get('APIkey')) {
 		$callback->([
-			{ name => cstring($client, 'PLUGIN_YOUTUBE_MISSINGKEY'), type => 'text' },
+			{ name => cstring($client, 'PLUGIN_YOUTUBE_MISSINGKEY'), type => 'textarea' },
 		]);
 		return;
 	}

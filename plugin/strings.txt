@@ -2,9 +2,20 @@ PLUGIN_YOUTUBE
 	EN	YouTube
 
 PLUGIN_YOUTUBE_DESC
+	DE	Audio von YouTube Videos wiedergeben. ACHTUNG: diese Plugin benötigt mehr Bandbreite als andere Streaming Dienste, da zur Wiedergabe des Tones das ganze Video heruntergeladen wird, obwohl nur der Ton wiedergegeben wird.
 	EN	Play audio from YouTube videos.  WARNING: this plugin will use more network bandwidth than other streaming services as the entire video is being streamed even though only the audio is played.	Updated to API v3
 	
 PLUGIN_YOUTUBE_MISSINGKEY
+	DE	Fehlender YouTube API Schlüssel (siehe Einstellungen). Um einen Schlüssel zu erhalten:
+	DE	- mit deinem Gmail Konto
+	DE	- https://console.developers.google.com/apis/api/youtube/overview
+	DE	- klicke "Create a Project", falls du noch keins hast
+	DE	- im nächsten Bildschirm auf "Credentials" gehen
+	DE	- klicke "Create Credentials", "API Key", dann "Browser Key"
+	DE	- klicke "Create", dann kopiere den Schlüssel
+	DE	- gehe zurück nach https://console.developers.google.com/apis/api/youtube/overview
+	DE	- klicke "Enable"
+	DE	- füge den Schlüssel in den YouTube Plugin Einstellungen ein
 	EN	Missing YouTube API key (see settings). To get a key:
 	EN	- using your gmail account
 	EN	- https://console.developers.google.com/apis/api/youtube/overview
@@ -17,75 +28,107 @@ PLUGIN_YOUTUBE_MISSINGKEY
 	EN	- paste the key in the YT plugin settings
 	
 PLUGIN_YOUTUBE_MISSINGSSL
+	DE	SSL wird benögtig (installiere mit dem Paket-Manager deines Betriebssystems, z.B. "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
 	EN	SSL required (try to install it using CPAN and/or on Linux do "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
 	
 PLUGIN_YOUTUBE_MISSINGOAUTH
+	DE	Oauth Konfiguration fehlt, siehe YouTube Plugin Einstellungen
 	EN	Oauth configuration missing, please see YouTube plugin settings
 	
 PLUGIN_YOUTUBE_NA
+	DE	nicht verfügbar
 	EN	n/a
 
+PLUGIN_YOUTUBE_SEARCH
+	DE	Suche
+	EN	Search
+
 PLUGIN_YOUTUBE_VIDEOSEARCH
+	DE	Video suchen
 	EN	Video Search
 	
 PLUGIN_YOUTUBE_MUSICSEARCH
+	DE	Musik suchen
 	EN	Music Search
 
 PLUGIN_YOUTUBE_CHANNELSEARCH
+	DE	Kanal suchen
 	EN	Channel Search
 
 PLUGIN_YOUTUBE_PLAYLISTSEARCH
+	DE	Wiedergabeliste suchen
 	EN	Playlist Search
 	
 PLUGIN_YOUTUBE_LIVEVIDEOSEARCH
-	EN	Live Video Search	
+	DE	Live Video suchen
+	EN	Live Video Search
 	
 PLUGIN_YOUTUBE_MYSUBSCRIPTIONS
+	DE	Meine Abonnements
 	EN	My Subscriptions
 	
 PLUGIN_YOUTUBE_MYPLAYLISTS
+	DE	Meine Wiedergabelisten
 	EN	My Playlists
 	
 PLUGIN_YOUTUBE_PLAYLISTID
 	EN	Playlist id
 
 PLUGIN_YOUTUBE_GUIDECATEGORIES
+	DE	Geführte Kanäle
 	EN	Guided Channels 
 
 PLUGIN_YOUTUBE_VIDEOCATEGORIES
+	DE	Video Kategorien
 	EN	Video Categories
 
 PLUGIN_YOUTUBE_RECENTLYPLAYED
+	DE	Kürzlich gespielt
 	EN	Recently Played
 	
 PLUGIN_YOUTUBE_URL
+	DE	YouTube URL oder Video ID
 	EN	YouTube URL or Video id
 
 PLUGIN_YOUTUBE_URLRELATEDSEARCH
+	DE	Verwandte URL oder Video ID
 	EN	Related to URL or Video id
 	
 PLUGIN_YOUTUBE_WHOLE
+	DE	YouTube Suche (alles)
 	EN	YouTube Search (everything)
 	
 PLUGIN_YOUTUBE_PLAYALL
+	DE	Alle Titel
 	EN	All tracks
 	
 PLUGIN_YOUTUBE_BADURL
+	DE	Ungültige YouTube URL
 	EN	Bad YouTube URL
 
 PLUGIN_YOUTUBE_ON_YOUTUBE
+	DE	Auf YouTube
 	EN	On YouTube
 
 PLUGIN_YOUTUBE_WEBLINK
+	DE	YouTube Video anschauen
 	EN	Watch YouTube Video
 
 PLUGIN_YOUTUBE_PLAYLINK
+	DE	Video wiedergeben
 	EN	Play Video
 
 PLUGIN_YOUTUBE_BANNER
+	DE	Warnung
 	EN	WARNING
 
 PLUGIN_YOUTUBE_BANNER_TEXT
+	DE	Beachte bitte, dass dieses Plugin das ganze YouTube Video herunterlädt um die Audiowiedergabe zu ermöglichen.
+	DE	Dies benötigt wesentlich mehr Netzwerk-Bandbreite als reines Audio-Streaming. Bitte berücksichtige dies, falls
+	DE	deine Internet-Verbindung nach Datenmenge abgerechnet wird. <br>
+	DE	Beachte auch, dass SSL benötigt wird. Falls das Plugin auf Linux nicht funktioniiert, öffne ein Terminal und
+	DE	führe folgenden Befehl aus:
+	DE	"sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl"
 	EN	Please note that this plugin streams the entire YouTube video file to playback the audio stream.  
 	EN	This will use use significantly more network bandwidth than audio only streaming.  Please consider
 	EN	this if your internet connection has a usage charge.<br>
@@ -94,46 +137,60 @@ PLUGIN_YOUTUBE_BANNER_TEXT
 	EN	"sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl"
 
 PLUGIN_YOUTUBE_APIKEY
+	DE	YouTube API Access Key.
 	EN	YouTube API access key.
 
 PLUGIN_YOUTUBE_APIKEY_DESC
+	DE	YouTube API v3 braucht einen Access Key. Besuche https://console.developers.google.com/start.
 	EN	YouTube API v3 needs a key to access. Goto https://console.developers.google.com/start
 
 PLUGIN_YOUTUBE_MAXITEMS
+	DE	Anzahl Suchresultate
 	EN	Items per search
 
 PLUGIN_YOUTUBE_MAXITEMS_DESC
+	DE	Maximale Anzahl Resultate von Suchresultaten
 	EN	Maximum number of items a search can return
 	
 PLUGIN_YOUTUBE_ICONRES
+	DE	Hochauflösende Vorschaubilder
 	EN	High resolution icons
 
 PLUGIN_YOUTUBE_ICONRES_DESC
+	DE	Benutze hochauflösende Vorschaubilder (benötigt mehr Zeit zum Laden)
 	EN	Select high resolution icons (nicer display with some 3rd party apps like iPeng but requires smore time for 
 	EN	loading long playlist)
 	
 PLUGIN_YOUTUBE_COUNTRY
+	DE	Land für die Kategorien
 	EN	Country for categories
 
 PLUGIN_YOUTUBE_COUNTRY_DESC
+	DE	Setze den zweistelligen Buchstabencode für das Land, das bei der Suche nach Kategorien verwendet werden soll.
 	EN	Set the 2-letters country used to search available categories
 
 PLUGIN_YOUTUBE_CACHE
+	DE	Cache löschen
 	EN	Flush cache 
 
 PLUGIN_YOUTUBE_CACHE_DESC
+	DE	Suchresultate werden für einen Tage zwischengespeichert. Klicke, um Speicher zu löschen.
 	EN	Search results are cached for a day. Click to flush them
 
 PLUGIN_YOUTUBE_CHANNELTAGS
+	DE	Kanal-Identifikationstags
 	EN	Channel identification tags
 
 PLUGIN_YOUTUBE_PLAYLISTTAGS
+	DE	Wiedergabelisten-Identifikationstags
 	EN	Playlist identification tags
 
 PLUGIN_YOUTUBE_PLAYLISTTAGS_DESC
+	DE	Um Wiedergabelisten in Suchresultaten hervorzuheben, verwende Zeichenkette oder Formatierungsanweisung (z.B. \<b>...\</b> für fett) die vor und nach dem Titel eingefügt werden sollen
 	EN	To identify playlists items in a search result, set string or font modifier (eg \<b> and \</b> for bold) to be added before and after then title
 	
 PLUGIN_YOUTUBE_CHANNELTAGS_DESC
+	DE	Um Kanäle in Suchresultaten hervorzuheben, verwende Zeichenkette oder Formatierungsanweisung (z.B. \<b>...\</b> für fett) die vor und nach dem Titel eingefügt werden sollen
 	EN	To identify channels items in a search result, set string or font modifier (eg \<b> and \</b> for bold) to be added before and after then title
 	
 PLUGIN_YOUTUBE_PREFIX
@@ -143,6 +200,7 @@ PLUGIN_YOUTUBE_SUFFIX
 	EN	Suffix
 	
 PLUGIN_YOUTUBE_LIVEOPTIONS
+	DE	Live Stream Einstellungen
 	EN	Live stream options
 	
 PLUGIN_YOUTUBE_LIVEOPTIONSDESC
@@ -153,46 +211,66 @@ PLUGIN_YOUTUBE_LIVEEDGE
 	EN	Play live edge with
 	
 PLUGIN_YOUTUBE_LIVEDELAY
+	DE	Sekunden Verzögerung
 	EN	seconds delay
 	
 PLUGIN_YOUTUBE_CLIENTID
 	EN	Client ID
 	
 PLUGIN_YOUTUBE_CLIENTID_DESC
+	DE	Eine Client ID, wie du sie in der Google Konsole finden kannst (https://console.developers.google.com/apis/dashboard?)
 	EN	Client ID as found on your google console page https://console.developers.google.com/apis/dashboard?
 
 PLUGIN_YOUTUBE_CLIENTSECRET
 	EN	Client Secret
 	
 PLUGIN_YOUTUBE_CLIENTSECRET_DESC
-	EN	Client ID as found on your google console page https://console.developers.google.com/apis/dashboard?
+	DE	Eine Client Secret, wie du es in der Google Konsole finden kannst (https://console.developers.google.com/apis/dashboard?)
+	EN	Client Secret as found on your google console page https://console.developers.google.com/apis/dashboard?
 		
 PLUGIN_YOUTUBE_OAUTH
+	DE	Oauth2 Anmeldung
 	EN	Oauth2 authorization
 	
 PLUGIN_YOUTUBE_CLIENTOAUTH_DESC
+	DE	Klicke auf den Link, um zur Google Konsole zu gehen, und gib dem Plugin <b>Lesezugriff</b>.
 	EN	Click on the link to go to google console and authorize the plugin to <b>read</b> your YouTube account
 	EN	Clearing the access token will force a refresh 
 	
 PLUGIN_YOUTUBE_OAUTHLINK
+	DE	Klicke hier, um Zugriff zu gewähren
 	EN	Click here to authorize
 	
 PLUGIN_YOUTUBE_GETCODE
+	DE	"Erhalte Code"
 	EN	"Get Code"
 	
 PLUGIN_YOUTUBE_REFRESH
+	DE	"Aktualisieren"
 	EN	"Refresh"
 	
 PLUGIN_YOUTUBE_OAUTHCODE
+	DE	gib diesen Code ein
 	EN	and enter this code
 	
 PLUGIN_YOUTUBE_CLEARTOKEN
+	DE	Access Token löschen
 	EN	Clear access token
 	
 PLUGIN_YOUTUBE_OAUTHHOWTO
+	DE	So verwendest du dein persönliches Konto
 	EN	How to use personal account
 	
 PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT
+	DE	- gehe nach <a href="https://console.developers.google.com/apis/credentials?" target="none">Google Console Credentials</a> 
+	DE	und wähle dein YouTube Projekt
+	DE	<br>- wähle "Create Credentials", dann "OAuth Client ID", dann "Other"
+	DE	<br>- gib einen Namen
+	DE	<br>- klicke "Create", das wird eine Client ID und Client Secrete generieren
+	DE	<br>- Füge Client ID und Client Secret hier ein, speichere die Einstellungen
+	DE	<br>- klicke "Erhalte Code". Falls rechts nichts passiert, klicke "Aktualisieren"
+	DE	<br>- kopiere den roten Code, und "Klicke hier, um Zugriff zu gewähren". YouTube wird dich auffordern, den Code einzugeben.
+	DE	<br>- zurück in LMS solltest du nun "Meine Abonnements" und "Meine Wiedergabelisten" verwenden können
 	EN	- go to <a href="https://console.developers.google.com/apis/credentials?" target="none">Google Console Credentials</a> 
 	EN	and select your YouTube project
 	EN	<br>- select "Create credentials", then "OAuth client ID" and then "Other" 
