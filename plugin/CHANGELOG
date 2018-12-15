@@ -1,3 +1,6 @@
+0.84.0
+ - APIKey is trimmed 
+
 0.83.1
  - offset was not set before sysread started (race condition) when startime was set
  
