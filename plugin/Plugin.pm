@@ -601,6 +601,8 @@ sub trackInfoMenu {
 			passthrough => [ { q => "($artist)+($title)" } ], 
 		};
 	}
+
+	return;
 }
 
 sub albumInfoMenu {
@@ -620,6 +622,8 @@ sub albumInfoMenu {
 			passthrough => [ { type => 'video,channel,playlist', q => "($artist)+($albumTitle)" } ], 
 		};
 	}
+
+	return;
 }
 
 sub artistInfoMenu {
@@ -635,6 +639,8 @@ sub artistInfoMenu {
 			passthrough => [ { type => 'video,channel,playlist', q => "($artist)" } ], 
 		};
 	}
+
+	return;
 }
 
 sub webVideoLink {
@@ -663,6 +669,8 @@ sub webVideoLink {
 			};
 		}
 	}
+
+	return;
 }
 
 sub searchInfoMenu {
