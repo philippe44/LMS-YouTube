@@ -26,18 +26,18 @@ sub cache_player {
 
 	if ($code =~ /\.sig\|\|([a-zA-Z0-9\$]+)\(/) {
 		$funcname = $1;
-	} elsif ($code =~ /\bc\s*&&\s*d\.set\([^,]+\s*,\s*([a-zA-Z0-9\$]+)\(/) {
+	} elsif ($code =~ /\bc\s*&&\s*d\.set\([^,]+\s*,\s*(?:encodeURIComponent\s*\()?\s*([a-zA-Z0-9\$]+)\(/) {
 		$funcname = $1;
 	} elsif ($code =~ /\bc\s*&&\s*d\.set\([^,]+\s*,\s*\([^)]*\)\s*\(\s*([a-zA-Z0-9\$]+)\(/) {
 		$funcname = $1;
-	} elsif ($code =~ /yt\.akamaized\.net\/\)\s*\|\|\s*.*?\s*c\s*&&\s*d\.set\([^,]+\s*,\s*([a-zA-Z0-9\$]+)\(/) {
+	} elsif ($code =~ /yt\.akamaized\.net\/\)\s*\|\|\s*.*?\s*c\s*&&\s*d\.set\([^,]+\s*,\s*(?:encodeURIComponent\s*\()?([a-zA-Z0-9\$]+)\(/) {
 		$funcname = $1;
 	} elsif ( $code =~ /(["\'])signature\1\s*,\s*([a-zA-Z0-9\$]+)\(/ ) {
 		$funcname = $2;
 	} else {	
 		die "Cannot find JS player signature function name in '" . $code . "'";	
 	}	
-	
+		
     $players{$uri} = $js->callable($funcname);
 }
 

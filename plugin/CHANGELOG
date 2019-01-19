@@ -1,3 +1,7 @@
+0.85.0
+ - return nothing in info function
+ - update signature regex
+
 0.84.0
  - APIKey is trimmed 
 
