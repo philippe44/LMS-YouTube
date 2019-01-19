@@ -328,14 +328,14 @@ sub getNextTrack {
 									
 			main::DEBUGLOG && $log->is_debug && $log->debug($http->content);
 			
-			my ($streams) = $http->content =~ /\"url_encoded_fmt_stream_map\":\"(.*?)\"/;
-			$streams =~ s/\\u0026/\&/g;
+			my $content = $http->content;
+			$content =~ s/\\u0026/\&/g;
+			$content =~ s/\\//g;
 			
-			my ($dashmpd) = $http->content =~ /\"dashmpd\":\"(.*?)\"/;
-			$dashmpd =~ s/\\u0026/\&/g;
-			$dashmpd =~ s/\\//g;
-			            			
-			main::DEBUGLOG && $log->is_debug && $log->debug($streams);
+			my ($streams) = $content =~ /\"url_encoded_fmt_stream_map\":\"(.*?)\"/;
+			my ($dashmpd) = $content =~ /\"dashManifestUrl\":\"(.*?)\"/;
+						           			
+			main::DEBUGLOG && $log->is_debug && $log->debug("streams: $streams\ndashmpg: $dashmpd");
 			
 			# first try non-DASH streams;
 			main::INFOLOG && $log->is_info && $log->info("trying regular streams");
@@ -352,7 +352,7 @@ sub getNextTrack {
 								$getProperties->{$props->{'format'}}($song, $props, $successCb);
 							} );
 				} else {	
-					($streams) = $http->content =~ /\"adaptive_fmts\":\"(.*?)\"/;
+					($streams) = $content =~ /\"adaptive_fmts\":\"(.*?)\"/;
 					$streams =~ s/\\u0026/\&/g;
 					$streamInfo = getStream($streams, \@allowDASH);
 				}
@@ -360,7 +360,7 @@ sub getNextTrack {
 			
 			# process non-DASH streams
 			if ($streamInfo) {
-					getSignature($http->content, $streamInfo->{'sig'}, $streamInfo->{'encrypted'}, sub {
+					getSignature($content, $streamInfo->{'sig'}, $streamInfo->{'encrypted'}, sub {
 								my $sig = shift;
 								if (defined $sig) {
 									my $props = { format => $streamInfo->{'format'} };

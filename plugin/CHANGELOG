@@ -1,3 +1,6 @@
+0.85.1
+ - dashmpg is now dashManifestUrl ... not sure how to handle these changes
+ 
 0.85.0
  - return nothing in info function
  - update signature regex
