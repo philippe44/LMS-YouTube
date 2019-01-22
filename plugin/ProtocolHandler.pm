@@ -527,14 +527,16 @@ sub getMPD {
 			if ($updatePeriod && $prefs->get('live_edge') && $props->{'segmentTimeline'}) {
 				my $index = scalar @{$props->{'segmentTimeline'}} - 1;
 				my $delay = $prefs->get('live_delay');
-	
-				while ($delay > 0 && $index > 0) {
-					$delay -= ${$props->{'segmentTimeline'}}[$index]->{'d'} / $props->{'timescale'};
+				my $edgeYield = 0;
+								
+				while ($delay > $edgeYield && $index > 0) {
+					$edgeYield += ${$props->{'segmentTimeline'}}[$index]->{'d'} / $props->{'timescale'};
 					$index--;
 				}	
 				
+				$props->{'edgeYield'} = $edgeYield;
 				$props->{'liveOffset'} = $index;
-				main::INFOLOG && $log->is_info && $log->info("live edge $index/", scalar @{$props->{'segmentTimeline'}});
+				main::INFOLOG && $log->is_info && $log->info("live edge $index/", scalar @{$props->{'segmentTimeline'}}, ", edge yield $props->{'edgeYield'}");
 			}	
 								
 			$cb->($props);
@@ -570,7 +572,7 @@ sub updateMPD {
 			my ($selAdapt) = grep { $_->{'id'} == $props->{'mpd'}->{'adaptId'} } @{$period->{'AdaptationSet'}}; 
 			my ($selRepres) = grep { $_->{'id'} == $props->{'mpd'}->{'represId'} } @{$selAdapt->{'Representation'}}; 
 			
-			#$log->error("UPDATEMPD ", Dumper($selRepres));
+			#$log->error("UPDATEMPD ", Dumper($mpd));
 						
 			my $startNumber = $selRepres->{'SegmentList'}->{'startNumber'} // 
 							  $selAdapt->{'SegmentList'}->{'startNumber'} // 
@@ -578,10 +580,15 @@ sub updateMPD {
 							  
 			my ($misc, $hour, $min, $sec) = $mpd->{'minimumUpdatePeriod'} =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:([+-]?([0-9]*[.])?[0-9]+)S)?/;
 			my $updatePeriod = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
-			$updatePeriod = min($updatePeriod * 10, $props->{'timeShiftDepth'} / 2) if $updatePeriod && $props->{'timeShiftDepth'} && !$props->{'liveOffset'};
+			
+			if ($updatePeriod && $props->{'timeShiftDepth'}) {
+				$updatePeriod = max($updatePeriod, $props->{'edgeYield'} / 2); 
+				$updatePeriod = min($updatePeriod, $props->{'timeShiftDepth'} / 2); 
+			}	
 			
 			main::INFOLOG && $log->is_info && $log->info("offset $v->{'offset'} adjustement ", $startNumber - $props->{'startNumber'}, ", update period $updatePeriod");			
 			$v->{'offset'} -= $startNumber - $props->{'startNumber'};	
+			$v->{'offset'} = 0 if $v->{'offset'} < 0;
 						
 			$props->{'startNumber'} = $startNumber;
 			$props->{'updatePeriod'} = $updatePeriod;
@@ -594,7 +601,7 @@ sub updateMPD {
 			
 			$v->{'streaming'} = 1 if $v->{'offset'} != @{$props->{'segmentURL'}};
 			Slim::Utils::Timers::setTimer($self, time() + $updatePeriod, \&updateMPD);
-
+			
 			# UI displayed position is startOffset + elapsed so that it appeared fixed
 			$song->startOffset( $props->{'startOffset'} - $song->master->songElapsedSeconds);
 		},

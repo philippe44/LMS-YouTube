@@ -1,3 +1,7 @@
+0.85.2
+ - update MPD no slower than half of actual (ot desired) edge delay (live streams with very few segments)
+ - segment offset cannot be negative ((live streams with very few segments)
+ 
 0.85.1
  - dashmpg is now dashManifestUrl ... not sure how to handle these changes
  

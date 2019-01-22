@@ -46,13 +46,13 @@ sub getStartOffset {
 	my $index = 0;
 	my $time = 0;
 	
-	$cb->(0) unless $startTime;
-		
-	foreach (@{$props->{'segmentTimeline'}}) {
-		$time += $_->{'d'} / $props->{'timescale'};
-		last if $time >= $startTime;
-		$index++;
-	}
+	if ($startTime) {
+		foreach (@{$props->{'segmentTimeline'}}) {
+			$time += $_->{'d'} / $props->{'timescale'};
+			last if $time >= $startTime;
+			$index++;
+		}	
+	}		
 		
 	$cb->($index);
 }	
