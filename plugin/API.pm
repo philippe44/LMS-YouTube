@@ -125,7 +125,8 @@ sub _call {
 	$args->{regionCode} ||= $prefs->get('country') unless delete $args->{_noRegion};
 	$args->{part}       ||= 'snippet' unless delete $args->{_noPart};
 	$args->{maxResults} ||= 50;
-
+	$args->{order} 		||= 'date';
+	
 	for my $k ( sort keys %{$args} ) {
 		next if $k =~ /^_/;
 		$url .= $k . '=' . URI::Escape::uri_escape_utf8( Encode::decode( 'utf8', $args->{$k} ) ) . '&';

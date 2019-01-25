@@ -1,3 +1,9 @@
+0.86.0
+ - add playlist to channel search
+ - search by channel id and optionally playlist only
+ - sorte order by date when no search
+ - alphabetical sort of mysubscription 
+ 
 0.85.2
  - update MPD no slower than half of actual (ot desired) edge delay (live streams with very few segments)
  - segment offset cannot be negative ((live streams with very few segments)

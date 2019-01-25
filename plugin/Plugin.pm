@@ -186,18 +186,22 @@ sub toplevel {
 		
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_WHOLE'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'video,channel,playlist' } ] },
 		
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_LIVEVIDEOSEARCH'),  type => 'search', url => \&searchHandler, passthrough => [ { eventType => 'live' } ] },
-		
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_MYSUBSCRIPTIONS'), type => 'url', url => \&subscriptionsHandler, passthrough => [ { count => 2 } ] },
-		
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_MYPLAYLISTS'), type => 'url', url => \&myPlaylistHandler, passthrough => [ { count => 2 } ] },
-	
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_URL'), type => 'search', url  => \&urlHandler, },
 		
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_URLRELATEDSEARCH'), type => 'search', url => \&relatedURLHandler },
 		
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_PLAYLISTID'), type => 'search', url  => \&playlistIdHandler, },
 		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_CHANNELID'), type => 'search', url  => \&channelIdHandler, passthrough => [ { type => 'playlist,video' } ]},
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_CHANNELIDPLAYLIST'), type => 'search', url  => \&channelIdHandler, passthrough => [ { type => 'playlist' } ]},
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_LIVEVIDEOSEARCH'),  type => 'search', url => \&searchHandler, passthrough => [ { eventType => 'live' } ] },
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_MYSUBSCRIPTIONS'), type => 'url', url => \&subscriptionsHandler, passthrough => [ { count => 2 } ] },
+		
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_MYPLAYLISTS'), type => 'url', url => \&myPlaylistHandler, passthrough => [ { count => 2 } ] },
+						
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_RECENTLYPLAYED'), url  => \&recentHandler, },
 	]);
 }
@@ -387,6 +391,7 @@ sub subscriptionsHandler {
 		_quantity		=> $args->{quantity},
 		mine			=> 'true',
 		access_token 	=> $cache->get('yt:access_token'),
+		order			=> 'alphabetical',
 	});
 }
 
@@ -426,11 +431,12 @@ sub myPlaylistHandler {
 
 sub searchHandler {
 	my ($client, $cb, $args, $params) = @_;
-	
+		
 	if ($args->{search}) {
 		$args->{search} = encode('utf8', $args->{search});
 		$params->{q} ||= delete $args->{search};
-	}	
+		$params->{order} = 'relevance';
+	} 	
 	
 	# workaround due to XMLBrowser management of defeatTTP
 	$cache->set("yt:search-$client", $params->{q}, 60) if defined $params->{q};
@@ -444,6 +450,34 @@ sub searchHandler {
 	}, $params );
 }
 
+sub searchChannelHandler {
+	my ($client, $cb, $args, $params) = @_;
+	
+	$params->{_index} = $args->{index};
+	$params->{_quantity} = $args->{quantity};
+						   
+	Plugins::YouTube::API->search(sub {
+		my $result = $_[0];
+		if ( $result->{total} < $prefs->get('max_items') ) {
+			$log->info("adding playlist search");
+			Plugins::YouTube::API->searchDirect('playlists', sub {
+				my $total = { total => $result->{total} + $_[0]->{total},	
+							  # should add $result->{total} if option #2 of API was chosen	
+							  offset => $_[0]->{offset}, 
+							  items => [ @{$result->{items}}, @{$_[0]->{items}} ] };
+				$cb->( _renderList($total) );
+			}, { 
+				%{$params},
+				_index 		=> $args->{index} > $result->{total} ? $args->{index} - $result->{total} : 0,
+				_quantity 	=> ($args->{quantity} ? $args->{quantity} : $prefs->get('max_items')) - $result->{total},
+			} );	
+		} else {
+			$log->info("menu full, no playlist search");
+			$cb->( _renderList($result) );
+		}	
+	}, $params );
+}
+	
 sub playlistHandler {
 	my ($client, $cb, $args, $params) = @_;
 	
@@ -465,6 +499,34 @@ sub channelHandler {
 	}, {
 		_index  => $args->{index},
 		_quantity => $args->{quantity},
+		%{$params},
+	});
+}
+
+sub channelIdHandler {
+	my ($client, $cb, $args, $params) = @_;
+	my $url = $args->{search};
+
+	# because search replaces '.' by ' '
+	$url =~ s/ /./g;
+	my ($id) = $url =~ /channel=([^&]+)/;
+	$id ||= $url;
+	
+	if (!$id) {
+		$cb->( { items => [ { 
+			type => 'text',
+			name => cstring($client, 'PLUGIN_YOUTUBE_BADURL'), 
+			} ] } );
+		return;
+	}
+	
+	Plugins::YouTube::API->search( sub {
+			$cb->( _renderList($_[0]) ); 
+	},{ 
+		_index  	=> $args->{index},
+		_quantity 	=> $args->{quantity},
+		channelId 	=> $id,
+		order		=> 'date',
 		%{$params},
 	});
 }
@@ -540,7 +602,7 @@ sub _renderList {
 		} elsif ($kind eq 'youtube#channel') {	
 			$item->{name} = $chTags->{prefix} . $title . $chTags->{suffix};
 			$item->{passthrough} = [ { channelId => $id, %{$through} } ];
-			$item->{url}         = \&searchHandler;
+			$item->{url}         = \&searchChannelHandler;
 			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
 			$item->{favorites_type}	= 'audio';
 		} else {
