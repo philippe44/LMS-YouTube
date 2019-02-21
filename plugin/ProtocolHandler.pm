@@ -744,8 +744,10 @@ sub getMetadataFor {
 			_getBulkMetadata($client, $pageCall, $list);
 		} else {
 			$client->master->pluginData(fetchingYTMeta => 0);
-			$client->currentPlaylistUpdateTime( Time::HiRes::time() );
-			Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );	
+			if ($status) {
+				$client->currentPlaylistUpdateTime( Time::HiRes::time() );
+				Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );	
+			}	
 		} 
 	};
 
