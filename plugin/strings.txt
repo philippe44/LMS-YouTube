@@ -17,15 +17,28 @@ PLUGIN_YOUTUBE_MISSINGKEY
 	DE	- klicke "Enable"
 	DE	- füge den Schlüssel in den YouTube Plugin Einstellungen ein
 	EN	Missing YouTube API key (see settings). To get a key:
-	EN	- using your gmail account
-	EN	- https://console.developers.google.com/apis/api/youtube/overview
-	EN	- click "Create a project" if you don't have any
-	EN	- in the next screen, go to "credentials" 
-	EN	- click on "create credentials", select "API key" and then choose "Browser key"
-	EN	- click "create" and copy the key
-	EN	- go back to https://console.developers.google.com/apis/api/youtube/overview
-	EN	- click "enable"
-	EN	- paste the key in the YT plugin settings
+	EN	- Goto https://console.developers.google.com
+	EN	- Click: Create Project
+	EN	- Name the project. Example: YouTube-API-Key-Project
+	EN	- Leave Organization Blank
+	EN	- Click Create
+	EN	- Once at your project dashboard, in the APIs box, click: Go to APIs Overview
+	EN	- In the APIs & Services Dashboard, click: Enable APIs and Services
+	EN	- In the API Library, search for "youtube" and click: YouTube Data API v3
+	EN	- In the YouTube Data API v3 screen, click: ENABLE
+	EN	- In the YouTube Data API v3 Overview, click: CREATE CREDENTIALS
+	EN	- Under "Which API are you using?" choose: YouTube Data API v3
+	EN	- Under "Where will you be calling the API from?" choose: Web browser (Javascript)
+	EN	- Under "What data will you be accessing?" choose: Public data
+	EN	- Then click "What credentials do I need?" button.
+	EN	- You should now see your API key. Copy it to your clipboard.
+	EN	- Click the link: "Restrict key"
+	EN	- Under "API restrictions" select Restrict key, and check "YouTube Data API v3"
+	EN	- Click Save
+	EN	- Return to the YouTube plugin and paste your key, making sure there are no preceeding or trailing spaces in what you paste.
+	
+	
+	
 	
 PLUGIN_YOUTUBE_MISSINGSSL
 	DE	SSL wird benögtig (installiere mit dem Paket-Manager deines Betriebssystems, z.B. "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
