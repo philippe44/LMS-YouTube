@@ -366,7 +366,7 @@ sub getNextTrack {
 									my $props = { format => $streamInfo->{'format'} };
 									main::DEBUGLOG && $log->is_debug && $log->debug("unobfuscated signature $sig");
 									$song->pluginData(props => $props);
-									$song->pluginData(baseURL  => $streamInfo->{'url'} . "&signature=" . $sig);
+									$song->pluginData(baseURL  => "$streamInfo->{'url'}&$streamInfo->{sp}=$sig");
 									$getProperties->{$props->{'format'}}($song, $props, $successCb);
 								} else {
 									$errorCb->();
@@ -422,7 +422,7 @@ sub getStream {
 											
 		main::INFOLOG && $log->is_info && $log->info("selected $$allow[$index][1] sig $sig encrypted $encrypted");
 							
-		$streamInfo = { url => $url, sig => $sig, encrypted => $encrypted, format => $$allow[$index][1] };
+		$streamInfo = { url => $url, sp => $props{sp} || 'signature', sig => $sig, encrypted => $encrypted, format => $$allow[$index][1] };
 		$selected = $index;
 	}
 		

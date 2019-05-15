@@ -562,7 +562,7 @@ sub decode_u24 { unpack('N', ("\0" . $_[0]) ) }
 sub decode_u32 { unpack('N', $_[0]) }
 sub decode_u64 { 
 	return unpack('Q>', substr($_[0], 0, 8)) if $Config{ivsize} == 8;
-	$log->error("can't unpack 64 bits integer, using 32 bits LSB");
+	$log->warn("can't unpack 64 bits integer, using 32 bits LSB");
 	return unpack('N', substr($_[0], 4, 4));
 }
 sub decode_u { 
@@ -573,7 +573,7 @@ sub decode_u {
 	return unpack('N', $_[0]) if ($len == 4);
 	if ($len == 8) {
 		return unpack('Q>', substr($_[0], 0, 8)) if $Config{ivsize} == 8;
-		$log->error("can't unpack 64 bits integer, using 32 bits LSB");
+		$log->warn("can't unpack 64 bits integer, using 32 bits LSB");
 		return unpack('N', substr($_[0], 4, 4));
 	} 
 	return undef;
@@ -680,7 +680,7 @@ sub getProperties {
 			},
 		
 			sub {
-				$log->warn("could not get codec info");
+				$log->warn("could not get codec info: ", shift->error);
 				$cb->();
 			}
 		)->get( $song->pluginData('baseURL'), 'Range' => "bytes=$var->{'offset'}-" . ($var->{'offset'} + HEADER_CHUNK - 1) );

@@ -1,3 +1,7 @@
+0.87.0
+ - follow some YT signature changes (need to look at [sp] name)
+ - 64 bits endianness
+ 
 0.86.3
  - Update API creation guide
  
@@ -5,7 +9,7 @@
  - help string for live option was missing
  
 0.86.1
- - avoid login flooding when HTTP metadata call fails
+ - avoid logging flooding when HTTP metadata call fails
  
 0.86.0
  - add playlist to channel search
