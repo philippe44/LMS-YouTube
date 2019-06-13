@@ -1,3 +1,6 @@
+0.87.1
+ - unescape signature before unobfuscating it
+ 
 0.87.0
  - follow some YT signature changes (need to look at [sp] name)
  - 64 bits endianness

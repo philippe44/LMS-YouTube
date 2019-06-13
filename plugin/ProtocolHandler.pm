@@ -419,6 +419,8 @@ sub getStream {
 		} else {
 			$sig = '';
 		}
+		
+		$sig = uri_unescape($sig);
 											
 		main::INFOLOG && $log->is_info && $log->info("selected $$allow[$index][1] sig $sig encrypted $encrypted");
 							
