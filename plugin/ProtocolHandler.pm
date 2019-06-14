@@ -366,7 +366,7 @@ sub getNextTrack {
 									my $props = { format => $streamInfo->{'format'} };
 									main::DEBUGLOG && $log->is_debug && $log->debug("unobfuscated signature $sig");
 									$song->pluginData(props => $props);
-									$song->pluginData(baseURL  => "$streamInfo->{'url'}&$streamInfo->{sp}=$sig");
+									$song->pluginData(baseURL  => "$streamInfo->{'url'}" . ($sig ? "&$streamInfo->{sp}=$sig" : ''));
 									$getProperties->{$props->{'format'}}($song, $props, $successCb);
 								} else {
 									$errorCb->();

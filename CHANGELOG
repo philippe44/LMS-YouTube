@@ -1,3 +1,6 @@
+0.87.2
+ - do not add 'signature' key when there is no signature
+ 
 0.87.1
  - unescape signature before unobfuscating it
  
