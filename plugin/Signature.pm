@@ -24,6 +24,7 @@ sub cache_player {
 
     my $js = Plugins::YouTube::JSInterp->new($code);
 
+=obsolete
 	if ($code =~ /\.sig\|\|([a-zA-Z0-9\$]+)\(/) {
 		$funcname = $1;
 	} elsif ($code =~ /\bc\s*&&\s*d\.set\([^,]+\s*,\s*(?:encodeURIComponent\s*\()?\s*([a-zA-Z0-9\$]+)\(/) {
@@ -34,6 +35,13 @@ sub cache_player {
 		$funcname = $1;
 	} elsif ( $code =~ /(["\'])signature\1\s*,\s*([a-zA-Z0-9\$]+)\(/ ) {
 		$funcname = $2;
+=cut		
+	if ($code =~ /\b[cs]\s*&&\s*[adf]\.set\([^,]+\s*,\s*(?:encodeURIComponent\s*\()?\s*([a-zA-Z0-9\$]+)\(/) {
+		$funcname = $1;
+    } elsif ($code =~ /\b[a-zA-Z0-9]+\s*&&\s*[a-zA-Z0-9]+\.set\([^,]+\s*,\s*(?:encodeURIComponent\s*\()?\s*([a-zA-Z0-9\$]+)\(/) {
+		$funcname = $1;
+	} elsif ($code =~ /([a-zA-Z0-9\$]+)\s*=\s*function\(\s*a\s*\)\s*\{\s*a\s*=\s*a\.split\(\s*""\s*\)/) {
+		$funcname = $1;
 	} else {	
 		die "Cannot find JS player signature function name in '" . $code . "'";	
 	}	
