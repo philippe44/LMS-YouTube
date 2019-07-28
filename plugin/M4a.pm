@@ -62,10 +62,25 @@ sub getProperties {
 	my $client = $song->master();
 					
 	$song->track->secs( $props->{'duration'} );
+	
+	if ( $props->{'samplingRate'} ) {
+		updateMetadata($song, $props);
+	} else {
+		# no audio details in header, need to wait for stream
+		$props->{'_song'} = $song;
+	}	
+	
+	$cb->();
+}
+
+sub updateMetadata {
+	my ($song, $props) = @_;
+	my $client = $song->master();
+					
 	$song->track->bitrate( $props->{'bandwidth'} );
 	$song->track->samplerate( $props->{'samplingRate'} );
 	# $song->track->samplesize( $props->{'track'}->{'samplesize'} );
-	$song->track->channels( $props->{'channels'} );
+	$song->track->channels( $props->{'channels'} ); 
 	
 	my $id = Plugins::YouTube::ProtocolHandler->getId($song->track()->url);
 	if (my $meta = $cache->get("yt:meta-$id")) {
@@ -75,8 +90,6 @@ sub getProperties {
 	
 	$client->currentPlaylistUpdateTime( Time::HiRes::time() );
 	Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );	
-	
-	$cb->();
 }
 
 sub getAudio {
@@ -107,8 +120,17 @@ sub getAudio {
 		$v->{need} = ATOM_NEED;
 		
 		if ($v->{mdat}) {
-			my $esds = $v->{'moov'}->{'trak'}->{'mdia'}->{'minf'}->{'stbl'}->{'stsd'}->{'entries'}->{'mp4a'}->{'esds'};	
-			$v->{outBuf} .= convertDashSegtoADTS($esds, $v->{mdat}->{data}, $v->{'moof'}->{'traf'});
+			my $mp4a = $v->{'moov'}->{'trak'}->{'mdia'}->{'minf'}->{'stbl'}->{'stsd'}->{'entries'}->{'mp4a'};	
+			
+			# audio details acquired 
+			if ( !$props->{'samplingRate'} && $mp4a->{'samplerate'} ) {
+				$props->{'bandwidth'} = $mp4a->{'esds'}->{'avgbitrate'};
+				$props->{'samplingRate'} = $mp4a->{'samplerate'};
+				$props->{'channels'} = $mp4a->{'channelcount'};
+				updateMetadata($props->{'_song'}, $props);
+			}			
+			
+			$v->{outBuf} .= convertDashSegtoADTS($mp4a->{'esds'}, $v->{mdat}->{data}, $v->{'moof'}->{'traf'});
 			main::DEBUGLOG && $log->is_debug && $log->debug("extracted ", length $v->{mdat}->{data}, " bytes, out ", length $v->{outBuf});
 			$v->{mdat} = undef;
 		}	
@@ -295,14 +317,15 @@ sub process_mp4a_atom {
 	$result{'samplesize'}            =  decode_u16(substr($data, 18, 2));
 	$result{'predefined'}            =  decode_u16(substr($data, 20, 2));
 	$result{'reserved3'}             =  decode_u16(substr($data, 22, 2));
-	# FIXME : buffersizedb seems to be little endian
-	$result{'samplerate'}            =  decode_u32(substr($data, 24, 4));
+	# FIXME : buffersizedb seems to be little endian or some other format
+	# samplerate seems to be big-endian, but 16 upper bits 
+	$result{'samplerate'}            =  decode_u32(substr($data, 24, 4)) >> 16;
 	if ($size > 28) {
 		# Assumed entry is Audio
 		my ($sub_type, $sub_size) = get_next_atom(substr($data, 28));
 		$result{$sub_type} = process_atom($sub_type, $sub_size - 8, substr($data, 36));
 	}
-    
+	
 	return  \%result ;
 }
 

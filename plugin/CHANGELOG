@@ -1,3 +1,6 @@
+0.89.0
+ - get the audio sample rate & channel data through stream when using AAC in non-dash mode (no mpd)
+
 0.88.0
  - yet another signature pattern
  
