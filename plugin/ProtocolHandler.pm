@@ -67,9 +67,18 @@ but I'm not sure at that point. Anyway, the dash webm format used in codec
 handling than normal webm
 =cut
 
-my $getProperties  = { 'ogg' => \&Plugins::YouTube::WebM::getProperties, 'aac' => \&Plugins::YouTube::M4a::getProperties };
-my $getAudio 	   = { 'ogg' => \&Plugins::YouTube::WebM::getAudio, 'aac' => \&Plugins::YouTube::M4a::getAudio };
-my $getStartOffset = { 'ogg' => \&Plugins::YouTube::WebM::getStartOffset, 'aac' => \&Plugins::YouTube::M4a::getStartOffset };
+my $getProperties  = { 	'ogg' => \&Plugins::YouTube::WebM::getProperties, 
+						'ops' => \&Plugins::YouTube::WebM::getProperties, 
+						'aac' => \&Plugins::YouTube::M4a::getProperties 
+				};
+my $getAudio 	   = { 	'ogg' => \&Plugins::YouTube::WebM::getAudio, 
+						'ops' => \&Plugins::YouTube::WebM::getAudio, 
+						'aac' => \&Plugins::YouTube::M4a::getAudio 
+				};
+my $getStartOffset = { 	'ogg' => \&Plugins::YouTube::WebM::getStartOffset, 
+						'ops' => \&Plugins::YouTube::WebM::getStartOffset, 
+						'aac' => \&Plugins::YouTube::M4a::getStartOffset 
+				};
 
 sub canDoAction {
     my ( $class, $client, $url, $action ) = @_;
@@ -274,7 +283,7 @@ sub sysread {
 
 	# process all available data	
 	$getAudio->{$props->{'format'}}($v, $props) if length $v->{'inBuf'};
-		
+	
 	if ( my $bytes = min(length $v->{'outBuf'}, $maxBytes) ) {
 		$_[1] = substr($v->{'outBuf'}, 0, $bytes);
 		$v->{'outBuf'} = substr($v->{'outBuf'}, $bytes);
@@ -315,10 +324,14 @@ sub getNextTrack {
 	my $masterUrl = $song->track()->url;
 	my $id = $class->getId($masterUrl);
 	my $url = "http://www.youtube.com/watch?v=$id";
-	my @allow = ( [43, 'ogg'], [44, 'ogg'], [45, 'ogg'], [46, 'ogg'] );
-	my @allowDASH = ( [171, 'ogg'], [140, 'aac'], [139, 'aac'] );
+	my @allow = ( [43, 'ogg', 0], [44, 'ogg', 0], [45, 'ogg', 0], [46, 'ogg', 0] );
+	my @allowDASH = (); 	
 				  
 	main::INFOLOG && $log->is_info && $log->info("next track id: $id url: $url master: $masterUrl");
+	
+	push @allowDASH, ( [251, 'ops', 160_000], [250, 'ops', 70_000], [249, 'ops', 50_000], [171, 'ogg', 128_000] ) if $prefs->get('ogg'); 
+	push @allowDASH, ( [141, 'aac', 256_000], [140, 'aac', 128_000], [139, 'aac', 48_000] ) if $prefs->get('aac');
+	@allowDASH = sort {@$a[2] < @$b[2]} @allowDASH;
 
 	# fetch new url(s)
 	Slim::Networking::SimpleAsyncHTTP->new(
@@ -343,7 +356,7 @@ sub getNextTrack {
 			
 			# then DASH streams
 			if (!$streamInfo) {
-				main::INFOLOG && $log->is_info && $log->info("no stream found, trying DASH");
+				main::INFOLOG && $log->is_info && $log->info("no stream found, trying MPD/DASH");
 				if ($dashmpd) {
 					getMPD($dashmpd, \@allowDASH, sub {
 								my $props = shift;
@@ -358,12 +371,12 @@ sub getNextTrack {
 				}
 			} 	
 			
-			# process non-DASH streams
+			# process non-mpd streams
 			if ($streamInfo) {
 					getSignature($content, $streamInfo->{'sig'}, $streamInfo->{'encrypted'}, sub {
 								my $sig = shift;
 								if (defined $sig) {
-									my $props = { format => $streamInfo->{'format'} };
+									my $props = { format => $streamInfo->{'format'}, bitrate => $streamInfo->{'bitrate'} };
 									main::DEBUGLOG && $log->is_debug && $log->debug("unobfuscated signature $sig");
 									$song->pluginData(props => $props);
 									$song->pluginData(baseURL  => "$streamInfo->{'url'}" . ($sig ? "&$streamInfo->{sp}=$sig" : ''));
@@ -396,15 +409,16 @@ sub getStream {
 		no strict 'subs';
         my %props = map { $_ =~ /=(.+)/ ? split(/=/, $_) : () } split(/&/, $stream);
 				
+		main::INFOLOG && $log->is_info && $log->info("found itag: $props{itag}");
 		main::DEBUGLOG && $log->is_debug && $log->debug($stream);
 						
 		# check streams in preferred id order
         next unless ($index) = grep { $$allow[$_][0] == $props{itag} } (0 .. @$allow-1);
-		main::INFOLOG && $log->is_info && $log->info("found matching format $props{itag}");
+		main::INFOLOG && $log->is_info && $log->info("matching format $props{itag}");
 		next unless !defined $streamInfo || $index < $selected;
+		
+		main::INFOLOG && $log->is_info && $log->info("selected itag: $props{itag}, props: $props{url}");
 
-		main::INFOLOG && $log->is_info && $log->info("itag: $props{itag}, props: $props{url}");
-						
 		my $url = uri_unescape($props{url});
 		my $sig;
 		my $encrypted = 0;
@@ -424,7 +438,7 @@ sub getStream {
 											
 		main::INFOLOG && $log->is_info && $log->info("selected $$allow[$index][1] sig $sig encrypted $encrypted");
 							
-		$streamInfo = { url => $url, sp => $props{sp} || 'signature', sig => $sig, encrypted => $encrypted, format => $$allow[$index][1] };
+		$streamInfo = { url => $url, sp => $props{sp} || 'signature', sig => $sig, encrypted => $encrypted, format => $$allow[$index][1], bitrate => $$allow[$index][2] };
 		$selected = $index;
 	}
 		
@@ -516,7 +530,7 @@ sub getMPD {
 									   $selAdapt->{'audioSamplingRate'},
 					channels		=> $selRepres->{'AudioChannelConfiguration'}->{'value'} // 
 									   $selAdapt->{'AudioChannelConfiguration'}->{'value'},
-					bandwidth		=> $selRepres->{'bandwidth'},
+					bitrate			=> $selRepres->{'bandwidth'},
 					duration		=> $duration,
 					timescale		=> $timescale || 1,
 					timeShiftDepth	=> $timeShiftDepth,

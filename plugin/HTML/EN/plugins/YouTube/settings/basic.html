@@ -22,6 +22,12 @@
 		<input type="text" class="stdedit" name="pref_country" id="pref_country" value="[% prefs.pref_country %]" size="2">
 	[% END %]
 	
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_CODECS" desc="PLUGIN_YOUTUBE_CODECS_DESC" %]
+		<input name="pref_aac" type="checkbox" [% IF prefs.pref_aac %] checked [% END %]> aac
+		&nbsp
+		<input value='vorbis/opus' name="pref_ogg" type="checkbox" [% IF prefs.pref_ogg %] checked [% END %]> vorbis/opus
+	[% END %]
+	
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_LIVEOPTIONS" desc="PLUGIN_YOUTUBE_LIVEOPTIONS_DESC" %]
 		<input name="pref_live_edge" type="checkbox" [% IF prefs.pref_live_edge %] checked [% END %]>
 		[% "PLUGIN_YOUTUBE_LIVEEDGE" | string %]

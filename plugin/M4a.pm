@@ -77,7 +77,7 @@ sub updateMetadata {
 	my ($song, $props) = @_;
 	my $client = $song->master();
 					
-	$song->track->bitrate( $props->{'bandwidth'} );
+	$song->track->bitrate( $props->{'bitrate'} );
 	$song->track->samplerate( $props->{'samplingRate'} );
 	# $song->track->samplesize( $props->{'track'}->{'samplesize'} );
 	$song->track->channels( $props->{'channels'} ); 
@@ -124,7 +124,7 @@ sub getAudio {
 			
 			# audio details acquired 
 			if ( !$props->{'samplingRate'} && $mp4a->{'samplerate'} ) {
-				$props->{'bandwidth'} = $mp4a->{'esds'}->{'avgbitrate'};
+				$props->{'bitrate'} ||= $mp4a->{'esds'}->{'avgbitrate'};
 				$props->{'samplingRate'} = $mp4a->{'samplerate'};
 				$props->{'channels'} = $mp4a->{'channelcount'};
 				updateMetadata($props->{'_song'}, $props);

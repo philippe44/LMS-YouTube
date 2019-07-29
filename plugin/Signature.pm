@@ -35,7 +35,7 @@ sub cache_player {
 		$funcname = $1;
 	} elsif ( $code =~ /(["\'])signature\1\s*,\s*([a-zA-Z0-9\$]+)\(/ ) {
 		$funcname = $2;
-=cut		
+=cut
 	if ($code =~ /\b[cs]\s*&&\s*[adf]\.set\([^,]+\s*,\s*(?:encodeURIComponent\s*\()?\s*([a-zA-Z0-9\$]+)\(/) {
 		$funcname = $1;
     } elsif ($code =~ /\b[a-zA-Z0-9]+\s*&&\s*[a-zA-Z0-9]+\.set\([^,]+\s*,\s*(?:encodeURIComponent\s*\()?\s*([a-zA-Z0-9\$]+)\(/) {
@@ -44,8 +44,8 @@ sub cache_player {
 		$funcname = $1;
 	} else {	
 		die "Cannot find JS player signature function name in '" . $code . "'";	
-	}	
-		
+	}			
+			
     $players{$uri} = $js->callable($funcname);
 }
 

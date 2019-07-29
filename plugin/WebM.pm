@@ -213,10 +213,10 @@ sub getAudio {
 			$log->debug("timecode: $v->{timecode}");
 		} elsif ($id eq ID_BLOCK || $id eq ID_BLOCK_SIMPLE) {
 			my $time;
-			my $out = extractVorbis(\$v->{inBuf}, $props->{track}->{tracknum}, $size, \$time);
+			my $out = extractAudio(\$v->{inBuf}, $props->{track}->{tracknum}, $size, \$time);
 									
 			if (defined $out) { 
-				my $pos = ($v->{timecode} + $time) * $props->{track}->{samplerate} / ($props->{timecode_scale} / 1000);
+				my $pos = ($v->{timecode} + $time) * $props->{track}->{samplerate} / ($props->{timecode_scale} / 1000) + $props->{track}->{preSkip};
 				$v->{outBuf} .= buildOggPage([$out], $pos, 0x00, $v->{seqnum}++);
 			}	
 		}	
@@ -349,6 +349,7 @@ sub buildOggPage {
 				);
 			
 	foreach my $p (@{$packets}) {
+		next unless $p;
 		my $len = length $p;
 		while ($len >= 255) { $page .= "\xff"; $len -= 255; $count++ }
 		$page .= pack("C", $len);
@@ -400,7 +401,6 @@ sub getTrackInfo {
 		} elsif	($id eq ID_CODEC) {
 			$info->{codec}->{id} = substr $s, 0, $size;
 			$log->info("codec: $info->{codec}->{id}");
-			return undef if ($info->{codec}->{id} ne "A_VORBIS");
 		} elsif ($id eq ID_CODEC_PRIVATE) {
 			$private = substr($s, 0, $size);
 		} elsif ($id eq ID_AUDIO) {
@@ -417,29 +417,45 @@ sub getTrackInfo {
 		$s = substr $s, $size;
 	} 
 	
-	# codec private data shall only be used once we have found codec
-	my $count = decode_u8(substr $private, 0, 1) + 1;
-	my $hdr_size = decode_u8(substr $private, 1, 1);
-	my $set_size = decode_u8(substr $private, 2, 1);
-	$log->debug ("private count $count, hdr: $hdr_size, setup: $set_size, total: ". length($private));
+	# codec private data shall only be used once we have found codec	
+	if ($info->{codec}->{id} eq 'A_VORBIS') {
+		my $count = decode_u8(substr $private, 0, 1) + 1;
+		my $hdr_size = decode_u8(substr $private, 1, 1);
+		my $set_size = decode_u8(substr $private, 2, 1);
+		$log->debug ("VORBIS private count $count, hdr: $hdr_size, setup: $set_size, total: ". length($private));
 									
-	# the explanation for the packet length & offsets of codec private data are found here
-	# https://matroska.org/technical/specs/codecid/index.html 
-	$info->{codec}->{header} = substr $private, 3, $hdr_size;
-	$info->{codec}->{setup} = substr $private, 3 + $hdr_size, $set_size;
-	$info->{codec}->{comment} = substr $private, 3 + $hdr_size + $set_size, length($private) - 3 - $set_size - $hdr_size;
+		# the explanation for the packet length & offsets of codec private data are found here
+		# https://matroska.org/technical/specs/codecid/index.html 
+		$info->{codec}->{header} = substr $private, 3, $hdr_size;
+		$info->{codec}->{setup} = substr $private, 3 + $hdr_size, $set_size;
+		$info->{codec}->{comment} = substr $private, 3 + $hdr_size + $set_size, length($private) - 3 - $set_size - $hdr_size;
 	
-	# header contains more accurate information
-	$info->{channels} = decode_u8(substr($info->{codec}->{header}, 11, 1));
-	$info->{samplerate} = unpack('V', substr($info->{codec}->{header}, 12, 4));
-	$info->{bitrate} = unpack('V', substr($info->{codec}->{header}, 20, 4));
-	$info->{samplesize} = 16 unless ($info->{samplesize} == 8);
-			
+		# header contains more accurate information
+		$info->{channels} = decode_u8(substr($info->{codec}->{header}, 11, 1));
+		$info->{samplerate} = unpack('V', substr($info->{codec}->{header}, 12, 4));
+		$info->{bitrate} = unpack('V', substr($info->{codec}->{header}, 20, 4));
+		$info->{sampleSize} = 16 unless ($info->{sampleSize} == 8);
+	} elsif ( $info->{codec}->{id} eq 'A_OPUS' ) {
+		$log->debug("OPUS private count ", length $private);
+		
+		# see https://wiki.xiph.org/MatroskaOpus and https://tools.ietf.org/html/rfc7845
+		$info->{codec}->{header} = $private;
+		$info->{codec}->{comment} = "OpusTags\x02\x00\x00\x00YT\x00\x00\x00\x00";
+		$info->{codec}->{setup} = undef;
+		
+		$info->{channels} = decode_u8(substr($info->{codec}->{header}, 9, 1));
+		$info->{preSkip} = int((1000 * 1000 * unpack('v', substr($info->{codec}->{header}, 10, 2))) / 48000);
+		$info->{samplerate} = unpack('V', substr($info->{codec}->{header}, 12, 4));
+	} else {
+		$log->error("unknown codec $info->{codec}->{id}");
+		return undef;
+	}	
+	
 	return $info;
 }
 
 
-sub extractVorbis {
+sub extractAudio {
 	my ($s, $tracknum, $size, $time) = @_;
 	my $val = 0;
 	my $len;
@@ -656,14 +672,14 @@ sub getProperties {
 					$process->();
 				} elsif ( $res eq WEBM_DONE ) {	
 					$song->track->secs( $props->{'duration'} / 1000 ) if $props->{'duration'};
-					$song->track->bitrate( $props->{'track'}->{'bitrate'} );
+					$song->track->bitrate( $props->{'track'}->{'bitrate'} || $props->{'bitrate'} );
 					$song->track->samplerate( $props->{'track'}->{'samplerate'} );
 					$song->track->samplesize( $props->{'track'}->{'samplesize'} );
 					$song->track->channels( $props->{'track'}->{'channels'} );
 					
 					my $id = Plugins::YouTube::ProtocolHandler->getId($song->track()->url);
 					if (my $meta = $cache->get("yt:meta-$id")) {
-						$meta->{type} = "YouTube (ogg\@$props->{'track'}->{'samplerate'}Hz)";
+						$meta->{type} = "YouTube ($props->{'format'}\@$props->{'track'}->{'samplerate'}Hz)";
 						$cache->set("yt:meta-$id", $meta);
 					}
 				

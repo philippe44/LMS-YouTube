@@ -47,6 +47,8 @@ $prefs->init({
 	highres_icons => 1,
 	live_delay => 60,
 	live_edge => 1,
+	aac => 1,
+	ogg => 1,
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;

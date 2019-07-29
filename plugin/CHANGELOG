@@ -1,3 +1,6 @@
+0.90.0
+ - add opus codec
+ 
 0.89.0
  - get the audio sample rate & channel data through stream when using AAC in non-dash mode (no mpd)
 

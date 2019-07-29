@@ -37,9 +37,6 @@ PLUGIN_YOUTUBE_MISSINGKEY
 	EN	- Click Save
 	EN	- Return to the YouTube plugin and paste your key, making sure there are no preceeding or trailing spaces in what you paste.
 	
-	
-	
-	
 PLUGIN_YOUTUBE_MISSINGSSL
 	DE	SSL wird benögtig (installiere mit dem Paket-Manager deines Betriebssystems, z.B. "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
 	EN	SSL required (try to install it using CPAN and/or on Linux do "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
@@ -84,6 +81,12 @@ PLUGIN_YOUTUBE_MYPLAYLISTS
 	DE	Meine Wiedergabelisten
 	EN	My Playlists
 	
+PLUGIN_YOUTUBE_CODECS
+	EN	Allowed codecs
+
+PLUGIN_YOUTUBE_CODECS_DESC
+	EN	Select audio codecs searched fom YouTube videos (higher bitrate always selected)
+
 PLUGIN_YOUTUBE_PLAYLISTID
 	EN	Playlist id
 
