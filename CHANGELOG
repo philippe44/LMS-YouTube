@@ -1,3 +1,6 @@
+0.90.1
+ - set value to "0" for checkboxes that are unchecked, to avoid that initprefs with default 1 overwrite them at startup
+ 
 0.90.0
  - add opus codec
  

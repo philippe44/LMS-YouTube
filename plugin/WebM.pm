@@ -341,6 +341,7 @@ sub buildOggPage {
 	my $count = 0;
 	my $data = "";
 	
+	# https://xiph.org/ogg/doc/framing.html
 	# 0-3:pattern 4:vers 5:flags 6-13:granule 14-17:serial num 18-21:seqno 22-25:CRC 26:Nseq 27...:segtable
 	my $page = ("OggS" . "\x00" . pack("C", $flags) . 
 				($Config{ivsize} == 8 ? pack("Q", $granule) : (pack("V", int ($granule)) . pack("V", int ($granule/4294967296)))) . 

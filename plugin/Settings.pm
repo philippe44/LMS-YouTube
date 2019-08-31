@@ -12,6 +12,8 @@ use Slim::Utils::Log;
 my $log   = logger('plugin.youtube');
 my $cache = Slim::Utils::Cache->new();
 
+my @bool = qw(live_edge aac ogg highres_icons);
+
 sub name {
 	return 'PLUGIN_YOUTUBE';
 }
@@ -21,7 +23,7 @@ sub page {
 }
 
 sub prefs {
-	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix playlist_suffix country max_items APIkey client_id client_secret highres_icons live_delay live_edge aac ogg));
+	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix playlist_suffix country max_items APIkey client_id client_secret live_delay), @bool);
 }
 
 sub handler {
@@ -48,7 +50,11 @@ sub handler {
 	$params->{APIkey} =~ s/^\s+|\s+$//g;
 		
 	$cache->remove('yt:access_token') if $params->{clear_token};
-		
+	
+	foreach (@bool) {
+		$params->{"pref_$_"} = 0 unless defined $params->{"pref_$_"};
+	}
+				
 	$callback->($client, $params, $class->SUPER::handler($client, $params), @args);
 }
 
