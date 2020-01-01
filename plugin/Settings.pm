@@ -46,8 +46,8 @@ sub handler {
 	$params->{access_token} = $cache->get('yt:access_token');
 	
 	$params->{pref_max_items} = min($params->{pref_max_items}, 500);
-	$params->{live_delay} = max($params->{live_delay}, 30);
-	$params->{APIkey} =~ s/^\s+|\s+$//g;
+	$params->{pref_live_delay} = max($params->{pref_live_delay}, 30);
+	$params->{pref_APIkey} =~ s/^\s+|\s+$//g;
 		
 	$cache->remove('yt:access_token') if $params->{clear_token};
 	

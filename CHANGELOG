@@ -1,3 +1,9 @@
+0.91.0
+ - use JSON encoding for formats
+	
+0.90.2
+ - use pref_ prefix in settings for auto-handled parameters
+ 
 0.90.1
  - set value to "0" for checkboxes that are unchecked, to avoid that initprefs with default 1 overwrite them at startup
  

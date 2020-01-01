@@ -343,12 +343,14 @@ sub getNextTrack {
 			
 			my $content = $http->content;
 			$content =~ s/\\u0026/\&/g;
-			$content =~ s/\\//g;
+			# remove all backslashes except double-backslashes that must be replaced by single ones
+			$content =~ s/\\{2}/\\/g;
+			$content =~ s/\\([^\\])/$1/g;
 			
 			my ($streams) = $content =~ /\"url_encoded_fmt_stream_map\":\"(.*?)\"/;
 			my ($dashmpd) = $content =~ /\"dashManifestUrl\":\"(.*?)\"/;
 						           			
-			main::DEBUGLOG && $log->is_debug && $log->debug("streams: $streams\ndashmpg: $dashmpd");
+			#main::DEBUGLOG && $log->is_debug && $log->debug("streams: $streams\ndashmpg: $dashmpd");
 			
 			# first try non-DASH streams;
 			main::INFOLOG && $log->is_info && $log->info("trying regular streams");
@@ -365,9 +367,16 @@ sub getNextTrack {
 								$getProperties->{$props->{'format'}}($song, $props, $successCb);
 							} );
 				} else {	
-					($streams) = $content =~ /\"adaptive_fmts\":\"(.*?)\"/;
-					$streams =~ s/\\u0026/\&/g;
-					$streamInfo = getStream($streams, \@allowDASH);
+					my ($streams) = $content =~ /\"adaptiveFormats\":(\[.*?\])/;
+					if ($streams) {
+						main::DEBUGLOG && $log->is_debug && $log->debug("adaptiveFormat(JSON): $streams");
+						$streams = eval { decode_json($streams) };						
+						$streamInfo = getStreamJSON($streams, \@allowDASH);
+					} else {
+						($streams) = $content =~ /\"adaptive_fmts\":\"(.*?)\"/;
+						main::DEBUGLOG && $log->is_debug && $log->debug("adaptive_fmts: $streams");
+						$streamInfo = getStream($streams, \@allowDASH);
+					}
 				}
 			} 	
 			
@@ -418,6 +427,51 @@ sub getStream {
 		next unless !defined $streamInfo || $index < $selected;
 		
 		main::INFOLOG && $log->is_info && $log->info("selected itag: $props{itag}, props: $props{url}");
+
+		my $url = uri_unescape($props{url});
+		my $sig;
+		my $encrypted = 0;
+					
+		if (exists $props{s}) {
+			$sig = $props{s};
+			$encrypted = 1;
+		} elsif (exists $props{sig}) {
+			$sig = $props{sig};
+		} elsif (exists $props{signature}) {
+			$sig = $props{signature};
+		} else {
+			$sig = '';
+		}
+		
+		$sig = uri_unescape($sig);
+											
+		main::INFOLOG && $log->is_info && $log->info("selected $$allow[$index][1] sig $sig encrypted $encrypted");
+							
+		$streamInfo = { url => $url, sp => $props{sp} || 'signature', sig => $sig, encrypted => $encrypted, format => $$allow[$index][1], bitrate => $$allow[$index][2] };
+		$selected = $index;
+	}
+		
+	return $streamInfo;
+}
+
+sub getStreamJSON {
+	my ($streams, $allow) = @_;
+	my $streamInfo;
+	my $selected;
+			
+	for my $stream (@{$streams}) {
+		my $index;
+        my %props = map { $_ =~ /=(.+)/ ? split(/=/, $_) : () } split(/&/, $stream->{cipher});
+				
+		main::INFOLOG && $log->is_info && $log->info("found itag: $stream->{itag}");
+		main::DEBUGLOG && $log->is_debug && $log->debug($stream);
+						
+		# check streams in preferred id order
+        next unless ($index) = grep { $$allow[$_][0] == $stream->{itag} } (0 .. @$allow-1);
+		main::INFOLOG && $log->is_info && $log->info("matching format $stream->{itag}");
+		next unless !defined $streamInfo || $index < $selected;
+		
+		main::INFOLOG && $log->is_info && $log->info("selected itag: $stream->{itag}, props: $stream->{cipher}");
 
 		my $url = uri_unescape($props{url});
 		my $sig;
