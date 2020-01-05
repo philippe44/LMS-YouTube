@@ -350,7 +350,7 @@ sub getNextTrack {
 			my ($streams) = $content =~ /\"url_encoded_fmt_stream_map\":\"(.*?)\"/;
 			my ($dashmpd) = $content =~ /\"dashManifestUrl\":\"(.*?)\"/;
 						           			
-			#main::DEBUGLOG && $log->is_debug && $log->debug("streams: $streams\ndashmpg: $dashmpd");
+			# main::DEBUGLOG && $log->is_debug && $log->debug("streams: $streams\ndashmpg: $dashmpd");
 			
 			# first try non-DASH streams;
 			main::INFOLOG && $log->is_info && $log->info("trying regular streams");
@@ -461,41 +461,46 @@ sub getStreamJSON {
 			
 	for my $stream (@{$streams}) {
 		my $index;
-        my %props = map { $_ =~ /=(.+)/ ? split(/=/, $_) : () } split(/&/, $stream->{cipher});
-				
+        				
 		main::INFOLOG && $log->is_info && $log->info("found itag: $stream->{itag}");
 		main::DEBUGLOG && $log->is_debug && $log->debug($stream);
-						
+
 		# check streams in preferred id order
         next unless ($index) = grep { $$allow[$_][0] == $stream->{itag} } (0 .. @$allow-1);
 		main::INFOLOG && $log->is_info && $log->info("matching format $stream->{itag}");
 		next unless !defined $streamInfo || $index < $selected;
-		
-		main::INFOLOG && $log->is_info && $log->info("selected itag: $stream->{itag}, props: $stream->{cipher}");
 
-		my $url = uri_unescape($props{url});
-		my $sig;
+		my $url;
+		my $sig = '';
 		my $encrypted = 0;
-					
-		if (exists $props{s}) {
-			$sig = $props{s};
-			$encrypted = 1;
-		} elsif (exists $props{sig}) {
-			$sig = $props{sig};
-		} elsif (exists $props{signature}) {
-			$sig = $props{signature};
-		} else {
-			$sig = '';
-		}
+		my %props;
 		
+		if ($stream->{cipher}) {
+			%props = map { $_ =~ /=(.+)/ ? split(/=/, $_) : () } split(/&/, $stream->{cipher});
+
+			$url = uri_unescape($props{url});
+								
+			if (exists $props{s}) {
+				$sig = $props{s};
+				$encrypted = 1;
+			} elsif (exists $props{sig}) {
+				$sig = $props{sig};
+			} elsif (exists $props{signature}) {
+				$sig = $props{signature};
+			}
+		} else {
+			$url = uri_unescape($stream->{url});
+		}
+
 		$sig = uri_unescape($sig);
-											
-		main::INFOLOG && $log->is_info && $log->info("selected $$allow[$index][1] sig $sig encrypted $encrypted");
+
+		main::INFOLOG && $log->is_info && $log->info("candidate itag: $stream->{itag}, url/cipher: ", $stream->{cipher} || $stream->{url});													
+		main::INFOLOG && $log->is_info && $log->info("candidate $$allow[$index][1] sig $sig encrypted $encrypted");
 							
 		$streamInfo = { url => $url, sp => $props{sp} || 'signature', sig => $sig, encrypted => $encrypted, format => $$allow[$index][1], bitrate => $$allow[$index][2] };
 		$selected = $index;
 	}
-		
+
 	return $streamInfo;
 }
 

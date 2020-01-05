@@ -1,3 +1,6 @@
+0.91.1
+ - add unencrypted tracks with JSON encoding
+
 0.91.0
  - use JSON encoding for formats
 	
