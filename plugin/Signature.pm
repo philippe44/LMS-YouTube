@@ -40,6 +40,8 @@ sub cache_player {
 		$funcname = $1;
     } elsif ($code =~ /\b[a-zA-Z0-9]+\s*&&\s*[a-zA-Z0-9]+\.set\([^,]+\s*,\s*(?:encodeURIComponent\s*\()?\s*([a-zA-Z0-9\$]+)\(/) {
 		$funcname = $1;
+	} elsif ($code =~ /\b([a-zA-Z0-9\$]{2})\s*=\s*function\(\s*a\s*\)\s*\{\s*a\s*=\s*a\.split\(\s*""\s*\)/) {
+		$funcname = $1
 	} elsif ($code =~ /([a-zA-Z0-9\$]+)\s*=\s*function\(\s*a\s*\)\s*\{\s*a\s*=\s*a\.split\(\s*""\s*\)/) {
 		$funcname = $1;
 	} else {	
