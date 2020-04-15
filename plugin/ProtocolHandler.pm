@@ -778,10 +778,10 @@ sub getMetadataFor {
 	my ($class, $client, $url) = @_;
 	my $icon = $class->getIcon();
 	
-	main::DEBUGLOG && $log->is_debug && $log->debug("getmetadata: $url");
-
 	$url =~ s/&.*//;				
 	my $id = $class->getId($url) || return {};
+	
+	main::DEBUGLOG && $log->is_debug && $log->debug("getmetadata: $url");
 		
 	if (my $meta = $cache->get("yt:meta-$id")) {
 		my $song = $client->playingSong();
