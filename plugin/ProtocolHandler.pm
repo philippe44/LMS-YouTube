@@ -177,6 +177,22 @@ sub close {
 	$self->SUPER::close(@_);
 }
 
+sub onStop {
+    my ($class, $song) = @_;
+
+	# return if $song->pluginData('liveStream');
+	
+	my $elapsed = $song->master->controller->playingSongElapsed;
+	my $id = Plugins::YouTube::ProtocolHandler->getId($song->track->url);
+	
+	if ($elapsed < $song->duration - 15) {
+		$cache->set("yt:lastpos-$id", int ($elapsed), '30days');
+		$log->info("Last position for $id is $elapsed");
+	} else {
+		$cache->remove("yt:lastpos-$id");
+	}	
+}
+
 sub formatOverride { 
 	return $_[1]->pluginData('props')->{'format'};
 }

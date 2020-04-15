@@ -36,7 +36,6 @@ my	$log = Slim::Utils::Log->addLogCategory({
 
 my $prefs = preferences('plugin.youtube');
 my $cache = Slim::Utils::Cache->new();
-my $chain;
 
 $prefs->init({ 
 	prefer_lowbitrate => 0, 
@@ -119,36 +118,11 @@ sub initPlugin {
 	Slim::Control::Request::addDispatch(['youtube', 'info'], 
 		[1, 1, 1, \&cliInfoQuery]);
 		
-	$chain = \&Slim::Player::StreamingController::stop;
-	*{Slim::Player::StreamingController::stop} = \&_stop;
-		
 }
 
-sub _stop {
-    my ($self) = @_;
-	my $song = $self->playingSong;
-
-	# don't know if we should allow "last position of live stream" or not ...
-	#if ($song && $song->track->url =~ /youtube:/ && !$song->pluginData('liveStream')) {	
-	if ($song && $song->track->url =~ /youtube:/) {
-		my $elapsed = $self->playingSongElapsed;
-		my $id = Plugins::YouTube::ProtocolHandler->getId($self->playingSong->track->url);
-		
-		# need to not set anything for livestreams $props->{'timeShiftDepth'}
-		if ($elapsed < $self->playingSongDuration - 15) {
-			$cache->set("yt:lastpos-$id", int ($elapsed), '30days');
-			$log->error("STOP FOR YOUTUBE $elapsed $id");
-		} else {
-			$cache->remove("yt:lastpos-$id");
-		}	
-	}	
-	
-	return $chain->(@_);
-}		
 
 sub shutdownPlugin {
 	my $class = shift;
-	*{Slim::Player::StreamingController::stop} = $chain;
 	$class->saveRecentlyPlayed('now');
 }
 
