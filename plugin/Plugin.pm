@@ -36,6 +36,7 @@ my	$log = Slim::Utils::Log->addLogCategory({
 
 my $prefs = preferences('plugin.youtube');
 my $cache = Slim::Utils::Cache->new();
+my $chain;
 
 $prefs->init({ 
 	prefer_lowbitrate => 0, 
@@ -117,12 +118,37 @@ sub initPlugin {
 #        |  |  |  |Function to call
 	Slim::Control::Request::addDispatch(['youtube', 'info'], 
 		[1, 1, 1, \&cliInfoQuery]);
-
+		
+	$chain = \&Slim::Player::StreamingController::stop;
+	*{Slim::Player::StreamingController::stop} = \&_stop;
+		
 }
+
+sub _stop {
+    my ($self) = @_;
+	my $song = $self->playingSong;
+
+	# don't know if we should allow "last position of live stream" or not ...
+	#if ($song && $song->track->url =~ /youtube:/ && !$song->pluginData('liveStream')) {	
+	if ($song && $song->track->url =~ /youtube:/) {
+		my $elapsed = $self->playingSongElapsed;
+		my $id = Plugins::YouTube::ProtocolHandler->getId($self->playingSong->track->url);
+		
+		# need to not set anything for livestreams $props->{'timeShiftDepth'}
+		if ($elapsed < $self->playingSongDuration - 15) {
+			$cache->set("yt:lastpos-$id", int ($elapsed), '30days');
+			$log->error("STOP FOR YOUTUBE $elapsed $id");
+		} else {
+			$cache->remove("yt:lastpos-$id");
+		}	
+	}	
+	
+	return $chain->(@_);
+}		
 
 sub shutdownPlugin {
 	my $class = shift;
-
+	*{Slim::Player::StreamingController::stop} = $chain;
 	$class->saveRecentlyPlayed('now');
 }
 
@@ -130,7 +156,7 @@ sub getDisplayName { 'PLUGIN_YOUTUBE' }
 
 sub updateRecentlyPlayed {
 	my ($class, $info) = @_;
-
+	
 	$recentlyPlayed{ $info->{'url'} } = $info;
 
 	$class->saveRecentlyPlayed;
@@ -301,13 +327,33 @@ sub recentHandler {
 	my @menu;
 
 	for my $item(reverse values %recentlyPlayed) {
-		unshift  @menu, {
-			name => $item->{'name'},
-			play => $item->{'url'},
-			on_select => 'play',
-			image => $item->{'icon'},
-			type => 'playlist',
-		};
+		my $id = Plugins::YouTube::ProtocolHandler->getId($item->{'url'});
+		if (my $lastpos = $cache->get("yt:lastpos-$id")) {
+			my $position = Slim::Utils::DateTime::timeFormat($lastpos);
+			$position =~ s/^0+[:\.]//;
+			unshift @menu, {
+				type => "link",
+				image => $item->{'icon'},
+				name => $item->{'name'},
+				items => [ {
+						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'),
+						type   => 'audio',
+						url    => $item->{url},
+					}, {
+						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X', $position),
+						type   => 'audio',
+						url    => $item->{url} . "&lastpos=$lastpos",
+					} ],
+			};		
+		} else {
+			unshift  @menu, {
+				name => $item->{'name'},
+				play => $item->{'url'},
+				on_select => 'play',
+				image => $item->{'icon'},
+				type => 'playlist',
+			};
+		}	
 	}
 
 	$callback->({ items => \@menu });
@@ -590,11 +636,28 @@ sub _renderList {
 			$item->{favorites_type}	= 'audio';
 		} elsif ($kind eq 'youtube#video') {
 			# dont't set type to audio to have icons
-			# $item->{type} 	   = 'audio';
-			$item->{on_select} 	= 'play';
-			$item->{play}      	= STREAM_BASE_URL . $id;
-			$item->{playall}	= 1;
-			$item->{duration} 	= 'N/A';
+			#$item->{type} 	   = 'audio';
+			if (my $lastpos = $cache->get("yt:lastpos-$id")) {
+				my $position = Slim::Utils::DateTime::timeFormat($lastpos);
+				$position =~ s/^0+[:\.]//;
+				$item->{type} = "link";
+				$item->{items} = [ {
+						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'),
+						type   => 'audio',
+						url    => STREAM_BASE_URL . $id,
+						#duration => 'N/A',
+					}, {
+						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X', $position),
+						type   => 'audio',
+						url    => STREAM_BASE_URL . $id . "&lastpos=$lastpos",
+						#duration => 'N/A',
+					} ];
+			} else {
+				$item->{on_select} 	= 'play';
+				$item->{play}      	= STREAM_BASE_URL . $id;
+				$item->{playall}	= 1;
+				$item->{duration}	= 'N/A',
+			}	
 		} elsif ($kind eq 'youtube#playlist') {
 			$item->{name} = $plTags->{prefix} . $title . $plTags->{suffix};
 			$item->{passthrough} = [ { playlistId => $id, %{$through} } ];

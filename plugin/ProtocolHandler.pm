@@ -103,13 +103,17 @@ sub new {
 	
 	main::DEBUGLOG && $log->is_debug && $log->debug( Dumper($props) );
 	
+	# erase last position from cache
+	$cache->remove("yt:lastpos-" . $class->getId($args->{'url'}));
+	
 	# set offset depending on format
 	$offset = $props->{'liveOffset'} if $props->{'liveOffset'};
 	$offset = $props->{offset}->{clusters} if $props->{offset}->{clusters}; 
 						
 	$args->{'url'} = $song->pluginData('baseURL');
+	
 	my $seekdata = $song->can('seekdata') ? $song->seekdata : $song->{'seekdata'};
-	my $startTime = $seekdata->{'timeOffset'};
+	my $startTime = $seekdata->{'timeOffset'} || $song->pluginData('lastpos');
 	  
 	if ($startTime) {
 		$song->can('startOffset') ? $song->startOffset($startTime) : ($song->{startOffset} = $startTime);
@@ -117,7 +121,7 @@ sub new {
 		$offset = undef;
 	}
 	
-	main::INFOLOG && $log->is_info && $log->info("url: $args->{url}");
+	main::INFOLOG && $log->is_info && $log->info("url: $args->{url} offset: ", $startTime || 0);
 	
 	my $self = $class->SUPER::new;
 	
@@ -151,7 +155,10 @@ sub new {
 		# only set offset when missing startTime or not starting from live edge
 		$song->startOffset($props->{'timeShiftDepth'} - $prefs->get('live_delay')) unless $startTime || !$props->{'liveOffset'};
 		$song->duration($props->{'timeShiftDepth'});
+		$song->pluginData('liveStream', 1);
 		$props->{'startOffset'} = $song->startOffset;
+	} else {
+		$song->pluginData('liveStream', 0);
 	}	
 	
 	return $self;
@@ -303,15 +310,14 @@ sub sysread {
 sub getId {
 	my ($class, $url) = @_;
 
-	$url .= '&';
-	## also youtube://http://www youtube com/watch?v=tU0_rKD8qjw
+	# also youtube://http://www.youtube.com/watch?v=tU0_rKD8qjw
 		
-	if ($url =~ /^(?:youtube:\/\/)?https?:\/\/www\.youtube\.com\/watch\?v=(.*)&/ || 
-		$url =~ /^youtube:\/\/www\.youtube\.com\/v\/(.*)&/ ||
-		$url =~ /^youtube:\/\/(.*)&/ ||
-		$url =~ /([a-zA-Z0-9_\-]+)&/ )
+	if ($url =~ /^(?:youtube:\/\/)?https?:\/\/www\.youtube\.com\/watch\?v=([^&]*)/ || 
+		$url =~ /^youtube:\/\/www\.youtube\.com\/v\/([^&]*)/ ||
+		$url =~ /^youtube:\/\/([^&]*)/ ||
+		$url =~ /([a-zA-Z0-9_\-]+)/ )
 		{
-	
+
 		return $1;
 	}
 	
@@ -322,11 +328,15 @@ sub getId {
 sub getNextTrack {
 	my ($class, $song, $successCb, $errorCb) = @_;
 	my $masterUrl = $song->track()->url;
+	
+	$song->pluginData(lastpos => ($masterUrl =~ /&lastpos=([\d]+)/)[0] || 0);
+	$masterUrl =~ s/&.*//;
+	
 	my $id = $class->getId($masterUrl);
 	my $url = "http://www.youtube.com/watch?v=$id";
 	my @allow = ( [43, 'ogg', 0], [44, 'ogg', 0], [45, 'ogg', 0], [46, 'ogg', 0] );
 	my @allowDASH = (); 	
-				  
+	
 	main::INFOLOG && $log->is_info && $log->info("next track id: $id url: $url master: $masterUrl");
 	
 	push @allowDASH, ( [251, 'ops', 160_000], [250, 'ops', 70_000], [249, 'ops', 50_000], [171, 'ogg', 128_000] ) if $prefs->get('ogg'); 
@@ -753,14 +763,15 @@ sub getMetadataFor {
 	my $icon = $class->getIcon();
 	
 	main::DEBUGLOG && $log->is_debug && $log->debug("getmetadata: $url");
-				
+
+	$url =~ s/&.*//;				
 	my $id = $class->getId($url) || return {};
 		
 	if (my $meta = $cache->get("yt:meta-$id")) {
 		my $song = $client->playingSong();
-		
+				
 		if ($song && $song->currentTrack()->url eq $url) {
-			$song->track->secs( $meta->{duration} ) if $song && $song->currentTrack()->url eq $url;
+			$song->track->secs( $meta->{duration} );
 			if (defined $meta->{_thumbnails}) {
 				$meta->{cover} = $meta->{icon} = Plugins::YouTube::Plugin::_getImage($meta->{_thumbnails}, 1);				
 				delete $meta->{_thumbnails};

@@ -304,6 +304,13 @@ PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT
 	EN	<br>- return to the LMS main screen, you can now use "My Subcriptions" and "My Playlists"
 	EN	<br>- to remove authorizations, go to <a href="https://myaccount.google.com/permissions" target="none">Google Console Permissions</a>	
 	
+PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING
+	DE	Vom Anfang an wiedergeben
+	EN	Play from the beginning
+
+PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X
+	DE	Von der letzten Position wiedergeben (%s)
+	EN	Play from last position (%s)
 
 
 	
