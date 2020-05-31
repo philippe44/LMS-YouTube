@@ -500,9 +500,10 @@ sub getStreamJSON {
 		my $sig = '';
 		my $encrypted = 0;
 		my %props;
+		my $cipher = $stream->{cipher} || $stream->{signatureCipher};
 		
-		if ($stream->{cipher}) {
-			%props = map { $_ =~ /=(.+)/ ? split(/=/, $_) : () } split(/&/, $stream->{cipher});
+		if ($cipher) {
+			%props = map { $_ =~ /=(.+)/ ? split(/=/, $_) : () } split(/&/, $cipher);
 
 			$url = uri_unescape($props{url});
 								
@@ -520,7 +521,7 @@ sub getStreamJSON {
 
 		$sig = uri_unescape($sig);
 
-		main::INFOLOG && $log->is_info && $log->info("candidate itag: $stream->{itag}, url/cipher: ", $stream->{cipher} || $stream->{url});													
+		main::INFOLOG && $log->is_info && $log->info("candidate itag: $stream->{itag}, url/cipher: ", $cipher || $stream->{url});													
 		main::INFOLOG && $log->is_info && $log->info("candidate $$allow[$index][1] sig $sig encrypted $encrypted");
 							
 		$streamInfo = { url => $url, sp => $props{sp} || 'signature', sig => $sig, encrypted => $encrypted, format => $$allow[$index][1], bitrate => $$allow[$index][2] };
