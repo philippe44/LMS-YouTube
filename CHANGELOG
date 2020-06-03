@@ -1,3 +1,8 @@
+0.110.0
+ - reposition in aac
+ - use onStream instead of crafted paging calls
+ - various fixes
+
 0.101.0
  - yet another format change in signature
  

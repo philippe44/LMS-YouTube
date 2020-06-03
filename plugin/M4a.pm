@@ -46,50 +46,152 @@ sub getStartOffset {
 	my $index = 0;
 	my $time = 0;
 	
-	if ($startTime) {
+	return $cb->(0) unless $startTime;
+	
+	# use MPD timeline if possible, otherwise it's plain mp4
+	if (defined $props->{'segmentTimeline'}) {
 		foreach (@{$props->{'segmentTimeline'}}) {
 			$time += $_->{'d'} / $props->{'timescale'};
 			last if $time >= $startTime;
 			$index++;
 		}	
-	}		
+		main::INFOLOG && $log->is_info && $log->info("using MPD segment timeline for offset");
+		$cb->($index);
+	} else {
+		my $http = Slim::Networking::Async::HTTP->new;
+		my $args = { startTime => $startTime };
 		
-	$cb->($index);
+		$http->send_request( {
+			request     => HTTP::Request->new( GET => $url ),
+			onStream  	=> sub {
+				my ($http, $dataref) = @_;
+			
+				if (my $atom = parseAtoms('sidx', $dataref, $args)) {
+					my $offset = $args->{offset} || 0;
+					$startTime -= $atom->{time};
+
+					foreach my $item (@{$atom->{indexes}}) {
+						last if ($args->{startTime} -= $item->{duration} / $atom->{timescale}) <= 0;
+						$offset += $item->{size};
+					}
+
+					main::INFOLOG && $log->is_info && $log->info("using sidx for offset");
+					$cb->($offset);
+					return 0;
+				} elsif ($args->{offset} < 128*1024) {
+					return 1;
+				} else {	
+					$log->warn( "could not find get offset within $args->{offset} bytes" );
+					$cb->();
+					return 0;
+				}	
+			},
+			onError     => sub {
+				my ($self, $error) = @_;
+				$log->warn( "could not find start offset $error " );
+				$cb->(0);
+			},
+		} );
+	}	
 }	
 
-sub getProperties {
+sub setProperties {
 	my ($song, $props, $cb) = @_;
-	my $client = $song->master();
-					
-	$song->track->secs( $props->{'duration'} );
+	my $url = $song->pluginData('baseURL');
+	my $http = Slim::Networking::Async::HTTP->new;
+	my $args = {};
 	
-	if ( $props->{'samplingRate'} ) {
-		updateMetadata($song, $props);
-	} else {
-		# no audio details in header, need to wait for stream
-		$props->{'_song'} = $song;
-	}	
-	
-	$cb->();
-}
-
-sub updateMetadata {
-	my ($song, $props) = @_;
-	my $client = $song->master();
-					
-	$song->track->bitrate( $props->{'bitrate'} );
-	$song->track->samplerate( $props->{'samplingRate'} );
-	# $song->track->samplesize( $props->{'track'}->{'samplesize'} );
-	$song->track->channels( $props->{'channels'} ); 
-	
-	my $id = Plugins::YouTube::ProtocolHandler->getId($song->track()->url);
-	if (my $meta = $cache->get("yt:meta-$id")) {
-		$meta->{type} = "YouTube (aac\@$props->{'samplingRate'}Hz)";
-		$cache->set("yt:meta-$id", $meta);
+	# if this is MPD, get the initialization segment
+	if ($props->{'initializeURL'}) {
+		main::INFOLOG && $log->is_info && $log->info("using initialize url $props->{'initializeURL'}");
+		$url .= $props->{'initializeURL'};
+		$song->track->secs( $props->{'duration'} );
 	}
 	
-	$client->currentPlaylistUpdateTime( Time::HiRes::time() );
-	Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );	
+	$http->send_request( {
+		request     => HTTP::Request->new( GET => $url ),
+		onStream  	=> sub {
+			my ($http, $dataref) = @_;
+						
+			if (my $atom = parseAtoms('moov', $dataref, $args)) {
+				$props->{mp4a} = $atom->{'trak'}->{'mdia'}->{'minf'}->{'stbl'}->{'stsd'}->{'entries'}->{'mp4a'};	
+				$song->track->bitrate( $props->{bitrate} || $props->{mp4a}->{'esds'}->{'avgbitrate'} );
+				$song->track->samplerate( $props->{'samplingRate'} || $props->{mp4a}->{'samplerate'} );
+				$song->track->channels( $props->{'channels'} || $props->{mp4a}->{'channelcount'} ); 
+				# $song->track->samplesize( $props->{'track'}->{'samplesize'} );
+	
+				my $id = Plugins::YouTube::ProtocolHandler->getId($song->track()->url);
+				if (my $meta = $cache->get("yt:meta-$id")) {
+					$meta->{type} = "YouTube (aac\@$props->{'samplingRate'}Hz)";
+					$cache->set("yt:meta-$id", $meta);
+				}
+	
+				$song->master->currentPlaylistUpdateTime( Time::HiRes::time() );
+				Slim::Control::Request::notifyFromArray( $song->master, [ 'newmetadata' ] );	
+				main::INFOLOG && $log->is_info && $log->info("found moov (in $args->{offset} bytes) and set properties abr: ", $song->track->bitrate, 
+															 " sr:",$song->track->samplerate, " ch:", $song->track->channels); 
+				
+				$props->{sidx} =		
+				
+				$cb->();
+				return 0;
+			} elsif ($args->{offset} < 128*1024) {
+				return 1;
+			} else {	
+				$log->warn( "could not find get properties within $args->{offset} bytes" );
+				$cb->();
+				return 0;
+			}	
+		},
+		onError     => sub {
+			my ($self, $error) = @_;
+			$log->warn( "could not find get properties $error" );
+			$cb->();
+		},
+	} );
+}	
+
+sub parseAtoms {
+	my ( $atom, $dataref, $context ) = @_;
+		
+	if (!defined $context->{offset}) {	
+		$context->{offset} = 0;	
+		$context->{_parser} = {	'inBuf'       => '',
+							'state'       => ATOM,   
+							'need'        => ATOM_NEED,  
+							'offset'      => 0,       
+		};
+	}	
+		
+	my $v = $context->{_parser};
+	$v->{'inBuf'} .= $$dataref;
+	
+	while ($v->{need} <= length $v->{inBuf}) {
+	
+		if ($v->{state} == ATOM) {
+			my ($atom, $size) = get_next_atom($v->{inBuf});
+					
+			$v->{need} = $size - 8;
+			$v->{atom} = $atom;
+			$v->{state} = PARSING;
+			$v->{inBuf} = substr($v->{inBuf}, 8);
+			$context->{offset} += $size;
+		}	
+
+		return undef if $v->{need} > length $v->{inBuf};
+		
+		# enough data to process box and all included sub-boxes
+		$v->{$v->{atom}} = process_atom($v->{atom}, $v->{need}, substr($v->{inBuf}, 0, $v->{need}));
+			
+		$v->{inBuf} = substr($v->{inBuf}, $v->{need});
+		$v->{state} = ATOM;
+		$v->{need} = ATOM_NEED;
+
+		# have we acquired the desired atom 
+		return $v->{$atom} if $v->{$atom};
+	}	
+	
+	return undef;
 }
 
 sub getAudio {
@@ -120,16 +222,8 @@ sub getAudio {
 		$v->{need} = ATOM_NEED;
 		
 		if ($v->{mdat}) {
-			my $mp4a = $v->{'moov'}->{'trak'}->{'mdia'}->{'minf'}->{'stbl'}->{'stsd'}->{'entries'}->{'mp4a'};	
-			
-			# audio details acquired 
-			if ( !$props->{'samplingRate'} && $mp4a->{'samplerate'} ) {
-				$props->{'bitrate'} ||= $mp4a->{'esds'}->{'avgbitrate'};
-				$props->{'samplingRate'} = $mp4a->{'samplerate'};
-				$props->{'channels'} = $mp4a->{'channelcount'};
-				updateMetadata($props->{'_song'}, $props);
-			}			
-			
+			# mp4a data can come from segment (MPD) or be unique for a file (regular stream)
+			my $mp4a = $v->{'moov'}->{'trak'}->{'mdia'}->{'minf'}->{'stbl'}->{'stsd'}->{'entries'}->{'mp4a'} || $props->{'mp4a'};	
 			$v->{outBuf} .= convertDashSegtoADTS($mp4a->{'esds'}, $v->{mdat}->{data}, $v->{'moof'}->{'traf'});
 			main::DEBUGLOG && $log->is_debug && $log->debug("extracted ", length $v->{mdat}->{data}, " bytes, out ", length $v->{outBuf});
 			$v->{mdat} = undef;
@@ -147,6 +241,7 @@ my  %atom_handler = (
 	'minf' => sub { process_container('minf', @_) },
 	'stbl' => sub { process_container('stbl', @_) },
 	'stsd' => \&process_stsd_atom,
+	'sidx' => \&process_sidx_atom,
 	'mp4a' => \&process_mp4a_atom,
 	'esds' => \&process_esds_atom,
 	'mvex' => sub { process_container('mvex', @_) },
@@ -300,6 +395,40 @@ sub process_stsd_atom {
 		my ($sub_type, $sub_size) = get_next_atom(substr($data, 8+$offset));
 		$result{'entries'}{$sub_type} = process_atom($sub_type, $sub_size - 8, substr($data, 16+$offset));
 		$offset += $sub_size;
+	}
+	
+    return  \%result ;
+}
+
+sub process_sidx_atom {
+	my ($size, $data) = @_;
+	my $offset = 24;
+    my %result;    
+    
+	$result{'version'}     = decode_u32($data, 0, 4);
+	$result{'reference_id'} = decode_u32(substr($data, 4, 4));
+	$result{'timescale'} = decode_u32(substr($data, 8, 4));
+
+	if ($result{'version'}) {
+		$result{'time'} = decode_u64(substr($data, 12, 8));
+		$result{'offset'} = decode_u64(substr($data, 20, 8));
+		$offset += 8;
+	} else {
+		$result{'time'} = decode_u32(substr($data, 12, 4));
+		$result{'offset'} = decode_u32(substr($data, 16, 4));
+	}	
+	
+	# big endian order ...
+	$result{'reserved'} = decode_u16(substr($data, 20, 2));
+	$result{'reference_count'} = decode_u16(substr($data, 22, 2));
+	$result{'indexes'} = [ ];
+
+	for (my $i = 0 ; $i < $result{'reference_count'} ; $i++) {
+		my $size = decode_u32(substr($data, $offset, 4)) & 0x7fffffff;
+		my $duration = decode_u32(substr($data, 4+$offset, 4));
+		my $SAP = decode_u32(substr($data, 8+$offset, 4));
+		push @{$result{'indexes'}}, { size => $size, duration => $duration, SAP => $SAP };
+		$offset += 12;
 	}
 	
     return  \%result ;

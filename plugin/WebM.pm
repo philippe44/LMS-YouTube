@@ -148,11 +148,11 @@ sub getHeaders {
 			$props->{timecode_scale} = getInfo(substr($v->{inBuf}, 0, $size), ID_TIMECODE_SCALE, "u") || 1000000;
 			$log->debug("track timecode scale: $props->{timecode_scale}");
 			$props->{duration} = getInfo(substr($v->{inBuf}, 0, $size), ID_DURATION, "f") / (1000000 / $props->{timecode_scale});
-			$log->info("track duration: $props->{duration}");
+			main::INFOLOG && $log->is_info && $log->info("track duration: $props->{duration}");
 		} elsif	($id eq ID_TRACK_ENTRY) {
 			$props->{track} = getTrackInfo(substr $v->{inBuf}, 0, $size);
 			$props->{offset}->{clusters} = $v->{position} + $size;
-			$log->debug("offset: clusters=$props->{offset}->{clusters}");
+			main::DEBUGLOG && $log->is_debug && $log->debug("offset: clusters=$props->{offset}->{clusters}");
 		} 	
 				
 		$v->{inBuf} = substr($v->{inBuf}, $size);
@@ -177,7 +177,7 @@ sub getAudio {
 		$v->{seqnum} = 0;
 		$v->{outBuf} = buildOggPage( [$props->{track}->{codec}->{header}], 0, 0x02, $v->{seqnum}++ );
 		$v->{outBuf} .= buildOggPage( [$props->{track}->{codec}->{setup}, $props->{track}->{codec}->{comment}], 0, 0x00, $v->{seqnum}++ );
-		$log->debug("starting new audio parsing");
+		main::DEBUGLOG && $log->is_debug && $log->debug("starting new audio parsing");
 	}
 	
 	# process all we can
@@ -190,7 +190,7 @@ sub getAudio {
 			$v->{position} += getEBML(\$v->{inBuf}, \$id, \$size);
 						
 			# skip id that are not CLUSTER *except* the SEGMENT !
-			$log->info("cluster of $size byte (last audio $v->{timecode} ms)") if ($id eq ID_CLUSTER);
+			main::DEBUGLOG && $log->is_debug && $log->debug("cluster of $size byte (last audio $v->{timecode} ms)") if ($id eq ID_CLUSTER);
 			next if $id eq ID_CLUSTER || $id eq ID_SEGMENT;
 			
 			$v->{need} = $size;	
@@ -210,7 +210,7 @@ sub getAudio {
 		# handle sub-ID's we care		
 		if ($id eq ID_TIMECODE) {
 			$v->{timecode} = decode_u(substr($v->{inBuf}, 0, $size), $size);
-			$log->debug("timecode: $v->{timecode}");
+			main::DEBUGLOG && $log->is_debug && $log->debug("timecode: $v->{timecode}");
 		} elsif ($id eq ID_BLOCK || $id eq ID_BLOCK_SIMPLE) {
 			my $time;
 			my $out = extractAudio(\$v->{inBuf}, $props->{track}->{tracknum}, $size, \$time);
@@ -398,10 +398,10 @@ sub getTrackInfo {
 				
 		if ($id eq ID_TRACK_NUM) {
 			$info->{tracknum} = decode_u(substr($s, 0, $size), $size);
-			$log->info("tracknum: $info->{tracknum}");
+			main::INFOLOG && $log->is_info && $log->info("tracknum: $info->{tracknum}");
 		} elsif	($id eq ID_CODEC) {
 			$info->{codec}->{id} = substr $s, 0, $size;
-			$log->info("codec: $info->{codec}->{id}");
+			main::INFOLOG && $log->is_info && $log->info("codec: $info->{codec}->{id}");
 		} elsif ($id eq ID_CODEC_PRIVATE) {
 			$private = substr($s, 0, $size);
 		} elsif ($id eq ID_AUDIO) {
@@ -423,7 +423,7 @@ sub getTrackInfo {
 		my $count = decode_u8(substr $private, 0, 1) + 1;
 		my $hdr_size = decode_u8(substr $private, 1, 1);
 		my $set_size = decode_u8(substr $private, 2, 1);
-		$log->debug ("VORBIS private count $count, hdr: $hdr_size, setup: $set_size, total: ". length($private));
+		main::DEBUGLOG && $log->is_debug && $log->debug ("VORBIS private count $count, hdr: $hdr_size, setup: $set_size, total: ". length($private));
 									
 		# the explanation for the packet length & offsets of codec private data are found here
 		# https://matroska.org/technical/specs/codecid/index.html 
@@ -437,7 +437,7 @@ sub getTrackInfo {
 		$info->{bitrate} = unpack('V', substr($info->{codec}->{header}, 20, 4));
 		$info->{sampleSize} = 16 unless ($info->{sampleSize} == 8);
 	} elsif ( $info->{codec}->{id} eq 'A_OPUS' ) {
-		$log->debug("OPUS private count ", length $private);
+		main::DEBUGLOG && $log->is_debug && $log->debug("OPUS private count ", length $private);
 		
 		# see https://wiki.xiph.org/MatroskaOpus and https://tools.ietf.org/html/rfc7845
 		$info->{codec}->{header} = $private;
@@ -602,75 +602,65 @@ sub decode_f {
 	return undef;
 }
 
-
 sub getStartOffset {
 	my ($url, $startTime, $props, $cb) = @_;
-	my $process;
 	my $var = {	'inBuf'       => '',
 				'id'          => undef,   
 				'need'        => EBML_NEED,  
-				'offset'      => $props->{offset}->{cues},       
 		};
-	
-	$process = sub {
-		Slim::Networking::SimpleAsyncHTTP->new(
 		
-			sub {
-				my $content = shift->content;
-								
-				$var->{'inBuf'} .= $content;
+	my $http = Slim::Networking::Async::HTTP->new;
+			
+	$http->send_request( {
+		request     => HTTP::Request->new( GET => $url, [ 'Range' => "bytes=$props->{offset}->{cues}-" ] ),
+		onStream  	=> sub {		
+				my ($http, $dataref) = @_;
+												
+				$var->{'inBuf'} .= $$dataref;		
 				my $res = getCues($var);
 				
 				if ( $res eq WEBM_MORE ) {
-					return $cb->( $props->{offset}->{clusters} ) if length($content) < HEADER_CHUNK; 
-					
-					main::DEBUGLOG && $log->is_debug && $log->debug("paging: $var->{offset}");
-					$var->{offset} += length $content;
-					$process->();
+					return 1 if $$dataref ne '';
+					$cb->( $props->{offset}->{clusters} );
+					return 0;		
 				} elsif ( $res eq WEBM_DONE ) {	
 					my $offset = getCueOffset($var->{outBuf}, $startTime*($props->{timecode_scale}/1000000)*1000) + $props->{segment_offset};
 					$cb->($offset);
+					return 0;
 				} elsif ( $res eq WEBM_ERROR ) {
 					$log->warn( "could not find start offset" );
 					$cb->( $props->{offset}->{clusters} );
+					return 0;
 				}		
-			},
-		
-			sub {
-				$log->warn( "could not find start offset" );
+		},
+		onError		=> sub {
+				my ($self, $error) = @_;
+				$log->warn( "could not find start offset $error" );
 				$cb->( $props->{offset}->{clusters} );
-			}
-		)->get( $url, 'Range' => "bytes=$var->{'offset'}-" . ($var->{'offset'} + HEADER_CHUNK - 1) );
-	 };	
-	
-	$process->();
+		},
+	} );
 }
 
-sub getProperties {
+sub setProperties {
 	my ($song, $props, $cb) = @_;
 	my $client = $song->master();
-	my $process;
 	my $var = {	'inBuf'       => '',
 				'id'          => undef,   
 				'need'        => EBML_NEED,  
-				'offset'      => 0,       
 		};
-	
-	$process = sub {
-		Slim::Networking::SimpleAsyncHTTP->new(
 		
-			sub {
-				my $content = shift->content;
-								
-				$var->{'inBuf'} .= $content;
+	my $http = Slim::Networking::Async::HTTP->new;
+			
+	$http->send_request( {
+		request     => HTTP::Request->new( GET => $song->pluginData('baseURL') ),
+		onStream  	=> sub {		
+				my ($http, $dataref) = @_;
+												
+				$var->{'inBuf'} .= $$dataref;
 				my $res = getHeaders($var, $props);
 				
 				if ( $res eq WEBM_MORE ) {
-					return $cb->() if length($content) < HEADER_CHUNK; 
-					
-					main::DEBUGLOG && $log->is_debug && $log->debug("paging: $var->{offset}");
-					$var->{offset} += length $content;
-					$process->();
+					return 1;
 				} elsif ( $res eq WEBM_DONE ) {	
 					$song->track->secs( $props->{'duration'} / 1000 ) if $props->{'duration'};
 					$song->track->bitrate( $props->{'track'}->{'bitrate'} || $props->{'bitrate'} );
@@ -690,21 +680,19 @@ sub getProperties {
 					Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );	
 									
 					$cb->();
+					return 0;
 				} elsif ( $res eq WEBM_ERROR ) {
 					$log->error( "could not get webm headers" );
 					$cb->();
+					return 0;
 				}		
-			},
-		
-			sub {
-				$log->warn("could not get codec info: ", shift->error);
+		},
+		onError	=>	sub {
+				my ($self, $error) = @_;
+				$log->warn("could not get codec info $error");
 				$cb->();
-			}
-		)->get( $song->pluginData('baseURL'), 'Range' => "bytes=$var->{'offset'}-" . ($var->{'offset'} + HEADER_CHUNK - 1) );
-	 };	
-	
-	$process->();
+		}
+	 } );	
 }
-
 
 1;

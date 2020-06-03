@@ -67,9 +67,9 @@ but I'm not sure at that point. Anyway, the dash webm format used in codec
 handling than normal webm
 =cut
 
-my $getProperties  = { 	'ogg' => \&Plugins::YouTube::WebM::getProperties, 
-						'ops' => \&Plugins::YouTube::WebM::getProperties, 
-						'aac' => \&Plugins::YouTube::M4a::getProperties 
+my $setProperties  = { 	'ogg' => \&Plugins::YouTube::WebM::setProperties, 
+						'ops' => \&Plugins::YouTube::WebM::setProperties, 
+						'aac' => \&Plugins::YouTube::M4a::setProperties 
 				};
 my $getAudio 	   = { 	'ogg' => \&Plugins::YouTube::WebM::getAudio, 
 						'ops' => \&Plugins::YouTube::WebM::getAudio, 
@@ -238,27 +238,6 @@ sub sysread {
 		return undef;
 	}
 		
-	if (!$v->{'fetching'} && !$v->{'init'} && $props->{'initializeURL'}) {
-	
-		$v->{'fetching'} = 1;
-		$v->{'init'} = 1;
-		
-		main::INFOLOG && $log->is_info && $log->info("fetching initialization URL $baseURL$props->{'initializeURL'}");
-		
-		Slim::Networking::SimpleAsyncHTTP->new(
-			sub {
-				$v->{'inBuf'} = $_[0]->content;
-				$v->{'fetching'} = 0;
-			},
-
-			sub {
-				$log->warn("error fetching initialization for $baseURL");
-				$v->{'fetching'} = 0;
-			}, 
-			
-		)->get($baseURL . $props->{'initializeURL'});
-	}	
-		
 	# need more data
 	if ( length $v->{'outBuf'} < MIN_OUT && !$v->{'fetching'} && $v->{'streaming'} ) {
 		my $url = $baseURL;
@@ -388,9 +367,10 @@ sub getNextTrack {
 				if ($dashmpd) {
 					getMPD($dashmpd, \@allowDASH, sub {
 								my $props = shift;
+								return $errorCb->() unless $props;
 								$song->pluginData(props => $props);
 								$song->pluginData(baseURL  => $props->{'baseURL'});
-								$getProperties->{$props->{'format'}}($song, $props, $successCb);
+								$setProperties->{$props->{'format'}}($song, $props, $successCb);
 							} );
 				} else {	
 					my ($streams) = $content =~ /\"adaptiveFormats\":(\[.*?\])/;
@@ -415,7 +395,7 @@ sub getNextTrack {
 									main::DEBUGLOG && $log->is_debug && $log->debug("unobfuscated signature $sig");
 									$song->pluginData(props => $props);
 									$song->pluginData(baseURL  => "$streamInfo->{'url'}" . ($sig ? "&$streamInfo->{sp}=$sig" : ''));
-									$getProperties->{$props->{'format'}}($song, $props, $successCb);
+									$setProperties->{$props->{'format'}}($song, $props, $successCb);
 								} else {
 									$errorCb->();
 								}	
@@ -546,7 +526,6 @@ sub getMPD {
 			my $adaptationSet = $period->{'AdaptationSet'}; 
 			
 			$log->error("Only one period supported") if @{$mpd->{'Period'}} != 1;
-						
 			#$log->error(Dumper($mpd));
 																		
 			# find suitable format, first preferred
@@ -565,6 +544,8 @@ sub getMPD {
 				}	
 			}
 			
+			# might not have found anything	
+			return $cb->() unless $selRepres;
 			main::INFOLOG && $log->is_info && $log->info("selected $selRepres->{'id'}");
 			
 			my $timeShiftDepth	= $selRepres->{'SegmentList'}->{'timeShiftBufferDepth'} // 
