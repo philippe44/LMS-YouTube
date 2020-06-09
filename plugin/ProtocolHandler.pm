@@ -54,7 +54,8 @@ my $prefs = preferences('plugin.youtube');
 my $cache = Slim::Utils::Cache->new;
 
 Slim::Player::ProtocolHandlers->registerHandler('youtube', __PACKAGE__);
-Slim::Player::ProtocolHandlers->registerURLHandler(PAGE_URL_REGEXP, __PACKAGE__);
+Slim::Player::ProtocolHandlers->registerURLHandler(PAGE_URL_REGEXP, __PACKAGE__)
+    if Slim::Player::ProtocolHandlers->can('registerURLHandler');
 
 sub flushCache { $cache->cleanup(); }
 
