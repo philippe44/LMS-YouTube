@@ -122,7 +122,7 @@ sub setProperties {
 	
 				my $id = Plugins::YouTube::ProtocolHandler->getId($song->track()->url);
 				if (my $meta = $cache->get("yt:meta-$id")) {
-					$meta->{type} = "YouTube (aac\@$props->{'samplingRate'}Hz)";
+					$meta->{type} = 'YouTube (aac@'. $song->track->samplerate . 'Hz)';
 					$cache->set("yt:meta-$id", $meta);
 				}
 	
@@ -130,8 +130,6 @@ sub setProperties {
 				Slim::Control::Request::notifyFromArray( $song->master, [ 'newmetadata' ] );	
 				main::INFOLOG && $log->is_info && $log->info("found moov (in $args->{offset} bytes) and set properties abr: ", $song->track->bitrate, 
 															 " sr:",$song->track->samplerate, " ch:", $song->track->channels); 
-				
-				$props->{sidx} =		
 				
 				$cb->();
 				return 0;

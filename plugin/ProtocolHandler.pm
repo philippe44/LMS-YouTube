@@ -757,18 +757,18 @@ sub getSignature {
 }	
 
 sub getMetadataFor {
-	my ($class, $client, $url) = @_;
+	my ($class, $client, $full_url) = @_;
 	my $icon = $class->getIcon();
 	
-	$url =~ s/&.*//;				
+	my ($url) = $full_url =~ /([^&]*)/;				
 	my $id = $class->getId($url) || return {};
 	
 	main::DEBUGLOG && $log->is_debug && $log->debug("getmetadata: $url");
 		
 	if (my $meta = $cache->get("yt:meta-$id")) {
 		my $song = $client->playingSong();
-				
-		if ($song && $song->currentTrack()->url eq $url) {
+
+		if ($song && $song->currentTrack()->url eq $full_url) {
 			$song->track->secs( $meta->{duration} );
 			if (defined $meta->{_thumbnails}) {
 				$meta->{cover} = $meta->{icon} = Plugins::YouTube::Plugin::_getImage($meta->{_thumbnails}, 1);				

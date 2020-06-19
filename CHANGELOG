@@ -1,3 +1,6 @@
+0.110.1
+ - missing metadata in aac
+ 
 0.110.0
  - reposition in aac
  - use onStream instead of crafted paging calls
