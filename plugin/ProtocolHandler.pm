@@ -47,7 +47,7 @@ use Plugins::YouTube::M4a;
 
 use constant MIN_OUT	=> 8192;
 use constant DATA_CHUNK => 128*1024;	
-use constant PAGE_URL_REGEXP => qr{^https://www\.youtube\.com/(?:watch\?|playlist\?|channel/)}i;
+use constant PAGE_URL_REGEXP => qr{^https://(?:www|m)\.youtube\.com/(?:watch\?|playlist\?|channel/)}i;
 
 my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
@@ -311,8 +311,8 @@ sub getId {
 
 	# also youtube://http://www.youtube.com/watch?v=tU0_rKD8qjw
 		
-	if ($url =~ /^(?:youtube:\/\/)?https?:\/\/www\.youtube\.com\/watch\?v=([^&]*)/ || 
-		$url =~ /^youtube:\/\/www\.youtube\.com\/v\/([^&]*)/ ||
+	if ($url =~ /^(?:youtube:\/\/)?https?:\/\/(?:www|m)\.youtube\.com\/watch\?v=([^&]*)/ ||
+		$url =~ /^youtube:\/\/(?:www|m)\.youtube\.com\/v\/([^&]*)/ ||
 		$url =~ /^youtube:\/\/([^&]*)/ ||
 		$url =~ /([a-zA-Z0-9_\-]+)/ )
 		{
