@@ -47,7 +47,7 @@ use Plugins::YouTube::M4a;
 
 use constant MIN_OUT	=> 8192;
 use constant DATA_CHUNK => 128*1024;	
-use constant PAGE_URL_REGEXP => qr{^https://(?:www|m)\.youtube\.com/(?:watch\?|playlist\?|channel/)}i;
+use constant PAGE_URL_REGEXP => qr{^https?://(?:(?:www|m)\.youtube\.com/(?:watch\?|playlist\?|channel/)|youtu\.be/)}i;
 
 my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
@@ -314,6 +314,7 @@ sub getId {
 	if ($url =~ /^(?:youtube:\/\/)?https?:\/\/(?:www|m)\.youtube\.com\/watch\?v=([^&]*)/ ||
 		$url =~ /^youtube:\/\/(?:www|m)\.youtube\.com\/v\/([^&]*)/ ||
 		$url =~ /^youtube:\/\/([^&]*)/ ||
+		$url =~ m{^https?://youtu\.be/([a-zA-Z0-9_\-]+)}i ||
 		$url =~ /([a-zA-Z0-9_\-]+)/ )
 		{
 
@@ -917,7 +918,11 @@ sub explodePlaylist {
 
 		my $handler;
 		my $search;
-		if ( $uri->path eq '/watch' ) {
+		if ( $uri->host eq 'youtu.be' ) {
+			$handler = \&Plugins::YouTube::Plugin::urlHandler;
+			$search = ($uri->path_segments)[1];
+		}
+		elsif ( $uri->path eq '/watch' ) {
 			$handler = \&Plugins::YouTube::Plugin::urlHandler;
 			$search = $uri->query_param('v');
 		}
