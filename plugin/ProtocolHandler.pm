@@ -24,6 +24,7 @@ use strict;
 
 use List::Util qw(min max first);
 use HTML::Parser;
+use HTML::Entities;
 use HTTP::Date;
 use URI;
 use URI::Escape;
@@ -179,11 +180,10 @@ sub close {
 
 sub onStop {
     my ($class, $song) = @_;
-
-	# return if $song->pluginData('liveStream');
-	
 	my $elapsed = $song->master->controller->playingSongElapsed;
 	my $id = Plugins::YouTube::ProtocolHandler->getId($song->track->url);
+	
+	# return if $song->pluginData('liveStream');
 	
 	if ($elapsed < $song->duration - 15) {
 		$cache->set("yt:lastpos-$id", int ($elapsed), '30days');
@@ -191,6 +191,22 @@ sub onStop {
 	} else {
 		$cache->remove("yt:lastpos-$id");
 	}	
+}
+
+sub onStream {
+	my ($class, $client, $song) = @_;
+	my $url = $song->track->url;
+	
+	$url =~ s/&lastpos=([\d]+)//;
+	
+	my $id = Plugins::YouTube::ProtocolHandler->getId($url);
+	my $meta = $cache->get("yt:meta-$id") || {};
+
+	Plugins::YouTube::Plugin->updateRecentlyPlayed( {
+		url  => $url, 
+		name => $meta->{_fulltitle} || $meta->{title} || $song->track->title,
+		icon => $meta->{icon} || $song->icon,
+	} );
 }
 
 sub formatOverride { 
@@ -777,13 +793,7 @@ sub getMetadataFor {
 				main::INFOLOG && $log->is_info && $log->info("updating thumbnail cache with hires $meta->{cover}");
 			}
 		}	
-											
-		Plugins::YouTube::Plugin->updateRecentlyPlayed({
-			url  => $url, 
-			name => $meta->{_fulltitle} || $meta->{title}, 
-			icon => $meta->{icon},
-		});
-
+				
 		main::DEBUGLOG && $log->is_debug && $log->debug("cache hit: $id");
 		
 		return $meta;

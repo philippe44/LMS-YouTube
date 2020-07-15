@@ -105,10 +105,8 @@ sub initPlugin {
 		Plugins::YouTube::Settings->new;
 	}
 	
-	for my $recent (reverse @{$prefs->get('recent')}) {
-		$recentlyPlayed{ $recent->{'url'} } = $recent;
-	}
-	
+	%recentlyPlayed = map { $_->{url} => $_ } reverse @{$prefs->get('recent')};
+		
 	$prefs->set('country', $convertCountry->{$prefs->get('country')}) if $convertCountry->{$prefs->get('country')};
 	
 #        |requires Client
@@ -122,37 +120,15 @@ sub initPlugin {
 
 
 sub shutdownPlugin {
-	my $class = shift;
-	$class->saveRecentlyPlayed('now');
+	my @played = values %recentlyPlayed;
+	$prefs->set('recent', \@played);
 }
 
 sub getDisplayName { 'PLUGIN_YOUTUBE' }
 
 sub updateRecentlyPlayed {
 	my ($class, $info) = @_;
-	
-	$recentlyPlayed{ $info->{'url'} } = $info;
-
-	$class->saveRecentlyPlayed;
-}
-
-sub saveRecentlyPlayed {
-	my $class = shift;
-	my $now   = shift;
-
-	unless ($now) {
-		Slim::Utils::Timers::killTimers($class, \&saveRecentlyPlayed);
-		Slim::Utils::Timers::setTimer($class, time() + 10, \&saveRecentlyPlayed, 'now');
-		return;
-	}
-
-	my @played;
-
-	for my $key (reverse keys %recentlyPlayed) {
-		unshift @played, $recentlyPlayed{ $key };
-	}
-
-	$prefs->set('recent', \@played);
+	$recentlyPlayed{ $info->{'url'} } ||= $info;
 }
 
 sub toplevel {
