@@ -323,9 +323,10 @@ sub getId {
 
 	# also youtube://http://www.youtube.com/watch?v=tU0_rKD8qjw
 		
-	if ($url =~ /^(?:youtube:\/\/)?https?:\/\/www\.youtube\.com\/watch\?v=([^&]*)/ || 
-		$url =~ /^youtube:\/\/www\.youtube\.com\/v\/([^&]*)/ ||
+	if ($url =~ /^(?:youtube:\/\/)?https?:\/\/(?:www|m)\.youtube\.com\/watch\?v=([^&]*)/ ||
+		$url =~ /^youtube:\/\/(?:www|m)\.youtube\.com\/v\/([^&]*)/ ||
 		$url =~ /^youtube:\/\/([^&]*)/ ||
+		$url =~ m{^https?://youtu\.be/([a-zA-Z0-9_\-]+)}i ||
 		$url =~ /([a-zA-Z0-9_\-]+)/ )
 		{
 

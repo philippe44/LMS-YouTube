@@ -1,3 +1,6 @@
+0.120.1
+ - revert TuneIn integration as it broke 7.9.x playback
+ 
 0.120.0
  - recently played is really what has been played recently, not what ahs been put in the playlist (use playlist to capture that)
  - integrated TuneIn (credits @mavit)
