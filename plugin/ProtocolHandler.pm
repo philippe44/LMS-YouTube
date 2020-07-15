@@ -28,7 +28,6 @@ use HTML::Entities;
 use HTTP::Date;
 use URI;
 use URI::Escape;
-use URI::QueryParam;
 use Scalar::Util qw(blessed);
 use JSON::XS;
 use Data::Dumper;
@@ -48,15 +47,12 @@ use Plugins::YouTube::M4a;
 
 use constant MIN_OUT	=> 8192;
 use constant DATA_CHUNK => 128*1024;	
-use constant PAGE_URL_REGEXP => qr{^https?://(?:(?:www|m)\.youtube\.com/(?:watch\?|playlist\?|channel/)|youtu\.be/)}i;
 
 my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
 my $cache = Slim::Utils::Cache->new;
 
 Slim::Player::ProtocolHandlers->registerHandler('youtube', __PACKAGE__);
-Slim::Player::ProtocolHandlers->registerURLHandler(PAGE_URL_REGEXP, __PACKAGE__)
-    if Slim::Player::ProtocolHandlers->can('registerURLHandler');
 
 sub flushCache { $cache->cleanup(); }
 
@@ -327,10 +323,9 @@ sub getId {
 
 	# also youtube://http://www.youtube.com/watch?v=tU0_rKD8qjw
 		
-	if ($url =~ /^(?:youtube:\/\/)?https?:\/\/(?:www|m)\.youtube\.com\/watch\?v=([^&]*)/ ||
-		$url =~ /^youtube:\/\/(?:www|m)\.youtube\.com\/v\/([^&]*)/ ||
+	if ($url =~ /^(?:youtube:\/\/)?https?:\/\/www\.youtube\.com\/watch\?v=([^&]*)/ || 
+		$url =~ /^youtube:\/\/www\.youtube\.com\/v\/([^&]*)/ ||
 		$url =~ /^youtube:\/\/([^&]*)/ ||
-		$url =~ m{^https?://youtu\.be/([a-zA-Z0-9_\-]+)}i ||
 		$url =~ /([a-zA-Z0-9_\-]+)/ )
 		{
 
@@ -920,40 +915,6 @@ sub getIcon {
 	return Plugins::YouTube::Plugin->_pluginDataFor('icon');
 }
 
-sub explodePlaylist {
-	my ( $class, $client, $uri, $cb ) = @_;
 
-	if ( $uri =~ PAGE_URL_REGEXP ) {
-		$uri = URI->new($uri);
-
-		my $handler;
-		my $search;
-		if ( $uri->host eq 'youtu.be' ) {
-			$handler = \&Plugins::YouTube::Plugin::urlHandler;
-			$search = ($uri->path_segments)[1];
-		}
-		elsif ( $uri->path eq '/watch' ) {
-			$handler = \&Plugins::YouTube::Plugin::urlHandler;
-			$search = $uri->query_param('v');
-		}
-		elsif ( $uri->path eq '/playlist' ) {
-			$handler = \&Plugins::YouTube::Plugin::playlistIdHandler;
-			$search = $uri->query_param('list');
-		}
-		elsif ( ($uri->path_segments)[1] eq 'channel' ) {
-			$handler = \&Plugins::YouTube::Plugin::channelIdHandler;
-			$search = ($uri->path_segments)[2];
-		}
-		$handler->(
-			$client,
-			sub { $cb->([map {$_->{'play'}} @{$_[0]->{'items'}}]) },
-			{'search' => $search},
-			{},
-		);
-	}
-	else {
-		$cb->([]);
-	}
-}
 
 1;
