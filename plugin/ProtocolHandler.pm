@@ -952,7 +952,7 @@ sub explodePlaylist {
 		);
 	}
 	else {
-		$cb->([]);
+		$cb->([$uri]);
 	}
 }
 
