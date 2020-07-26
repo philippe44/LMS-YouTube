@@ -1,3 +1,7 @@
+0.121.0
+ - add setting for channels & playlist content cache ttl 
+ - decode HTML entities for titles
+ 
 0.120.1
  - revert TuneIn integration as it broke 7.9.x playback
  

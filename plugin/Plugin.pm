@@ -10,6 +10,7 @@ use base qw(Slim::Plugin::OPMLBased);
 use List::Util qw(first);
 use Encode qw(encode decode);
 use JSON::XS::VersionOneAndTwo;
+use HTML::Entities;
 
 use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Prefs;
@@ -49,6 +50,7 @@ $prefs->init({
 	live_edge => 1,
 	aac => 1,
 	ogg => 1,
+	cache_ttl => 300,
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
@@ -545,6 +547,7 @@ sub _renderList {
 	for my $entry ( @{$args->{items} || []} ) {
 		my $snippet = $entry->{snippet} || next;
 		my $title = $snippet->{title} || next;
+		$title = decode_entities($title);
 		
 		next unless $entry->{id};
 		next unless $snippet->{thumbnails};
@@ -610,13 +613,13 @@ sub _renderList {
 			}	
 		} elsif ($kind eq 'youtube#playlist') {
 			$item->{name} = $plTags->{prefix} . $title . $plTags->{suffix};
-			$item->{passthrough} = [ { playlistId => $id, %{$through} } ];
+			$item->{passthrough} = [ { playlistId => $id, _cache_ttl => $prefs->get('cache_ttl'), %{$through} } ];
 			$item->{url}         = \&playlistHandler;
 			$item->{favorites_url}	= 'ytplaylist://playlistId=' . $id;
 			$item->{favorites_type}	= 'audio';
 		} elsif ($kind eq 'youtube#channel') {	
 			$item->{name} = $chTags->{prefix} . $title . $chTags->{suffix};
-			$item->{passthrough} = [ { channelId => $id, %{$through} } ];
+			$item->{passthrough} = [ { channelId => $id, _cache_ttl => $prefs->get('cache_ttl'), %{$through} } ];
 			$item->{url}         = \&searchChannelHandler;
 			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
 			$item->{favorites_type}	= 'audio';

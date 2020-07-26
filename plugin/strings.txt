@@ -215,6 +215,12 @@ PLUGIN_YOUTUBE_CHANNELTAGS_DESC
 	DE	Um Kanäle in Suchresultaten hervorzuheben, verwende Zeichenkette oder Formatierungsanweisung (z.B. \<b>...\</b> für fett) die vor und nach dem Titel eingefügt werden sollen
 	EN	To identify channels items in a search result, set string or font modifier (eg \<b> and \</b> for bold) to be added before and after then title
 	
+PLUGIN_YOUTUBE_CACHETTL
+	EN	Channels & Playlists cache duration
+
+PLUGIN_YOUTUBE_PLAYLISTTAGS_DESC
+	EN	Set the duration in seconds for how long the content list of a channel or a playlist is cached. Setting a low number means a lot more YouTube API calls
+	
 PLUGIN_YOUTUBE_PREFIX
 	EN	Prefix
 	
