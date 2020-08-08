@@ -115,6 +115,7 @@ sub new {
 	
 	my $seekdata = $song->can('seekdata') ? $song->seekdata : $song->{'seekdata'};
 	my $startTime = $seekdata->{'timeOffset'} || $song->pluginData('lastpos');
+	$song->pluginData('lastpos', 0);
 	  
 	if ($startTime) {
 		$song->can('startOffset') ? $song->startOffset($startTime) : ($song->{startOffset} = $startTime);
