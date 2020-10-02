@@ -280,7 +280,7 @@ sub recentHandler {
 
 	for my $item(reverse values %recentlyPlayed) {
 		my $id = Plugins::YouTube::ProtocolHandler->getId($item->{'url'});
-		if (my $lastpos = $cache->get("yt:lastpos-$id")) {
+		if ((my $lastpos = $cache->get("yt:lastpos-$id")) && $args && length $args->{index}) {
 			my $position = Slim::Utils::DateTime::timeFormat($lastpos);
 			$position =~ s/^0+[:\.]//;
 			unshift @menu, {

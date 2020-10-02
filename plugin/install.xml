@@ -8,7 +8,7 @@
     <minVersion>7.7</minVersion>
   </targetApplication>
   <defaultState>enabled</defaultState>
-  <version>0.122.1</version>
+  <version>0.123.0</version>
   <name>PLUGIN_YOUTUBE</name>
   <description>PLUGIN_YOUTUBE_DESC</description>
   <module>Plugins::YouTube::Plugin</module>
