@@ -726,6 +726,7 @@ sub getSignature {
 	
 	# get the player's url
 	my ($player_url) = ($content =~ /"assets":.+?"js":\s*("[^"]+")/);
+	($player_url) = ($content =~ /ytplayer\.config\s*=.*"jsUrl":\s*("[^"]+")/) unless $player_url;
 	
 	if ( !$player_url ) { 
 		$log->error("no player url to unobfuscate signature");

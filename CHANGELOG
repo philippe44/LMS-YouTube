@@ -1,3 +1,12 @@
+0.124.1
+ - tabs instead os spaces in strings.txt
+ 
+0.124.0
+ - adapt to player_url change
+ 
+0.123.1
+ - update usage
+ 
 0.123.0
  - show first level direct link even when there is a lastpos
  

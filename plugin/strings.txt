@@ -2,8 +2,8 @@ PLUGIN_YOUTUBE
 	EN	YouTube
 
 PLUGIN_YOUTUBE_DESC
-	DE	Audio von YouTube Videos wiedergeben. ACHTUNG: diese Plugin benötigt mehr Bandbreite als andere Streaming Dienste, da zur Wiedergabe des Tones das ganze Video heruntergeladen wird, obwohl nur der Ton wiedergegeben wird.
-	EN	Play audio from YouTube videos.  WARNING: this plugin will use more network bandwidth than other streaming services as the entire video is being streamed even though only the audio is played.	Updated to API v3
+	DE	YouTube Inhalt wiedergeben.
+	EN	Stream YouTube content
 	
 PLUGIN_YOUTUBE_MISSINGKEY
 	DE	Fehlender YouTube API Schlüssel (siehe Einstellungen). Um einen Schlüssel zu erhalten:
