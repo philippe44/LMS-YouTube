@@ -363,13 +363,9 @@ sub getNextTrack {
 			my $http = shift;
 									
 			main::DEBUGLOG && $log->is_debug && $log->debug($http->content);
-			
-			my $content = $http->content;
-			$content =~ s/\\u0026/\&/g;
-			# remove all backslashes except double-backslashes that must be replaced by single ones
-			$content =~ s/\\{2}/\\/g;
-			$content =~ s/\\([^\\])/$1/g;
-			
+
+			# need to clean the HTML (see if u0026 remains or not - $content =~ s/\\u0026/\&/g)	
+			my $content = decode_entities($http->content);
 			my ($streams) = $content =~ /\"url_encoded_fmt_stream_map\":\"(.*?)\"/;
 			my ($dashmpd) = $content =~ /\"dashManifestUrl\":\"(.*?)\"/;
 						           			
@@ -381,7 +377,7 @@ sub getNextTrack {
 			
 			# then DASH streams
 			if (!$streamInfo) {
-				main::INFOLOG && $log->is_info && $log->info("no stream found, trying MPD/DASH");
+				main::INFOLOG && $log->is_info && $log->info("no stream found, trying ", $dashmpd ? 'MPD' : 'DASH');
 				if ($dashmpd) {
 					getMPD($dashmpd, \@allowDASH, sub {
 								my $props = shift;
@@ -542,7 +538,7 @@ sub getMPD {
 			my $mpd = XMLin( $http->content, KeyAttr => [], ForceContent => 1, ForceArray => [ 'AdaptationSet', 'Representation', 'Period' ] );
 			my $period = $mpd->{'Period'}[0];
 			my $adaptationSet = $period->{'AdaptationSet'}; 
-			
+
 			$log->error("Only one period supported") if @{$mpd->{'Period'}} != 1;
 			#$log->error(Dumper($mpd));
 																		
@@ -622,8 +618,14 @@ sub getMPD {
 					mpd				=> { url => $dashmpd, type => $mpd->{'type'}, 
 										 adaptId => $selAdapt->{'id'}, represId => $selRepres->{'id'}, 
 									},	 
-				};	
-				
+			};	
+			
+			# sanity check and trace
+			if (ref $props->{'segmentURL'} ne 'ARRAY') {
+				$log->error("SegmentURL is not an ARRAY ", Dumper($mpd, $props));
+				return $cb->();
+			}
+			
 			# calculate live edge
 			if ($updatePeriod && $prefs->get('live_edge') && $props->{'segmentTimeline'}) {
 				my $index = scalar @{$props->{'segmentTimeline'}} - 1;
@@ -726,7 +728,7 @@ sub getSignature {
 	
 	# get the player's url
 	my ($player_url) = ($content =~ /"assets":.+?"js":\s*("[^"]+")/);
-	($player_url) = ($content =~ /ytplayer\.config\s*=.*"jsUrl":\s*("[^"]+")/) unless $player_url;
+	($player_url) = ($content =~ /ytplayer\.[^=]*=.*"jsUrl":\s*("[^"]+")/) unless $player_url;
 	
 	if ( !$player_url ) { 
 		$log->error("no player url to unobfuscate signature");
