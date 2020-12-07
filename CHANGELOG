@@ -1,3 +1,10 @@
+0.126.0
+ - enable youtube links to be used from TuneIn (credits @mavit)
+ 
+0.125.0
+ - more jsUrl changes
+ - tweak some logs
+
 0.124.1
  - tabs instead os spaces in strings.txt
  

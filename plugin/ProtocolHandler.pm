@@ -927,37 +927,34 @@ sub getIcon {
 sub explodePlaylist {
 	my ( $class, $client, $uri, $cb ) = @_;
 
-	if ( $uri =~ PAGE_URL_REGEXP ) {
-		$uri = URI->new($uri);
+	return $cb->([$uri]) unless $uri =~ PAGE_URL_REGEXP;
+	
+	$uri = URI->new($uri);
 
-		my $handler;
-		my $search;
-		if ( $uri->host eq 'youtu.be' ) {
-			$handler = \&Plugins::YouTube::Plugin::urlHandler;
-			$search = ($uri->path_segments)[1];
-		}
-		elsif ( $uri->path eq '/watch' ) {
-			$handler = \&Plugins::YouTube::Plugin::urlHandler;
-			$search = $uri->query_param('v');
-		}
-		elsif ( $uri->path eq '/playlist' ) {
-			$handler = \&Plugins::YouTube::Plugin::playlistIdHandler;
-			$search = $uri->query_param('list');
-		}
-		elsif ( ($uri->path_segments)[1] eq 'channel' ) {
-			$handler = \&Plugins::YouTube::Plugin::channelIdHandler;
-			$search = ($uri->path_segments)[2];
-		}
-		$handler->(
-			$client,
-			sub { $cb->([map {$_->{'play'}} @{$_[0]->{'items'}}]) },
-			{'search' => $search},
-			{},
-		);
+	my $handler;
+	my $search;
+	if ( $uri->host eq 'youtu.be' ) {
+		$handler = \&Plugins::YouTube::Plugin::urlHandler;
+		$search = ($uri->path_segments)[1];
 	}
-	else {
-		$cb->([$uri]);
+	elsif ( $uri->path eq '/watch' ) {
+		$handler = \&Plugins::YouTube::Plugin::urlHandler;
+		$search = $uri->query_param('v');
 	}
+	elsif ( $uri->path eq '/playlist' ) {
+		$handler = \&Plugins::YouTube::Plugin::playlistIdHandler;
+		$search = $uri->query_param('list');
+	}
+	elsif ( ($uri->path_segments)[1] eq 'channel' ) {
+		$handler = \&Plugins::YouTube::Plugin::channelIdHandler;
+		$search = ($uri->path_segments)[2];
+	}
+	$handler->(
+		$client,
+		sub { $cb->([map {$_->{'play'}} @{$_[0]->{'items'}}]) },
+		{'search' => $search},
+		{},
+	);
 }
 
 1;
