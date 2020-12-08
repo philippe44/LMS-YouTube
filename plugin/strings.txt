@@ -218,7 +218,7 @@ PLUGIN_YOUTUBE_CHANNELTAGS_DESC
 PLUGIN_YOUTUBE_CACHETTL
 	EN	Channels & Playlists cache duration
 
-PLUGIN_YOUTUBE_PLAYLISTTAGS_DESC
+PLUGIN_YOUTUBE_CACHETTL_DESC
 	EN	Set the duration in seconds for how long the content list of a channel or a playlist is cached. Setting a low number means a lot more YouTube API calls
 	
 PLUGIN_YOUTUBE_PREFIX
