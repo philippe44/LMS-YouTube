@@ -24,7 +24,6 @@ use strict;
 
 use List::Util qw(min max first);
 use HTML::Parser;
-use HTML::Entities;
 use HTTP::Date;
 use URI;
 use URI::Escape;
@@ -365,24 +364,21 @@ sub getNextTrack {
 
 		sub {
 			my $http = shift;
+			my $dashmpd;
 									
 			main::DEBUGLOG && $log->is_debug && $log->debug($http->content);
 
-			# need to clean the HTML (see if u0026 remains or not - $content =~ s/\\u0026/\&/g)	
-			my $content = decode_entities($http->content);
-			my ($streams) = $content =~ /\"url_encoded_fmt_stream_map\":\"(.*?)\"/;
-			my ($dashmpd) = $content =~ /\"dashManifestUrl\":\"(.*?)\"/;
-						           			
-			# main::DEBUGLOG && $log->is_debug && $log->debug("streams: $streams\ndashmpg: $dashmpd");
-			
 			# first try non-DASH streams;
 			main::INFOLOG && $log->is_info && $log->info("trying regular streams");
+			my ($streams) = $http->content =~ /"url_encoded_fmt_stream_map":"(.*?)"/;
 			my $streamInfo = getStream($streams, \@allow);
 			
-			# then DASH streams
+			# then DASH/MPD streams
 			if (!$streamInfo) {
-				main::INFOLOG && $log->is_info && $log->info("no stream found, trying ", $dashmpd ? 'MPD' : 'DASH');
+				($dashmpd) = $http->content =~ /"dashManifestUrl":"(.*?)"/;
+				
 				if ($dashmpd) {
+					main::INFOLOG && $log->is_info && $log->info("no regular stream found, using MPD");				
 					getMPD($dashmpd, \@allowDASH, sub {
 								my $props = shift;
 								return $errorCb->() unless $props;
@@ -391,35 +387,45 @@ sub getNextTrack {
 								$setProperties->{$props->{'format'}}($song, $props, $successCb);
 							} );
 				} else {	
-					my ($streams) = $content =~ /\"adaptiveFormats\":(\[.*?\])/;
+					# try adaptive format and see if they are escaped
+					(my $escaped, $streams) = $http->content =~ /adaptiveFormats(\\)?":(\[.*?\])/;
+					
 					if ($streams) {
-						main::DEBUGLOG && $log->is_debug && $log->debug("adaptiveFormat(JSON): $streams");
+						main::INFOLOG && $log->is_info && $log->info("no regular stream found, using DASH with JSON");		
+						# cleanup JSON payloadis when escaped, in right sequence (including replacing \u last)
+						if ($escaped) {
+							$streams =~ s/\\"/"/g;
+							$streams =~ s/\\{2}/\\/g;
+						}
 						$streams = eval { decode_json($streams) };						
 						$streamInfo = getStreamJSON($streams, \@allowDASH);
 					} else {
-						($streams) = $content =~ /\"adaptive_fmts\":\"(.*?)\"/;
-						main::DEBUGLOG && $log->is_debug && $log->debug("adaptive_fmts: $streams");
+						main::INFOLOG && $log->is_info && $log->info("no regular stream found, using plain DASH");				
+						($streams) = $http->content =~ /"adaptive_fmts":"(.*?)"/;
 						$streamInfo = getStream($streams, \@allowDASH);
 					}
+					
+					main::DEBUGLOG && $log->is_debug && $log->debug("DASH streams: $streams");					
 				}
 			} 	
 			
 			# process non-mpd streams
 			if ($streamInfo) {
-					getSignature($content, $streamInfo->{'sig'}, $streamInfo->{'encrypted'}, sub {
-								my $sig = shift;
-								if (defined $sig) {
-									my $props = { format => $streamInfo->{'format'}, bitrate => $streamInfo->{'bitrate'} };
-									main::DEBUGLOG && $log->is_debug && $log->debug("unobfuscated signature $sig");
-									$song->pluginData(props => $props);
-									$song->pluginData(baseURL  => "$streamInfo->{'url'}" . ($sig ? "&$streamInfo->{sp}=$sig" : ''));
-									$setProperties->{$props->{'format'}}($song, $props, $successCb);
-								} else {
-									$errorCb->();
-								}	
-							});
+				getSignature($http->content, $streamInfo->{'sig'}, $streamInfo->{'encrypted'}, sub {
+							my $sig = shift;
+							if (defined $sig) {
+								my $props = { format => $streamInfo->{'format'}, bitrate => $streamInfo->{'bitrate'} };
+								main::DEBUGLOG && $log->is_debug && $log->debug("unobfuscated signature $sig");
+								$song->pluginData(props => $props);
+								$song->pluginData(baseURL  => "$streamInfo->{'url'}" . ($sig ? "&$streamInfo->{sp}=$sig" : ''));
+								$setProperties->{$props->{'format'}}($song, $props, $successCb);
+							} else {
+								$errorCb->();
+							} 
+				});
 			} elsif (!$dashmpd) {
-				$log->error("no stream/DASH found ");
+				$log->error("no stream/DASH found");
+				main::INFOLOG && $log->is_info && $log->info($http->content);				
 				$errorCb->();
 			}	
 
@@ -437,6 +443,9 @@ sub getStream {
 	my $streamInfo;
 	my $selected;
 			
+	# transcode unicode escaped \uNNNN characters (mainly 0026 = &)
+	$streams =~ s/\\u(.{4})/chr(hex($1))/eg;
+	
 	for my $stream (split(/,/, $streams)) {
 		my $index;
 		no strict 'subs';
@@ -482,7 +491,10 @@ sub getStreamJSON {
 	my ($streams, $allow) = @_;
 	my $streamInfo;
 	my $selected;
-			
+	
+	# transcode unicode escaped \uNNNN characters (mainly 0026 = &)
+	$streams =~ s/\\u(.{4})/chr(hex($1))/eg;
+				
 	for my $stream (@{$streams}) {
 		my $index;
         				
@@ -531,6 +543,9 @@ sub getStreamJSON {
 
 sub getMPD {
 	my ($dashmpd, $allow, $cb) = @_;
+
+	# transcode unicode espaced characters
+	$dashmpd =~ s/\\u(.{4})/chr(hex($1))/eg;	
 	
 	# get MPD file
 	Slim::Networking::SimpleAsyncHTTP->new(

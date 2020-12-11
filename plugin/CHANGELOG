@@ -1,3 +1,6 @@
+0.126.3
+ - handle espaced and non-escaped JSON streams
+ 
 0.126.2
  - info-bubble on cache was missing
  
