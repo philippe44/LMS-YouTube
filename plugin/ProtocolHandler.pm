@@ -61,14 +61,14 @@ sub flushCache { $cache->cleanup(); }
 
 =comment
 There is a voluntaty 'confusion' between codecs and streaming formats 
-(regular http or dash). As we only support ogg with webm and aac with
-dash, this is not a problem at this point, although not very elegant.
+(regular http or dash). As we only support ogg/opus with webm and aac 
+withdash, this is not a problem at this point, although not very elegant.
 This only works because it seems that YT, when using webm and dash (171)
 does not build a mpd file but instead uses regular webm. It might be due
 to http://wiki.webmproject.org/adaptive-streaming/webm-dash-specification
 but I'm not sure at that point. Anyway, the dash webm format used in codec 
-171, probably because there is a single stream, does not need a different
-handling than normal webm
+171, 251, 250 and 249, probably because there is a single stream, does not
+need a different handling than normal webm
 =cut
 
 my $setProperties  = { 	'ogg' => \&Plugins::YouTube::WebM::setProperties, 
@@ -141,6 +141,9 @@ sub new {
 			'streaming'   => 1,      		# flag for streaming, changes to 0 when all data received
 			'fetching'    => 0,		  		# waiting for HTTP data
 			'offset'      => $offset,  		# offset for next HTTP request in webm/stream or segment index in dash
+			'session' 	  => Slim::Networking::Async::HTTP->new,
+			'baseURL'	  => $args->{'url'},			
+			'retry'       => 5,			
 		};
 	}
 	
@@ -173,11 +176,14 @@ sub close {
 	my $self = shift;
 	
 	${*$self}{'active'} = 0;		
+	${*$self}{'vars'}->{'session'}->disconnect;
 	
 	if (${*$self}{'props'}->{'updatePeriod'}) {
 		main::INFOLOG && $log->is_info && $log->info("killing MPD update timer");
 		Slim::Utils::Timers::killTimers($self, \&updateMPD);
 	}	
+	
+	main::INFOLOG && $log->is_info && $log->info("end of streaming for ", ${*$self}{'song'}->track->url);	
 	
 	$self->SUPER::close(@_);
 }
@@ -249,7 +255,6 @@ sub sysread {
 	# return in $_[1]
 	my $maxBytes = $_[2];
 	my $v = $self->vars;
-	my $baseURL = ${*$self}{'url'};
 	my $props = ${*$self}{'props'};
 	
 	# means waiting for offset to be set
@@ -260,65 +265,81 @@ sub sysread {
 		
 	# need more data
 	if ( length $v->{'outBuf'} < MIN_OUT && !$v->{'fetching'} && $v->{'streaming'} ) {
-		my $url = $baseURL;
-		my @range;
-						
+		my $url = $v->{'baseURL'};
+		my $headers = [ 'Connection', 'keep-alive' ];
+		my $suffix;
+
 		if ( $props->{'segmentURL'} ) {
-			$url .= ${$props->{'segmentURL'}}[$v->{'offset'}]->{'media'};		
-			$v->{'offset'}++;
+			$suffix = ${$props->{'segmentURL'}}[$v->{'offset'}]->{'media'};		
+			$url .= $suffix;
 		} else {
-			@range = ( 'Range', "bytes=$v->{offset}-" . ($v->{offset} + DATA_CHUNK - 1) );
-			$v->{offset} += DATA_CHUNK;
+			push @$headers, 'Range', "bytes=$v->{offset}-" . ($v->{offset} + DATA_CHUNK - 1);
 		}	
-				
+
+		my $request = HTTP::Request->new( GET => $url, $headers);
+		$request->protocol( 'HTTP/1.1' );		
+
 		$v->{'fetching'} = 1;
-				
-		Slim::Networking::SimpleAsyncHTTP->new(
-			sub {
-				$v->{'inBuf'} .= $_[0]->content;
-				$v->{'fetching'} = 0;
+
+		$v->{'session'}->send_request( {
+			request => $request,
+
+			onRedirect => sub {
+				my $redirect = shift->uri; 
+
 				if ( $props->{'segmentURL'} ) {
-					$v->{'streaming'} = 0 if $v->{'offset'} == @{$props->{'segmentURL'}};
-					main::DEBUGLOG && $log->is_debug && $log->debug("got chunk $v->{'offset'} length: ", length $_[0]->content, " for $url");
+					my $match = (reverse ($suffix) ^ reverse ($redirect)) =~ /^(\x00*)/;
+					$v->{'baseURL'} = substr $redirect, 0, -$+[1] if $match;								
 				} else {
-					main::DEBUGLOG && $log->is_debug && $log->debug("got chunk length: ", length $_[0]->content, " from ", $v->{offset} - DATA_CHUNK, " for $url");
-					$v->{'streaming'} = 0 if length($_[0]->content) < DATA_CHUNK;
+					$v->{'baseURL'} = $redirect;
+				}	
+
+				main::INFOLOG && $log->is_info && $log->info("being redirected from $url to $redirect using new base $v->{baseURL}");
+			},
+
+			onBody => sub {
+				my $response = shift->response;
+
+				$v->{'inBuf'} .= $response->content;
+				$v->{'fetching'} = 0;
+				$v->{'retry'} = 5;
+
+				if ( $props->{'segmentURL'} ) {
+					$v->{'offset'}++;
+					$v->{'streaming'} = 0 if $v->{'offset'} == @{$props->{'segmentURL'}};
+					main::DEBUGLOG && $log->is_debug && $log->debug("got chunk $v->{'offset'} length: ", length $response->content, " for $url");
+				} else {
+					$v->{offset} += DATA_CHUNK;
+					$v->{'streaming'} = 0 if length($response->content) < DATA_CHUNK;
+					main::DEBUGLOG && $log->is_debug && $log->debug("got chunk length: ", length $response->content, " from ", $v->{offset} - DATA_CHUNK, " for $url");					
 				}		
 			},
 
-			sub {
-				if (main::DEBUGLOG && $log->is_debug) {
-					$log->debug("error fetching $url")
-				}
-				# only log error every x seconds - it's too noisy for regular use
-				elsif (time() > $nextWarning) {
-					$log->warn("error fetching $url");
-					$nextWarning = time() + 10;
-				}
-
-				$v->{'inBuf'} = '';
-				$v->{'fetching'} = 0;
-			}, 
-			
-		)->get($url, @range);
+			onError => sub {
+				$log->warn("error $v->{retry} fetching $url") unless $v->{'baseURL'} ne ${*$self}{'url'} && $v->{'retry'};
+				$v->{'retry'}--; 
+				$v->{'fetching'} = 0 if $v->{retry} > 0;					
+				$v->{'baseURL'} = ${*$self}{'url'};
+			},
+		} );
 	}	
 
 	# process all available data	
 	$getAudio->{$props->{'format'}}($v, $props) if length $v->{'inBuf'};
-	
+
 	if ( my $bytes = min(length $v->{'outBuf'}, $maxBytes) ) {
 		$_[1] = substr($v->{'outBuf'}, 0, $bytes);
 		$v->{'outBuf'} = substr($v->{'outBuf'}, $bytes);
 		return $bytes;
-	} elsif ( $v->{'streaming'} || $props->{'updatePeriod'} ) {
+	} elsif ( ($v->{'streaming'} || $props->{'updatePeriod'}) && $v->{'retry'} > 0 ) {
 		$! = EINTR;
 		return undef;
 	}	
-	
+
 	# end of streaming and make sure timer is not running
 	main::INFOLOG && $log->is_info && $log->info("end streaming");
 	$props->{'updatePeriod'} = 0;
-	
+
 	return 0;
 }
 
