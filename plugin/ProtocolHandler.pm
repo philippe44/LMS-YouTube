@@ -34,6 +34,7 @@ use Data::Dumper;
 use File::Spec::Functions;
 use FindBin qw($Bin);
 use XML::Simple;
+use Time::Piece;
 
 use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Log;
@@ -380,6 +381,17 @@ sub getNextTrack {
 	push @allowDASH, ( [141, 'aac', 256_000], [140, 'aac', 128_000], [139, 'aac', 48_000] ) if $prefs->get('aac');
 	@allowDASH = sort {@$a[2] < @$b[2]} @allowDASH;
 
+	# need to set consent cookie if pending
+	my $cookieJar = Slim::Networking::Async::HTTP::cookie_jar();
+	my $consent = $cookieJar->get_cookies('www.youtube.com', 'CONSENT');
+
+	if ($consent =~ /PENDING/) {
+		my ($id) = $consent =~ /PENDING\+(\d+)/;
+		my $value = "YES+cb." . gmtime->ymd('') . "-00-p0.en+FX" . ($id || int(rand(900)) + 100);
+		$cookieJar->set_cookie(0, 'CONSENT', $value, '/', '.youtube.com', undef, undef, undef, 3600*24*365);
+		$log->info("Acceping CONSENT cookie $id");		
+	}	
+	
 	# fetch new url(s)
 	Slim::Networking::SimpleAsyncHTTP->new(
 

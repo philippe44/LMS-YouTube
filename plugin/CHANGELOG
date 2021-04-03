@@ -1,3 +1,9 @@
+0.130.1
+ - handle CONSENT cookie
+ 
+0.127.1
+ - fix incorrect help when using <>
+ 
 0.127.0
  - use keep-alive between chunks to avoid SSL re-negotiation
  

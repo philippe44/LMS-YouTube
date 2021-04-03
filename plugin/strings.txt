@@ -208,12 +208,12 @@ PLUGIN_YOUTUBE_PLAYLISTTAGS
 	EN	Playlist identification tags
 
 PLUGIN_YOUTUBE_PLAYLISTTAGS_DESC
-	DE	Um Wiedergabelisten in Suchresultaten hervorzuheben, verwende Zeichenkette oder Formatierungsanweisung (z.B. \<b>...\</b> für fett) die vor und nach dem Titel eingefügt werden sollen
-	EN	To identify playlists items in a search result, set string or font modifier (eg \<b> and \</b> for bold) to be added before and after then title
+	DE	Um Wiedergabelisten in Suchresultaten hervorzuheben, verwende Zeichenkette oder Formatierungsanweisung (z.B. &ltb&gt...&lt/b&gt für fett) die vor und nach dem Titel eingefügt werden sollen
+	EN	To identify playlists items in a search result, set string or font modifier (eg &ltb&gt and &lt/b&gt for bold) to be added before and after then title
 	
 PLUGIN_YOUTUBE_CHANNELTAGS_DESC
-	DE	Um Kanäle in Suchresultaten hervorzuheben, verwende Zeichenkette oder Formatierungsanweisung (z.B. \<b>...\</b> für fett) die vor und nach dem Titel eingefügt werden sollen
-	EN	To identify channels items in a search result, set string or font modifier (eg \<b> and \</b> for bold) to be added before and after then title
+	DE	Um Kanäle in Suchresultaten hervorzuheben, verwende Zeichenkette oder Formatierungsanweisung (z.B. &ltb&gt...&lt/b&gt für fett) die vor und nach dem Titel eingefügt werden sollen
+	EN	To identify channels items in a search result, set string or font modifier (eg &ltb&gt and &lt/b&gt for bold) to be added before and after then title
 	
 PLUGIN_YOUTUBE_CACHETTL
 	EN	Channels & Playlists cache duration

@@ -117,10 +117,8 @@ sub initPlugin {
 #        |  |  |  |Function to call
 	Slim::Control::Request::addDispatch(['youtube', 'info'], 
 		[1, 1, 1, \&cliInfoQuery]);
-		
 }
-
-
+		
 sub shutdownPlugin {
 	my @played = values %recentlyPlayed;
 	$prefs->set('recent', \@played);
