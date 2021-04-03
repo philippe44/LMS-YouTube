@@ -34,7 +34,7 @@ use Data::Dumper;
 use File::Spec::Functions;
 use FindBin qw($Bin);
 use XML::Simple;
-use Time::Piece;
+use POSIX qw(strftime);
 
 use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Log;
@@ -387,9 +387,9 @@ sub getNextTrack {
 
 	if ($consent =~ /PENDING/) {
 		my ($id) = $consent =~ /PENDING\+(\d+)/;
-		my $value = "YES+cb." . gmtime->ymd('') . "-00-p0.en+FX" . ($id || int(rand(900)) + 100);
+		my $value = "YES+cb." . POSIX::strftime('%Y%m%d', gmtime) . "-00-p0.en+FX+" . ($id || int(rand(900)) + 100);
 		$cookieJar->set_cookie(0, 'CONSENT', $value, '/', '.youtube.com', undef, undef, undef, 3600*24*365);
-		$log->info("Acceping CONSENT cookie $id");		
+		$log->info("Acceping CONSENT cookie $value");		
 	}	
 	
 	# fetch new url(s)
