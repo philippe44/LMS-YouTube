@@ -588,14 +588,14 @@ sub _renderList {
 		} elsif ($kind eq 'youtube#video') {
 			# dont't set type to audio to have icons
 			#$item->{type} 	   = 'audio';
+			$item->{on_select} 	= 'play';
+			$item->{play}      	= STREAM_BASE_URL . $id;
+			$item->{playall}	= 1;
+			$item->{duration}	= 'N/A';
 			if (my $lastpos = $cache->get("yt:lastpos-$id")) {
 				my $position = Slim::Utils::DateTime::timeFormat($lastpos);
 				$position =~ s/^0+[:\.]//;
 				$item->{type} = "link";
-				$item->{on_select} 	= 'play';
-				$item->{play}      	= STREAM_BASE_URL . $id;
-				$item->{playall}	= 1;
-				$item->{duration}	= 'N/A',
 				$item->{items} = [ {
 						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'),
 						enclosure => {
@@ -610,8 +610,8 @@ sub _renderList {
 							url    => STREAM_BASE_URL . $id . "&lastpos=$lastpos",
 						}	
 						#duration => 'N/A',
-					} ];
-			}
+				} ];
+			} 	
 		} elsif ($kind eq 'youtube#playlist') {
 			$item->{name} = $plTags->{prefix} . $title . $plTags->{suffix};
 			$item->{passthrough} = [ { playlistId => $id, _cache_ttl => $prefs->get('cache_ttl'), %{$through} } ];

@@ -1,14 +1,14 @@
 <?xml version='1.0' standalone='yes'?>
 <extensions>
   <icon>plugins/YouTube/html/images/youtube.png</icon>
+  <optionsURL>plugins/YouTube/settings/basic.html</optionsURL>
   <targetApplication>
     <maxVersion>*</maxVersion>
     <id>SlimServer</id>
     <minVersion>7.7</minVersion>
   </targetApplication>
-  <optionsURL>plugins/YouTube/settings/basic.html</optionsURL>
   <creator>Philippe</creator>
-  <version>0.140.0</version>
+  <version>0.140.1</version>
   <name>PLUGIN_YOUTUBE</name>
   <description>PLUGIN_YOUTUBE_DESC</description>
   <email>philippe_44@outlook.com</email>

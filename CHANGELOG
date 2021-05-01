@@ -1,3 +1,6 @@
+0.140.1
+ - backport error
+ 
 0.140
  - put "start from last position" into an enclosure to let it be part of playlist
  
