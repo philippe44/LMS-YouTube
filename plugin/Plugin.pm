@@ -592,23 +592,26 @@ sub _renderList {
 				my $position = Slim::Utils::DateTime::timeFormat($lastpos);
 				$position =~ s/^0+[:\.]//;
 				$item->{type} = "link";
-				$item->{items} = [ {
-						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'),
-						type   => 'audio',
-						url    => STREAM_BASE_URL . $id,
-						#duration => 'N/A',
-					}, {
-						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X', $position),
-						type   => 'audio',
-						url    => STREAM_BASE_URL . $id . "&lastpos=$lastpos",
-						#duration => 'N/A',
-					} ];
-			} else {
 				$item->{on_select} 	= 'play';
 				$item->{play}      	= STREAM_BASE_URL . $id;
 				$item->{playall}	= 1;
 				$item->{duration}	= 'N/A',
-			}	
+				$item->{items} = [ {
+						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING'),
+						enclosure => {
+							type   => 'audio',
+							url    => STREAM_BASE_URL . $id,
+						},	
+						#duration => 'N/A',
+					}, {
+						title => cstring(undef, 'PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X', $position),
+						enclosure => {
+							type   => 'audio',
+							url    => STREAM_BASE_URL . $id . "&lastpos=$lastpos",
+						}	
+						#duration => 'N/A',
+					} ];
+			}
 		} elsif ($kind eq 'youtube#playlist') {
 			$item->{name} = $plTags->{prefix} . $title . $plTags->{suffix};
 			$item->{passthrough} = [ { playlistId => $id, _cache_ttl => $prefs->get('cache_ttl'), %{$through} } ];

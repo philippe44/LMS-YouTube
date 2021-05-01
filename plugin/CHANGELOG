@@ -1,3 +1,6 @@
+0.140
+ - put "start from last position" into an enclosure to let it be part of playlist
+ 
 0.130.2
  - use POSIX::strftime instead of Time::Piece
  
