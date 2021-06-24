@@ -781,6 +781,7 @@ sub getSignature {
 	# get the player's url
 	my ($player_url) = ($content =~ /"assets":.+?"js":\s*("[^"]+")/);
 	($player_url) = ($content =~ /ytplayer\.[^=]*=.*"jsUrl":\s*("[^"]+")/) unless $player_url;
+	($player_url) = ($content =~ /".*_player"\s*,\s*"jsUrl":\s*("[^"]+")/) unless $player_url;
 	
 	if ( !$player_url ) { 
 		$log->error("no player url to unobfuscate signature");
@@ -875,12 +876,13 @@ sub getMetadataFor {
 		
 		for my $track ( @{ Slim::Player::Playlist::playList($client) } ) {
 			my $trackURL = blessed($track) ? $track->url : $track;
+			
 			if ( $trackURL =~ m{youtube:/*(.+)} ) {
 				my $trackId = $class->getId($trackURL);
+				
 				if ( $trackId && !$cache->get("yt:meta-$trackId") ) {
 					push @need, $trackId;
-				}
-				elsif (!$trackId) {
+				} elsif (!$trackId) {
 					$log->warn("No id found: $trackURL");
 				}
 			
@@ -895,18 +897,19 @@ sub getMetadataFor {
 			_getBulkMetadata($client, $pageCall, $list);
 		} else {
 			$client->master->pluginData(fetchingYTMeta => 0);
-			if ($status) {
-				$client->currentPlaylistUpdateTime( Time::HiRes::time() );
-				Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );	
-			}	
+			$client->currentPlaylistUpdateTime( Time::HiRes::time() );
+			Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );				
 		} 
 	};
 
 	$client->master->pluginData(fetchingYTMeta => 1);
 	
 	# get the one item if playlist empty
-	if ( Slim::Player::Playlist::count($client) ) { $pageCall->() }
-	else { _getBulkMetadata($client, undef, $id) }
+	if ( Slim::Player::Playlist::count($client) ) { 
+		$pageCall->();
+	} else { 
+		_getBulkMetadata($client, undef, $id);
+	}
 		
 	return {	
 			type	=> 'YouTube',
@@ -959,7 +962,7 @@ sub _getBulkMetadata {
 				
 			$cache->set("yt:meta-" . $item->{id}, $meta, 86400);
 		}				
-			
+
 		$cb->() if defined $cb;
 		
 	}, $ids);
