@@ -1,3 +1,7 @@
+0.142.0
+ - filter private videos
+ - show playlists when browsing a channel from favorites
+ 
 0.141.0
  - playlists/channels are proper favorites
  
