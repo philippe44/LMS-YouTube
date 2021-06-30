@@ -1,3 +1,9 @@
+0.141.0
+ - playlists/channels are proper favorites
+ 
+0.140.2
+ - more relaxed player signature finding
+ 
 0.140.1
  - backport error
  

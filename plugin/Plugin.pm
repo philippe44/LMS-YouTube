@@ -617,13 +617,13 @@ sub _renderList {
 			$item->{passthrough} = [ { playlistId => $id, _cache_ttl => $prefs->get('cache_ttl'), %{$through} } ];
 			$item->{url}         = \&playlistHandler;
 			$item->{favorites_url}	= 'ytplaylist://playlistId=' . $id;
-			$item->{favorites_type}	= 'audio';
+			$item->{favorites_type}	= 'playlist';
 		} elsif ($kind eq 'youtube#channel') {	
 			$item->{name} = $chTags->{prefix} . $title . $chTags->{suffix};
 			$item->{passthrough} = [ { channelId => $id, _cache_ttl => $prefs->get('cache_ttl'), %{$through} } ];
 			$item->{url}         = \&searchChannelHandler;
 			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
-			$item->{favorites_type}	= 'audio';
+			$item->{favorites_type}	= 'playlist';
 		} else {
 			$log->warn("Unknown item type");
 			main::DEBUGLOG && $log->is_debug && $log->debug(Data::Dump::dump($entry));
