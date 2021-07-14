@@ -56,7 +56,7 @@ sub explodePlaylist {
 sub renderItems {
 	my ($items, $cb) = @_;
 	my $tracks = Plugins::YouTube::Plugin::_renderList($items);
-	$tracks = [ map { $_->{play} } @{$tracks->{items}} ] if $main::VERSION < 8.2.0;
+	$tracks = [ map { $_->{play} } @{$tracks->{items}} ] if $main::VERSION lt '8.2.0';
 	$cb->( $tracks );
 }
 

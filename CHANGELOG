@@ -1,3 +1,6 @@
+0.142.1
+ - fix favorites expansion when LMS version is < 8.2.0
+ 
 0.142.0
  - filter private videos
  - show playlists when browsing a channel from favorites
