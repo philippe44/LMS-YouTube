@@ -156,7 +156,7 @@ sub getHeaders {
 			main::DEBUGLOG && $log->is_debug && $log->debug("offset: clusters=$props->{offset}->{clusters}");
 		} 	
 				
-		$v->{inBuf} = substr($v->{inBuf}, $size);
+		substr($v->{inBuf}, 0, $size, '');
 		$v->{need} = EBML_NEED;
 		$v->{position} += $size;
 		undef $v->{id};
@@ -222,7 +222,7 @@ sub getAudio {
 			}	
 		}	
 						
-		$v->{inBuf} = substr($v->{inBuf}, $size);
+		substr($v->{inBuf}, 0, $size, '');
 		$v->{need} = EBML_NEED;
 		$v->{position} += $size;
 		undef $v->{id};
@@ -250,7 +250,7 @@ sub getInfo {
 			if ($fmt eq "s") { return substr($s, 0, $size); }
 		}	
 		
-		$s = substr($s, $size);
+		substr($s, 0, $size, '');
 	}	
 	
 	return undef;
@@ -273,8 +273,7 @@ sub getSeekOffset {
 		
 		getEBML(\$s, \$id, \$size);
 		
-		$data = substr($s, 0, $size);
-		$s = substr($s, $size);
+		$data = substr($s, 0, $size, '');
 		
 		next if ($id != ID_SEEK);
 		
@@ -282,7 +281,7 @@ sub getSeekOffset {
 			getEBML(\$data, \$id, \$size);
 			$seek_id = substr($data, 0, $size) if ($id eq ID_SEEK_ID);
 			$seek_offset = decode_u(substr($data, 0, $size), $size) if ($id eq ID_SEEK_POS);
-			$data = substr($data, $size);
+			substr($data, 0, $size, '');
 		} 
 		
 		return $seek_offset if ($seek_id eq $tag);
@@ -309,8 +308,7 @@ sub getCueOffset {
 		
 		getEBML(\$s, \$id, \$size);
 		
-		$data = substr($s, 0, $size);
-		$s = substr($s, $size);
+		$data = substr($s, 0, $size, '');
 		
 		next if ($id != ID_CUE_POINT);
 		
@@ -318,7 +316,7 @@ sub getCueOffset {
 			getEBML(\$data, \$id, \$size);
 			$cue_time = decode_u(substr($data, 0, $size), $size) if ($id eq ID_CUE_TIME);
 			$cue_track = substr($data, 0, $size) if ($id eq ID_CUE_TRACK_POS);
-			$data = substr($data, $size);
+			substr($data, 0, $size, '');
 		}
 			
 		next if ($cue_time < $time);
@@ -416,7 +414,7 @@ sub getTrackInfo {
 				$data = substr $data, $size;
 			}
 		}
-		$s = substr $s, $size;
+		substr($s, 0, $size, '');
 	} 
 	
 	# codec private data shall only be used once we have found codec	
@@ -502,12 +500,11 @@ sub getEBML {
 		$log->error("wrong len: $len, $c");
 		# arbitrary, but at least won't get stuck in the an infinite loop and will not go beyond available data
 		$len = EBML_NEED; 	
-		$$in = substr($$in, $len);
+		substr($$in, 0, $len, '');
 		return $len;
 	}
 	
-	$$id = substr($$in, 0, $len);
-	$$in = substr($$in, $len);
+	$$id = substr($$in, 0, $len, '');
 	$total = $len;
 	
 	# then get the data size
@@ -532,7 +529,7 @@ sub getEBML {
 =cut	
 	main::DEBUGLOG && $log->debug("size:$$size (tagsize: $total + $len)");
 	
-	$$in = substr($$in, $len);
+	substr($$in, 0, $len, '');
 	$total += $len;
 	
 	return $total;

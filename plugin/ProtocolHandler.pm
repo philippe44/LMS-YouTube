@@ -329,8 +329,8 @@ sub sysread {
 	$getAudio->{$props->{'format'}}($v, $props) if length $v->{'inBuf'};
 
 	if ( my $bytes = min(length $v->{'outBuf'}, $maxBytes) ) {
-		$_[1] = substr($v->{'outBuf'}, 0, $bytes);
-		$v->{'outBuf'} = substr($v->{'outBuf'}, $bytes);
+		$_[1] = substr($v->{'outBuf'}, 0, $bytes, '');
+
 		return $bytes;
 	} elsif ( ($v->{'streaming'} || $props->{'updatePeriod'}) && $v->{'retry'} > 0 ) {
 		$! = EINTR;

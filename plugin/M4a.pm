@@ -173,7 +173,7 @@ sub parseAtoms {
 			$v->{need} = $size - 8;
 			$v->{atom} = $atom;
 			$v->{state} = PARSING;
-			$v->{inBuf} = substr($v->{inBuf}, 8);
+			substr($v->{inBuf}, 0, 8, '');
 			$context->{offset} += $size;
 		}	
 
@@ -182,7 +182,7 @@ sub parseAtoms {
 		# enough data to process box and all included sub-boxes
 		$v->{$v->{atom}} = process_atom($v->{atom}, $v->{need}, substr($v->{inBuf}, 0, $v->{need}));
 			
-		$v->{inBuf} = substr($v->{inBuf}, $v->{need});
+		substr($v->{inBuf}, 0, $v->{need}, '');
 		$v->{state} = ATOM;
 		$v->{need} = ATOM_NEED;
 
@@ -208,7 +208,7 @@ sub getAudio {
 			$v->{need} = $size - 8;
 			$v->{atom} = $atom;
 			$v->{state} = PARSING;
-			$v->{inBuf} = substr($v->{inBuf}, 8);
+			substr($v->{inBuf}, 0, 8, '');
 		}	
 
 		return 1 if $v->{need} > length $v->{inBuf};
@@ -216,7 +216,7 @@ sub getAudio {
 		# process the atom (just what we need)
 		$v->{$v->{atom}} = process_atom($v->{atom}, $v->{need}, substr($v->{inBuf}, 0, $v->{need}));
 			
-		$v->{inBuf} = substr($v->{inBuf}, $v->{need});
+		substr($v->{inBuf}, 0, $v->{need}, '');
 		$v->{state} = ATOM;
 		$v->{need} = ATOM_NEED;
 		
@@ -287,7 +287,7 @@ sub process_container {
 		my ($sub_type, $sub_size) = get_next_atom($data);
 		   
 		$result{$sub_type} = process_atom($sub_type, $sub_size - 8, substr($data, 8, $sub_size - 8));
-		$data = substr($data, $sub_size);
+		substr($data, 0, $sub_size, '');
 		$size -= $sub_size;
 	}
 	 
