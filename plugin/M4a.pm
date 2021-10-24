@@ -21,6 +21,7 @@ package Plugins::YouTube::M4a;
 
 use strict;
 use Config;
+use bytes;
 
 use Slim::Utils::Log;
 use Slim::Utils::Cache;

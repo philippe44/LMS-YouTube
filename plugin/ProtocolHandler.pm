@@ -234,7 +234,7 @@ sub isRemote { 1 }
 
 sub canDirectStream { 0 }
 
-sub songBytes {}
+sub songBytes { }
 
 sub canSeek { 1 }
 

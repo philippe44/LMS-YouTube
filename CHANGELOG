@@ -1,3 +1,6 @@
+0.142.2
+- use bytes in codec handlers
+
 0.142.1
  - fix favorites expansion when LMS version is < 8.2.0
  

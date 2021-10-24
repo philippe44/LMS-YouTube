@@ -20,6 +20,7 @@ package Plugins::YouTube::WebM;
 
 use strict;
 use Config;
+use bytes;
 
 use Slim::Utils::Log;
 use Slim::Utils::Cache;
