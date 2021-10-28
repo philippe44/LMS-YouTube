@@ -54,7 +54,7 @@ $prefs->init({
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
-my $convertCountry = { EN => 'US' };
+my $convertCountry = { EN => 'US', CS => 'CZ' };
 
 sub setCountry {
 	my $lang = Slim::Utils::Strings::getLanguage();
