@@ -1,3 +1,6 @@
+0.143.1
+ - allow "music.youtube.com links"
+ 
 0.143.0
  - optimize string management using in-place update
  

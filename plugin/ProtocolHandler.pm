@@ -48,7 +48,7 @@ use Plugins::YouTube::M4a;
 
 use constant MIN_OUT	=> 8192;
 use constant DATA_CHUNK => 128*1024;
-use constant PAGE_URL_REGEXP => qr{^https?://(?:(?:www|m)\.youtube\.com/(?:watch\?|playlist\?|channel/)|youtu\.be/)}i;
+use constant PAGE_URL_REGEXP => qr{^https?://(?:(?:www|m|music)\.youtube\.com/(?:watch\?|playlist\?|channel/)|youtu\.be/)}i;
 
 my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
