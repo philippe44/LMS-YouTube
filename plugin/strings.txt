@@ -382,7 +382,7 @@ PLUGIN_YOUTUBE_OAUTHHOWTO
 PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT
 	CS	- přejděte na <a href="https://console.cloud.google.com/apis/credentials" target="none">Google Cloud Platform Credentials</a>
 	CS	a vyberte svůj projekt YouTube
-	CS	<br>- vyberte "CREATE CREDENTIALS", poté "OAuth client ID" a poté "Other"
+	CS	<br>- vyberte "CREATE CREDENTIALS", poté "OAuth client ID" a poté "TVs and Limited Input devices"
 	CS	<br>- vyberte název nebo ponechte výchozí hodnotu
 	CS	<br>- klikněte na "CREATE", čímž se vygeneruje Client ID a Client secret
 	CS	<br>- vložte sem "Client ID" a "Client secret" a klikněte na "Použít"
@@ -392,7 +392,7 @@ PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT
 	CS	<br>- chcete-li odebrat oprávnění, přejděte na <a href="https://myaccount.google.com/permissions" target="none">Aplikace s přístupem k vašemu účtu</a>
 	DE	- gehe nach <a href="https://console.cloud.google.com/apis/credentials" target="none">Google Cloud Platform Credentials</a>
 	DE	und wähle dein YouTube Projekt
-	DE	<br>- wähle "CREATE CREDENTIALS", dann "OAuth Client ID", dann "Other"
+	DE	<br>- wähle "CREATE CREDENTIALS", dann "OAuth Client ID", dann "TVs and Limited Input devices"
 	DE	<br>- gib einen Namen
 	DE	<br>- klicke "CREATE", das wird eine Client ID und Client Secrete generieren
 	DE	<br>- Füge Client ID und Client Secret hier ein, speichere die Einstellungen
@@ -401,7 +401,7 @@ PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT
 	DE	<br>- zurück in LMS solltest du nun "Meine Abonnements" und "Meine Wiedergabelisten" verwenden können
 	EN	- go to <a href="https://console.cloud.google.com/apis/credentials" target="none">Google Cloud Platform Credentials</a>
 	EN	and select your YouTube project
-	EN	<br>- select "CREATE CREDENTIALS", then "OAuth client ID" and then "Other"
+	EN	<br>- select "CREATE CREDENTIALS", then "OAuth client ID" and then "TVs and Limited Input devices"
 	EN	<br>- choose a name or leave the default
 	EN	<br>- click "CREATE", this will generate a Client ID and Client secret
 	EN	<br>- paste "Client ID" and "Client secret" here and click "Apply"
