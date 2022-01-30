@@ -1,3 +1,7 @@
+0.144.1
+ - update Czech translations
+ - strings.txt must be Unix-like (as usual...)
+ 
 0.144.0
  - add Czech translation credist @mipa87
  
