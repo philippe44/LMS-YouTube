@@ -174,7 +174,7 @@ PLUGIN_YOUTUBE_BADURL
 	EN	Bad YouTube URL
 
 PLUGIN_YOUTUBE_ON_YOUTUBE
-	DE	Na YouTube
+	CS	Na YouTube
 	DE	Auf YouTube
 	EN	On YouTube
 
@@ -322,19 +322,23 @@ PLUGIN_YOUTUBE_LIVEDELAY
 	EN	seconds delay
 
 PLUGIN_YOUTUBE_CLIENTID
+	CS	Client ID
+	DE	Client-ID
 	EN	Client ID
 
 PLUGIN_YOUTUBE_CLIENTID_DESC
 	CS	Client ID nalezené na stránce Google Cloud Platform https://console.cloud.google.com/apis/dashboard
-	DE	Eine Client ID, wie du sie in der Google Cloud Platform finden kannst (https://console.cloud.google.com/apis/dashboard)
+	DE	Eine Client-ID, wie du sie in der Google Cloud Platform finden kannst (https://console.cloud.google.com/apis/dashboard)
 	EN	Client ID as found on your Google Cloud Platform page https://console.cloud.google.com/apis/dashboard
 
 PLUGIN_YOUTUBE_CLIENTSECRET
+	CS	Client Secret
+	DE	Clientschlüssel
 	EN	Client Secret
 
 PLUGIN_YOUTUBE_CLIENTSECRET_DESC
 	CS	Client Secret nalezený na stránce Google Cloud Platform https://console.cloud.google.com/apis/dashboard
-	DE	Eine Client Secret, wie du es in der Google Cloud Platform finden kannst (https://console.cloud.google.com/apis/dashboard)
+	DE	Eine Clientschlüssel, wie du es in der Google Cloud Platform finden kannst (https://console.cloud.google.com/apis/dashboard)
 	EN	Client Secret as found on your Google Cloud Platform page https://console.cloud.google.com/apis/dashboard
 
 PLUGIN_YOUTUBE_OAUTH
@@ -384,18 +388,18 @@ PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT
 	CS	a vyberte svůj projekt YouTube
 	CS	<br>- vyberte "CREATE CREDENTIALS", poté "OAuth client ID" a poté "TVs and Limited Input devices"
 	CS	<br>- vyberte název nebo ponechte výchozí hodnotu
-	CS	<br>- klikněte na "CREATE", čímž se vygeneruje Client ID a Client secret
-	CS	<br>- vložte sem "Client ID" a "Client secret" a klikněte na "Použít"
+	CS	<br>- klikněte na "CREATE", čímž se vygeneruje Client ID a Client Secret
+	CS	<br>- vložte sem "Your Client ID" a "Your Client Secret" a klikněte na "Použít"
 	CS	<br>- klikněte na "Získat kód" a pokud se vpravo od něj nic neobjeví, stačí kliknout na "Obnovit" nebo obnovit tuto stránku LMS
 	CS	<br>- zkopírujte červeně vyznačený kód a klikněte na odkaz "Klikněte zde pro autorizaci". YouTube vás vyzve k zadání kódu
 	CS	<br>- vraťte se na hlavní obrazovku LMS, nyní můžete používat "Moje odběry" a "Moje seznamy skladeb"
 	CS	<br>- chcete-li odebrat oprávnění, přejděte na <a href="https://myaccount.google.com/permissions" target="none">Aplikace s přístupem k vašemu účtu</a>
 	DE	- gehe nach <a href="https://console.cloud.google.com/apis/credentials" target="none">Google Cloud Platform Credentials</a>
 	DE	und wähle dein YouTube Projekt
-	DE	<br>- wähle "CREATE CREDENTIALS", dann "OAuth Client ID", dann "TVs and Limited Input devices"
+	DE	<br>- wähle "ANMELDEDATEN ERSTELLEN", dann "OAuth-Client-ID", dann "Fernsehgeräte und Geräte mit begrenzter Eingabe"
 	DE	<br>- gib einen Namen
-	DE	<br>- klicke "CREATE", das wird eine Client ID und Client Secrete generieren
-	DE	<br>- Füge Client ID und Client Secret hier ein, speichere die Einstellungen
+	DE	<br>- klicke "ERSTELLEN", das wird eine Client-ID und Clientschlüssel generieren
+	DE	<br>- Füge Ihre Client-ID und Ihr Clientschlüssel hier ein, speichere die Einstellungen
 	DE	<br>- klicke "Erhalte Code". Falls rechts nichts passiert, klicke "Aktualisieren"
 	DE	<br>- kopiere den roten Code, und "Klicke hier, um Zugriff zu gewähren". YouTube wird dich auffordern, den Code einzugeben.
 	DE	<br>- zurück in LMS solltest du nun "Meine Abonnements" und "Meine Wiedergabelisten" verwenden können
@@ -403,8 +407,8 @@ PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT
 	EN	and select your YouTube project
 	EN	<br>- select "CREATE CREDENTIALS", then "OAuth client ID" and then "TVs and Limited Input devices"
 	EN	<br>- choose a name or leave the default
-	EN	<br>- click "CREATE", this will generate a Client ID and Client secret
-	EN	<br>- paste "Client ID" and "Client secret" here and click "Apply"
+	EN	<br>- click "CREATE", this will generate a Client ID and Client Secret
+	EN	<br>- paste "Your Client ID" and "Your Client Secret" here and click "Apply"
 	EN	<br>- click "Get Code" and if nothing appears to its right, just click "Refresh" or refresh this LMS page
 	EN	<br>- copy the code in red and click "Click here to authorize" link. You'll be prompted by YouTube to enter the code
 	EN	<br>- return to the LMS main screen, you can now use "My Subscriptions" and "My Playlists"
