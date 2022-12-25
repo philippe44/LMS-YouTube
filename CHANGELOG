@@ -1,3 +1,7 @@
+0.144.2
+ - update CZ transation
+ - fix JS signature 
+ 
 0.144.1
  - update Czech translations
  - strings.txt must be Unix-like (as usual...)
