@@ -357,25 +357,32 @@ sub interpret_expression {
 sub extract_object {
     my ($self, $depth, $objname) = @_;
     my $obj = {};
+    my $fields;
 
     $self->progress($depth, "--", "Extract '$objname'");
+    
+    my $_FUNC_NAME_RE = '(?:[a-zA-Z$0-9]+|"[a-zA-Z$0-9]+"|\'[a-zA-Z$0-9]+\')';
+    my $_NAME_RE = '[a-zA-Z_$][\w$]*';
 
-    if (!($self->{code} =~  /
-            (?<!this\.)
-             \Q$objname\E
-             \s*=\s*\{
-             \s*(([a-zA-Z\$0-9]+\s*:\s*function\(.*?\)\s*\{.*?\}(?:,\s*)?)*)
-            \}\s*;
-              /x)) {
-	die "Could not extract JS object '$objname'";
+    # alternative for below with a different non-reedycapture group
+    # (?<fields>$_FUNC_NAME_RE\s*:\s*function\s*\(.*?\)\s*{.*?}(?:,\s*)?)?
+
+    while ($self->{code} =~ /
+        $_NAME_RE\s*\.\s*\Q$objname\E|\Q$objname\E\s*=\s*
+        {\s*
+        (?<fields>($_FUNC_NAME_RE\s*:\s*function\s*\(.*?\)\s*{.*?}(?:,\s*)?)*)
+        }\s*;
+        /xgs) {
+        $fields = $+{fields};
+        last if defined $fields;
     }
-    my $fields = $1;
+	die "Could not extract JS object '$objname'" if !$fields;
 
     # Currently, it only supports function definitions
     while ($fields =~ /
             ([a-zA-Z\$0-9]+)\s*:\s*function
             \(([a-z,]+)\)\{([^}]+)\}
-              /xg) {
+              /xgs) {
 	my $key = $1;
 	my $args = $2;
 	my $code = $3;

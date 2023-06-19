@@ -310,9 +310,11 @@ sub sysread {
 					$v->{'streaming'} = 0 if $v->{'offset'} == @{$props->{'segmentURL'}};
 					main::DEBUGLOG && $log->is_debug && $log->debug("got chunk $v->{'offset'} length: ", length $response->content, " for $url");
 				} else {
-					$v->{offset} += DATA_CHUNK;
-					$v->{'streaming'} = 0 if length($response->content) < DATA_CHUNK;
-					main::DEBUGLOG && $log->is_debug && $log->debug("got chunk length: ", length $response->content, " from ", $v->{offset} - DATA_CHUNK, " for $url");
+					($v->{length}) = $response->header('content-range') =~ /\/(\d+)$/ unless $v->{length};
+					my $len = length $response->content;
+					$v->{offset} += $len;
+					$v->{'streaming'} = 0 if ($len < DATA_CHUNK && !$v->{length}) || ($v->{offset} == $v->{length});
+					main::DEBUGLOG && $log->is_debug && $log->debug("got chunk length: $len from ", $v->{offset} - $len, " for $url");
 				}
 			},
 

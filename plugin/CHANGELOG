@@ -1,3 +1,9 @@
+0.150
+ - update JSInterp for new parsing
+
+0.145.0
+  - end WebM streaming on more robust criteria than just less than DATA_CHUNK received
+ 
 0.144.2
  - update CZ transation
  - fix JS signature 
