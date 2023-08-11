@@ -134,12 +134,14 @@ sub updateRecentlyPlayed {
 sub toplevel {
 	my ($client, $callback, $args) = @_;
 
+=comment
 	if (!$prefs->get('APIkey')) {
 		$callback->([
 			{ name => cstring($client, 'PLUGIN_YOUTUBE_MISSINGKEY'), type => 'textarea' },
 		]);
 		return;
 	}
+=cut    
 
 	if (!Slim::Networking::Async::HTTP::hasSSL() || !eval { require IO::Socket::SSL } ) {
 		$callback->([

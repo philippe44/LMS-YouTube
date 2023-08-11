@@ -7,9 +7,11 @@ use File::Spec::Functions qw(catdir);
 use JSON::XS::VersionOneAndTwo;
 use List::Util qw(min max);
 use URI::Escape qw(uri_escape uri_escape_utf8);
+use MIME::Base64 qw(decode_base64);
 
 use constant API_URL => 'https://www.googleapis.com/youtube/v3/';
 use constant DEFAULT_CACHE_TTL => 24 * 3600;
+use constant DEFAULT_API_KEY => 'QUl6YVN5Qi1wd1B0RGt4RjZKUW1BOHFxOWgxbWQ2ME15STVRNWlB';
 
 use Slim::Utils::Cache;
 use Slim::Utils::Log;
@@ -119,8 +121,9 @@ sub _pagedCall {
 
 sub _call {
 	my ( $method, $args, $cb ) = @_;
-	
-	my $url = '?' . (delete $args->{_noKey} ? '' : 'key=' . $prefs->get('APIkey') . '&');
+
+    my $API_KEY = $prefs->get('APIkey') || MIME::Base64::decode_base64(DEFAULT_API_KEY);
+	my $url = '?' . (delete $args->{_noKey} ? '' : 'key=' . $API_KEY . '&');
 	
 	$args->{regionCode} ||= $prefs->get('country') unless delete $args->{_noRegion};
 	$args->{part}       ||= 'snippet' unless delete $args->{_noPart};

@@ -427,7 +427,7 @@ sub getNextTrack {
 
 					if ($streams) {
 						main::INFOLOG && $log->is_info && $log->info("no regular stream found, using DASH with JSON");
-						# cleanup JSON payloadis when escaped, in right sequence (including replacing \u last)
+						# cleanup JSON payloads when escaped, in right sequence (including replacing \u last)
 						if ($escaped) {
 							$streams =~ s/\\"/"/g;
 							$streams =~ s/\\{2}/\\/g;

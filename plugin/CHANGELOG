@@ -1,3 +1,9 @@
+0.161
+ - as usual, fix previous fuck-up with key
+ 
+0.160
+ - add default key
+ 
 0.150
  - update JSInterp for new parsing
 
