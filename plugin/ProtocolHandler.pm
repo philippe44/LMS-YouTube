@@ -385,14 +385,11 @@ sub getNextTrack {
 
 	# need to set consent cookie if pending
 	my $cookieJar = Slim::Networking::Async::HTTP::cookie_jar();
-	my $consent = $cookieJar->get_cookies('www.youtube.com', 'CONSENT');
-
-	if ($consent =~ /PENDING/) {
-		my ($id) = $consent =~ /PENDING\+(\d+)/;
-		my $value = "YES+cb." . POSIX::strftime('%Y%m%d', gmtime) . "-00-p0.en+FX+" . ($id || int(rand(900)) + 100);
-		$cookieJar->set_cookie(0, 'CONSENT', $value, '/', '.youtube.com', undef, undef, undef, 3600*24*365);
-		$log->info("Acceping CONSENT cookie $value");
-	}
+    my $socs = $cookieJar->get_cookies('www.youtube.com', 'SOCS');
+    if (!$socs || $socs =~ /^CAA/) {
+		$cookieJar->set_cookie(0, 'SOCS', 'CAI', '/', '.youtube.com', undef, undef, 1, 3600*24*365);
+		$log->info("Acceping CONSENT cookie");
+    }
 
 	# fetch new url(s)
 	Slim::Networking::SimpleAsyncHTTP->new(
