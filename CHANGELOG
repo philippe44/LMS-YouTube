@@ -1,3 +1,6 @@
+0.163
+ - get last 2 digits for language to guess country
+ 
 0.162
  - fix consent that seems required in EU and whose format has changed
  

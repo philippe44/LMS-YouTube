@@ -57,11 +57,8 @@ tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
 my $convertCountry = { EN => 'US', CS => 'CZ' };
 
 sub setCountry {
-	my $lang = Slim::Utils::Strings::getLanguage();
-
-	$lang = $convertCountry->{$lang} if $convertCountry->{$lang};
-
-	return $lang;
+	my $lang = substr(Slim::Utils::Strings::getLanguage(), -2);
+	return $convertCountry->{$lang} || $lang;
 }
 
 
