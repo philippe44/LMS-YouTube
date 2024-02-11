@@ -1,3 +1,10 @@
+0.170
+ - let user select query order
+ - let user sort display order and select query batch size
+ - guided channel is deprecated
+ - better handling of some OPML functions learnt from Tidal plugin experience
+ - remove trailing white space
+ 
 0.163
  - get last 2 digits for language to guess country
  
@@ -179,7 +186,7 @@
 0.86.0
  - add playlist to channel search
  - search by channel id and optionally playlist only
- - sorte order by date when no search
+ - sort order by date when no search
  - alphabetical sort of mysubscription 
  
 0.85.2

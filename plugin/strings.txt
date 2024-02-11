@@ -232,7 +232,41 @@ PLUGIN_YOUTUBE_MAXITEMS_DESC
 	CS	Maximální počet položek, které může hledání vrátit.
 	DE	Maximale Anzahl Resultate von Suchresultaten.
 	EN	Maximum number of items a search can return.
+	
+PLUGIN_YOUTUBE_SORTING
+	EN	Sorting options
+	
+PLUGIN_YOUTUBE_SORTING_DESC
+	EN	The search order sets how YouTube sorts its search results. As this amount can be very large, only up to 
+	EN	"Items per search" will be returned. Then, these results can be sorted for display using the display order
+	EN	Choosing anything other than 'none' will force the plugin to query *all* items at once to be able to sort them 
+	EN	and that can be long. When no display order is selected, the plugin build up the list upon user request, by batch
+	EN	of 50 items at time, which is much faster. Note that choosing a search order of "title" and a display of "none" 
+	EN	is probably not a good idea because you'll get the first alphabetical items which are probably not very relevant.
+	EN	You can set the query batch size but that means that the display will not be fully relevant as only items acquired 
+	EN	so far will be sorted.
+	
+PLUGIN_YOUTUBE_SEARCHORDER
+	EN	Search order
+		
+PLUGIN_YOUTUBE_DISPLAYORDER
+	EN	Display order
+	
+PLUGIN_YOUTUBE_QUERYSIZE
+	EN	query batch size
+	
+PLUGIN_YOUTUBE_ORDERNONE
+	EN	none
 
+PLUGIN_YOUTUBE_ORDERRELEVANCE
+	EN	relevance
+	
+PLUGIN_YOUTUBE_ORDERTITLE
+	EN	title
+	
+PLUGIN_YOUTUBE_ORDERDATE
+	EN	date
+	
 PLUGIN_YOUTUBE_ICONRES
 	CS	Ikony s vysokým rozlišením
 	DE	Hochauflösende Vorschaubilder

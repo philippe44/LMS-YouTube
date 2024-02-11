@@ -17,6 +17,32 @@
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_MAXITEMS" desc="PLUGIN_YOUTUBE_MAXITEMS_DESC" %]
 		<input type="text" class="stdedit" name="pref_max_items" id="pref_max_items" value="[% prefs.pref_max_items %]" size="5">
 	[% END %]
+	
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_SORTING" desc="PLUGIN_YOUTUBE_SORTING_DESC" %]
+		<script type="text/javascript">
+		function querysize(input) {
+			var mode = input.options[input.selectedIndex].value || 'none';							
+			document.getElementById('query_size').style.display = (mode === 'none') ? 'none' : 'inline';
+		}
+		</script>
+
+		[% "PLUGIN_YOUTUBE_SEARCHORDER" | string %]
+		<select class="stdedit" id="pref_search_order" name="pref_search_order">
+		[% FOREACH entry IN [ ['PLUGIN_YOUTUBE_ORDERRELEVANCE','relevance'], ['PLUGIN_YOUTUBE_ORDERTITLE','title'], ['PLUGIN_YOUTUBE_ORDERDATE','date'] ] %]
+			<option label="[% entry.0 | string %]" [% IF entry.1 == prefs.pref_search_order %]selected[% END %] value="[% entry.1 %]">
+		[% END %]
+		&nbps</select>
+		[% "PLUGIN_YOUTUBE_DISPLAYORDER" | string %]
+		<select class="stdedit" id="pref_display_order" name="pref_display_order" onchange="querysize(this)">
+		[% FOREACH entry IN [ ['PLUGIN_YOUTUBE_ORDERNONE','none'], ['PLUGIN_YOUTUBE_ORDERTITLE','title'], ['PLUGIN_YOUTUBE_ORDERDATE','date'] ] %]
+			<option label="[% entry.0 | string %]" [% IF entry.1 == prefs.pref_display_order %]selected[% END %] value="[% entry.1 %]">
+		[% END %]
+		</select>
+		<span id="query_size" [% IF prefs.pref_display_order == 'none' %]hidden[% END %]>
+		&nbsp[% "PLUGIN_YOUTUBE_QUERYSIZE" | string %]
+		<input type="text" class="stdedit" name="pref_query_size" id="pref_query_size" value="[% prefs.pref_query_size %]" size="2">
+		</span>
+	[% END %]
 			
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_COUNTRY" desc="PLUGIN_YOUTUBE_COUNTRY_DESC" %]
 		<input type="text" class="stdedit" name="pref_country" id="pref_country" value="[% prefs.pref_country %]" size="2">

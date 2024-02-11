@@ -51,6 +51,9 @@ $prefs->init({
 	aac => 1,
 	ogg => 1,
 	cache_ttl => 300,
+	search_order => 'relevance',
+	display_order => 'none',
+	query_size => 50,
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
@@ -60,7 +63,6 @@ sub setCountry {
 	my $lang = substr(Slim::Utils::Strings::getLanguage(), -2);
 	return $convertCountry->{$lang} || $lang;
 }
-
 
 sub initPlugin {
 	my $class = shift;
@@ -138,7 +140,7 @@ sub toplevel {
 		]);
 		return;
 	}
-=cut    
+=cut
 
 	if (!Slim::Networking::Async::HTTP::hasSSL() || !eval { require IO::Socket::SSL } ) {
 		$callback->([
@@ -149,8 +151,6 @@ sub toplevel {
 
 	$callback->([
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_VIDEOCATEGORIES'), type => 'url', url => \&videoCategoriesHandler },
-
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_GUIDECATEGORIES'), type => 'url', url => \&guideCategoriesHandler },
 
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_VIDEOSEARCH'),  type => 'search', url => \&searchHandler },
 
@@ -308,54 +308,22 @@ sub recentHandler {
 	$callback->({ items => \@menu });
 }
 
-sub guideCategoriesHandler {
-	my ($client, $cb, $args) = @_;
-
-	Plugins::YouTube::API->getCategories('guideCategories', sub {
-		my $result = shift;
-		my @items;
-
-		for my $entry (@{$result->{items} || []}) {
-			my $title = $entry->{snippet}->{title} || next;
-
-			push @items, {
-				name => $title,
-				type => 'url',
-				url  => \&channelHandler,
-				passthrough => [  { categoryId => $entry->{id} } ],
-			};
-		}
-
-		$result->{items} = \@items;
-
-		$cb->( $result );
-	}, {
-		_index	   => $args->{index},
-		_quantity  => $args->{quantity},
-	});
-}
-
 sub videoCategoriesHandler {
 	my ($client, $cb, $args) = @_;
 
 	Plugins::YouTube::API->getCategories('videoCategories', sub {
-		my $result = shift;
-		my @items;
-
-		for my $entry (@{$result->{items} || []}) {
-			my $title = $entry->{snippet}->{title} || next;
-
-			push @items, {
-				name => $title,
+		my $items = [ map {
+			{
+				name => $_->{snippet}->{title},
 				type => 'search',
 				url  => \&searchHandler,
-				passthrough => [  { videoCategoryId => $entry->{id} } ],
+				passthrough => [  { videoCategoryId => $_->{id} } ],
 			};
-		}
+		} sort {
+			lc($a->{snippet}->{title}) cmp lc($b->{snippet}->{title})
+		} @{$_[0]->{items}} ];
 
-		$result->{items} = \@items;
-
-		$cb->( $result );
+		$cb->( { items => $items } );
 	}, {
 		_index	   => $args->{index},
 		_quantity  => $args->{quantity},
@@ -388,7 +356,6 @@ sub subscriptionsHandler {
 		_quantity		=> $args->{quantity},
 		mine			=> 'true',
 		access_token 	=> $cache->get('yt:access_token'),
-		order			=> 'alphabetical',
 	});
 }
 
@@ -432,7 +399,6 @@ sub searchHandler {
 	if ($args->{search}) {
 		$args->{search} = encode('utf8', $args->{search});
 		$params->{q} ||= delete $args->{search};
-		$params->{order} = 'relevance';
 	}
 
 	# workaround due to XMLBrowser management of defeatTTP
@@ -489,20 +455,6 @@ sub playlistHandler {
 	}, $params);
 }
 
-sub channelHandler {
-	my ($client, $cb, $args, $params) = @_;
-
-	$params ||= {};
-
-	Plugins::YouTube::API->searchDirect('channels', sub {
-		$cb->( _renderList($_[0]) );
-	}, {
-		_index  => $args->{index},
-		_quantity => $args->{quantity},
-		%{$params},
-	});
-}
-
 sub channelIdHandler {
 	my ($client, $cb, $args, $params) = @_;
 	my $url = $args->{search};
@@ -526,7 +478,6 @@ sub channelIdHandler {
 		_index  	=> $args->{index},
 		_quantity 	=> $args->{quantity},
 		channelId 	=> $id,
-		order		=> 'date',
 		%{$params},
 	});
 }
@@ -536,6 +487,7 @@ sub _renderList {
 	my @items;
 	my $id;
 	my $kind;
+	my $list;
 
 	my $chTags	= { prefix => $prefs->get('channel_prefix'),
 					suffix => $prefs->get('channel_suffix') };
@@ -544,7 +496,18 @@ sub _renderList {
 
 	$through ||= {};
 
-	for my $entry ( @{$args->{items} || []} ) {
+	if ($prefs->get('display_order') eq 'title') {
+		$log->info("sorting by title");
+		$list = [ sort { lc($a->{snippet}->{title}) cmp lc($b->{snippet}->{title}) } @{$args->{items}} ];
+	} elsif ($prefs->get('display_order') eq 'date') {
+		$log->info("sorting by date");
+		$list = [ sort { lc($a->{snippet}->{publishTime}) cmp lc($b->{snippet}->{publishTime}) } @{$args->{items}} ];
+	} else {
+		$log->info("no sorting");
+		$list = $args->{items};
+	}
+
+	for my $entry (@$list) {
 		my $snippet = $entry->{snippet} || next;
 		my $title = $snippet->{title} || next;
 		$title = decode_entities($title);
@@ -566,9 +529,6 @@ sub _renderList {
 		} elsif ($entry->{kind} eq 'youtube#subscription' || $entry->{kind} eq 'youtube#playlistItem') {
 			$id = $entry->{snippet}->{resourceId}->{videoId} || $entry->{snippet}->{resourceId}->{channelId} || $entry->{snippet}->{resourceId}->{playlistId};
 			$kind = $entry->{snippet}->{resourceId}->{kind};
-		} elsif ($entry->{kind} eq 'youtube#channel') {
-			$id = $entry->{id};
-			$kind = 'youtube#guidechannel';
 		} elsif ($entry->{kind} eq 'youtube#playlist' || $entry->{kind} eq 'youtube#video') {
 			$id = $entry->{id};
 			$kind = $entry->{kind};
@@ -582,13 +542,7 @@ sub _renderList {
 		}
 
 		# now organize the item list
-		if ($kind eq 'youtube#guidechannel') {
-			$item->{name} = $chTags->{prefix} . $title . $chTags->{suffix};
-			$item->{passthrough} = [ { channelId => $id, type => 'video,playlist' } ];
-			$item->{url}        = \&searchHandler;
-			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
-			$item->{favorites_type}	= 'audio';
-		} elsif ($kind eq 'youtube#video') {
+		if ($kind eq 'youtube#video') {
 			# dont't set type to audio to have icons
 			#$item->{type} 	   = 'audio';
 			$item->{on_select} 	= 'play';
