@@ -29,7 +29,7 @@ sub search {
 	$args ||= {};
 	$args->{part} = 'snippet';
 	$args->{type} ||= 'video';
-	$args->{order} ||= $prefs->get('search_order');
+	$args->{order} ||= $prefs->get('search_rank');
 	$args->{relevanceLanguage} = Slim::Utils::Strings::getLanguage();
 
 	_pagedCall('search', $args, $cb);
@@ -73,38 +73,32 @@ sub _pagedCall {
 	my @items;
 	my $pagingCb;
 	my $pageIndex = 0;
-
-	# doing a search with a display order, so need to give precedence to 'query_size'
-	$wantedItems = $prefs->get('query_size') if $prefs->get('display_order') ne 'none' && $method eq 'search';
-
-	# we want them from the current index
+	
+	# we want them starting from current index
 	$wantedItems += $args->{_index} || 0;
 
+	main::INFOLOG && $log->info("Searching by [$args->{order}]");
+	main::INFOLOG && $log->info("Query quantity [$args->{_quantity}] from index [$args->{_index}] to [$wantedItems] in mode [$method]");
+
+	# doing a search with a display order, so need to give precedence to 'query_size'
+	if ($prefs->get('search_sort') || $prefs->get('channel_sort') || $prefs->get('playlist_sort')) {
+		$wantedItems = (int($wantedItems / $prefs->get('query_size')) + 1) * $prefs->get('query_size');
+		main::INFOLOG && $log->info("Stretching items to $wantedItems");
+	}
+	
 	# that the maximum we'll get anyway
 	$wantedItems = $prefs->get('max_items') if $wantedItems > $prefs->get('max_items');
 
 	$pagingCb = sub {
 		my $results = shift;
 
-		if ( $results->{error} ) {
+		if ( $results->{error} || !$results->{items} ) {
 			$log->error("no results");
 			$cb->( { items => undef, total => 0 } ) if ( $results->{error} );
+			return;
 		}
 
-=comment
-		# option 2, get the exact range
-		# items are now in the wanted range
-		# this should be done by a splice of the array once we got everything
-		# rather than this contorded way which does not improve anything
-		if ($pageIndex + @{$results->{items}} > $wantedIndex) {
-			# remove offset when we start and don't add more than wanted
-			my $first = scalar @$items ? 0 : $wantedIndex - $pageIndex;
-			my $last = min($first + $wantedItems - scalar(@$items), scalar @{$results->{items}}) - 1;
-			push @$items, @{$results->{items}}[$first..$last];
-		}
-=cut
 		push @items, @{$results->{items}};
-
 		$pageIndex += scalar @{$results->{items}};
 
 		main::INFOLOG && $log->info("We want $wantedItems items from offset ", $wantedIndex, ", have " . scalar @items . " so far [acquired $pageIndex]");
@@ -123,15 +117,14 @@ sub _pagedCall {
 	_call($method, $args, $pagingCb);
 }
 
-
 sub _call {
 	my ( $method, $args, $cb ) = @_;
 
     my $API_KEY = $prefs->get('APIkey') || MIME::Base64::decode_base64(DEFAULT_API_KEY);
-	my $url = '?' . (delete $args->{_noKey} ? '' : 'key=' . $API_KEY . '&');
+	my $url = '?' . ($args->{_noKey} ? '' : 'key=' . $API_KEY . '&');
 
-	$args->{regionCode} ||= $prefs->get('country') unless delete $args->{_noRegion};
-	$args->{part}       ||= 'snippet' unless delete $args->{_noPart};
+	$args->{regionCode} ||= $prefs->get('country') unless $args->{_noRegion};
+	$args->{part}       ||= 'snippet' unless $args->{_noPart};
 	$args->{maxResults} ||= 50;
 
 	for my $k ( sort keys %{$args} ) {
@@ -150,7 +143,7 @@ sub _call {
 		return;
 	}
 
-	main::INFOLOG && $log->info('Calling API: ' . $url);
+	main::INFOLOG && $log->info("Calling API (cached ", $args->{_cache_ttl} || DEFAULT_CACHE_TTL, "): $url");
 
 	Slim::Networking::SimpleAsyncHTTP->new(
 		sub {

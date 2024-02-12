@@ -25,7 +25,7 @@ sub page {
 sub prefs {
 	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix 
 			playlist_suffix country max_items APIkey client_id client_secret live_delay 
-			cache_ttl search_order display_order query_size), @bool);
+			cache_ttl search_rank search_sort channel_rank channel_sort playlist_sort query_size), @bool);
 }
 
 sub handler {

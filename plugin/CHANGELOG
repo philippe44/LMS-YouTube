@@ -1,3 +1,9 @@
+0.200
+ - fixed version with sorting, add channel sorting
+ - don't add API key on subsequent pageToken in _call
+ - re-use channelHandler and playlistHandler in Plugin.pm and ListProtocolHandler.pm
+ - do a bit of general cleaning
+ 
 0.170
  - let user select query order
  - let user sort display order and select query batch size

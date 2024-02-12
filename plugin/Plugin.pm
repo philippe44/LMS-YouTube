@@ -51,8 +51,11 @@ $prefs->init({
 	aac => 1,
 	ogg => 1,
 	cache_ttl => 300,
-	search_order => 'relevance',
-	display_order => 'none',
+	search_rank => 'relevance',
+	search_sort => '',
+	channel_rank => 'relevance',
+	channel_sort => '',
+	playlist_sort => '',
 	query_size => 50,
 });
 
@@ -157,7 +160,7 @@ sub toplevel {
 		#FIXME: is this always 10 ?
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_MUSICSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { videoCategoryId => 10 } ] },
 
-		{ name => cstring($client, 'PLUGIN_YOUTUBE_CHANNELSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'channel' } ] },
+		{ name => cstring($client, 'PLUGIN_YOUTUBE_CHANNELSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'channel', sort => $prefs->get('channel_sort') } ] },
 
 		{ name => cstring($client, 'PLUGIN_YOUTUBE_PLAYLISTSEARCH'), type => 'search', url => \&searchHandler, passthrough => [ { type => 'playlist' } ] },
 
@@ -212,7 +215,6 @@ sub urlHandler {
 	}, $id );
 }
 
-
 sub relatedURLHandler {
 	my ($client, $cb, $args) = @_;
 	my $url = $args->{search};
@@ -233,7 +235,7 @@ sub relatedURLHandler {
 	}
 
 	Plugins::YouTube::API->search(sub {
-		$cb->( _renderList($_[0]) );
+		$cb->( _renderList($_[0], $prefs->get('search_sort')) );
 	}, 	{
 		type 			 => 'video',
 		relatedToVideoId => $id,
@@ -241,34 +243,6 @@ sub relatedURLHandler {
 		_quantity 		 => $args->{quantity},
 	});
 }
-
-
-sub playlistIdHandler {
-	my ($client, $cb, $args) = @_;
-	my $url = $args->{search};
-
-	# because search replaces '.' by ' '
-	$url =~ s/ /./g;
-	my ($id) = $url =~ /list=([^&]+)/;
-	$id ||= $url;
-
-	if (!$id) {
-		$cb->( { items => [ {
-			type => 'text',
-			name => cstring($client, 'PLUGIN_YOUTUBE_BADURL'),
-			} ] } );
-		return;
-	}
-
-	Plugins::YouTube::API->searchDirect( 'playlistItems', sub {
-			$cb->( _renderList($_[0]) );
-	},{
-		_index  	=> $args->{index},
-		_quantity 	=> $args->{quantity},
-		playlistId  => $id ,
-	});
-}
-
 
 sub recentHandler {
 	my ($client, $callback, $args) = @_;
@@ -348,7 +322,7 @@ sub subscriptionsHandler {
 	delete $params->{count};
 
 	Plugins::YouTube::API->searchDirect('subscriptions', sub {
-		$cb->( _renderList($_[0]) );
+		$cb->( _renderList($_[0], 'title') );
 	}, {
 		_cache_ttl 		=> 60,
 		_noKey			=> 1,
@@ -377,71 +351,20 @@ sub myPlaylistHandler {
 	delete $params->{count};
 
 	# need to passthrough the personal account items
-	my $personal = {
-					_cache_ttl 		=> 60,
-					_noKey			=> 1,
-					mine			=> 'true',
-					access_token 	=> $cache->get('yt:access_token'),
-				};
+	my $account = {
+		_cache_ttl 		=> 60,
+		_noKey			=> 1,
+		mine			=> 'true',
+		access_token 	=> $cache->get('yt:access_token'),
+	};
 
 	Plugins::YouTube::API->searchDirect('playlists', sub {
-		$cb->( _renderList($_[0], $personal) );
+		$cb->( _renderList($_[0], 'title', $account) );
 	}, {
-		%{$personal},
+		%$account,
 		_index  	=> $args->{index},
 		_quantity 	=> $args->{quantity},
 	});
-}
-
-sub searchHandler {
-	my ($client, $cb, $args, $params) = @_;
-
-	if ($args->{search}) {
-		$args->{search} = encode('utf8', $args->{search});
-		$params->{q} ||= delete $args->{search};
-	}
-
-	# workaround due to XMLBrowser management of defeatTTP
-	$cache->set("yt:search-$client", $params->{q}, 60) if defined $params->{q};
-	$params->{q} = $cache->get("yt:search-$client");
-
-	$params->{_index} = $args->{index};
-	$params->{_quantity} = $args->{quantity};
-
-	Plugins::YouTube::API->search(sub {
-		$cb->( _renderList($_[0]) );
-	}, $params );
-}
-
-sub searchChannelHandler {
-	my ($client, $cb, $args, $params) = @_;
-
-	$params->{_index} = $args->{index};
-	$params->{_quantity} = $args->{quantity};
-
-	# get video only first (default filter) because adding 'playlist' in 'type' does not return as many
-	Plugins::YouTube::API->search(sub {
-		my $result = $_[0];
-
-		# then add playlist with a separated query
-		if ( $result->{total} < $prefs->get('max_items') ) {
-			$log->info("adding playlist search");
-			Plugins::YouTube::API->searchDirect('playlists', sub {
-				my $total = { total => $result->{total} + $_[0]->{total},
-							  # should add $result->{total} if option #2 of API was chosen
-							  offset => $_[0]->{offset},
-							  items => [ @{$result->{items}}, @{$_[0]->{items}} ] };
-				$cb->( _renderList($total) );
-			}, {
-				%{$params},
-				_index 		=> $args->{index} > $result->{total} ? $args->{index} - $result->{total} : 0,
-				_quantity 	=> ($args->{quantity} ? $args->{quantity} : $prefs->get('max_items')) - $result->{total},
-			} );
-		} else {
-			$log->info("menu full, no playlist search");
-			$cb->( _renderList($result) );
-		}
-	}, $params );
 }
 
 sub playlistHandler {
@@ -449,10 +372,46 @@ sub playlistHandler {
 
 	$params->{_index} = $args->{index};
 	$params->{_quantity} = $args->{quantity};
+	$params->{_cache_ttl} = $prefs->get('cache_ttl');
 
 	Plugins::YouTube::API->searchDirect('playlistItems', sub {
-		$cb->( _renderList($_[0]) );
+		$cb->( _renderList($_[0], $prefs->get('playlist_sort')) );
 	}, $params);
+}
+
+sub playlistIdHandler {
+	my ($client, $cb, $args) = @_;
+	my $url = delete $args->{search};
+
+	# because search replaces '.' by ' '
+	$url =~ s/ /./g;
+	my ($id) = $url =~ /list=([^&]+)/;
+	$id ||= $url;
+
+	if (!$id) {
+		$cb->( { items => [ {
+			type => 'text',
+			name => cstring($client, 'PLUGIN_YOUTUBE_BADURL'),
+			} ] } );
+		return;
+	}
+	
+	playlistHandler($client, $cb, $args, { playlistId  => $id });
+}
+
+sub channelHandler {
+	my ($client, $cb, $args, $params) = @_;
+
+	$params->{_index} = $args->{index};
+	$params->{_quantity} = $args->{quantity};
+	$params->{_cache_ttl} = $prefs->get('cache_ttl');	
+	$params->{type} ||= 'video,playlist';
+	$params->{order} = $prefs->get('channel_rank');
+
+	# get video only first (default filter) because adding 'playlist' in 'type' does not return as many
+	Plugins::YouTube::API->search(sub {
+		$cb->( _renderList($_[0], $prefs->get('channel_sort')) );
+	}, $params );
 }
 
 sub channelIdHandler {
@@ -471,43 +430,51 @@ sub channelIdHandler {
 			} ] } );
 		return;
 	}
+	
+	channelHandler($client, $cb, $args, { channelId => $id });
+}
 
-	Plugins::YouTube::API->search( sub {
-			$cb->( _renderList($_[0]) );
-	},{
-		_index  	=> $args->{index},
-		_quantity 	=> $args->{quantity},
-		channelId 	=> $id,
-		%{$params},
-	});
+sub searchHandler {
+	my ($client, $cb, $args, $params) = @_;
+
+	if ($args->{search}) {
+		$args->{search} = encode('utf8', $args->{search});
+		$params->{q} ||= delete $args->{search};
+	}
+
+	# workaround due to XMLBrowser management of defeatTTP
+	$cache->set("yt:search-$client", $params->{q}, 60) if defined $params->{q};
+	$params->{q} = $cache->get("yt:search-$client");
+
+	$params->{_index} = $args->{index};
+	$params->{_quantity} = $args->{quantity};
+
+	Plugins::YouTube::API->search(sub {
+		$cb->( _renderList($_[0], $params->{sort} || $prefs->get('search_sort')) );
+	}, $params );
 }
 
 sub _renderList {
-	my ($args, $through) = @_;
+	my ($list, $sort, $passthrough) = @_;
+	my $sortedList = $list->{items};
 	my @items;
-	my $id;
-	my $kind;
-	my $list;
 
 	my $chTags	= { prefix => $prefs->get('channel_prefix'),
 					suffix => $prefs->get('channel_suffix') };
 	my $plTags	= { prefix => $prefs->get('playlist_prefix'),
 					suffix => $prefs->get('playlist_suffix') };
 
-	$through ||= {};
+	$passthrough ||= {};
+	$log->info("Sorting by [$sort]");
 
-	if ($prefs->get('display_order') eq 'title') {
-		$log->info("sorting by title");
-		$list = [ sort { lc($a->{snippet}->{title}) cmp lc($b->{snippet}->{title}) } @{$args->{items}} ];
-	} elsif ($prefs->get('display_order') eq 'date') {
-		$log->info("sorting by date");
-		$list = [ sort { lc($a->{snippet}->{publishTime}) cmp lc($b->{snippet}->{publishTime}) } @{$args->{items}} ];
-	} else {
-		$log->info("no sorting");
-		$list = $args->{items};
+	if ($sort eq 'title') {
+		$sortedList = [ sort { lc($a->{snippet}->{title}) cmp lc($b->{snippet}->{title}) } @{$list->{items}} ];
+	} elsif ($sort eq 'date') {
+		$sortedList = [ sort { $b->{snippet}->{publishTime} cmp $a->{snippet}->{publishTime} } @{$list->{items}} ];
 	}
 
-	for my $entry (@$list) {
+	for my $entry (@$sortedList) {
+		my ($id, $kind);		
 		my $snippet = $entry->{snippet} || next;
 		my $title = $snippet->{title} || next;
 		$title = decode_entities($title);
@@ -571,14 +538,14 @@ sub _renderList {
 			}
 		} elsif ($kind eq 'youtube#playlist') {
 			$item->{name} = $plTags->{prefix} . $title . $plTags->{suffix};
-			$item->{passthrough} = [ { playlistId => $id, _cache_ttl => $prefs->get('cache_ttl'), %{$through} } ];
+			$item->{passthrough} = [ { playlistId => $id, %$passthrough } ];
 			$item->{url}         = \&playlistHandler;
 			$item->{favorites_url}	= 'ytplaylist://playlistId=' . $id;
 			$item->{favorites_type}	= 'playlist';
 		} elsif ($kind eq 'youtube#channel') {
 			$item->{name} = $chTags->{prefix} . $title . $chTags->{suffix};
-			$item->{passthrough} = [ { channelId => $id, _cache_ttl => $prefs->get('cache_ttl'), %{$through} } ];
-			$item->{url}         = \&searchChannelHandler;
+			$item->{passthrough} = [ { channelId => $id, %$passthrough } ];
+			$item->{url}         = \&channelHandler;
 			$item->{favorites_url}	= 'ytplaylist://channelId=' . $id;
 			$item->{favorites_type}	= 'playlist';
 		} else {
@@ -590,9 +557,10 @@ sub _renderList {
 		push @items, $item;
 	}
 
-	$args->{items} = \@items;
-
-	return $args;
+	# replace items in-situ as we want to keep offset and total
+	$list->{items} = \@items;
+	
+	return $list;
 }
 
 sub _getImage {

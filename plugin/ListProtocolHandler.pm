@@ -23,42 +23,26 @@ sub explodePlaylist {
 	return unless $type && $id;
 
 	if ($type eq 'channelId') {
-
-		# get video first (search is video only) as adding 'playlist' does not return as many
-		Plugins::YouTube::API->search( sub {
-				my $result = shift;
-
-				return renderItems($result, $cb) if $result->{total} >= $prefs->get('max_items');
-
-				# then get playlists if remaining space
-				Plugins::YouTube::API->searchDirect('playlists', sub {
-						$result = { total => $result->{total} + $_[0]->{total},
-									items => [ @{$result->{items}}, @{$_[0]->{items}} ] };
-						renderItems($result, $cb);
-					}, {
-					 channelId => $id,
-					_quantity 	=> $prefs->get('max_items') - $result->{total},
-					}
-				);
-			}, { channelId => $id }
+		Plugins::YouTube::Plugin::channelHandler($client, sub {
+				my $tracks = shift;
+				$tracks = [ map { $_->{play} } @{$tracks->{items}} ] if $main::VERSION lt '8.2.0';
+				$cb->( $tracks );
+			}, { }, { 
+				channelId => $id,
+				type => 'video',
+			} 
 		);
-
 	} elsif ($type eq 'playlistId') {
-
-		Plugins::YouTube::API->searchDirect( 'playlistItems', sub {
-				renderItems(shift, $cb);
-			}, { playlistId => $id }
+		Plugins::YouTube::Plugin::playlistHandler($client, sub {
+				my $tracks = shift;
+				$tracks = [ map { $_->{play} } @{$tracks->{items}} ] if $main::VERSION lt '8.2.0';
+				$cb->( $tracks );
+			}, { }, { 
+				playlistId => $id 
+			}
 		);
 
 	}
 }
-
-sub renderItems {
-	my ($items, $cb) = @_;
-	my $tracks = Plugins::YouTube::Plugin::_renderList($items);
-	$tracks = [ map { $_->{play} } @{$tracks->{items}} ] if $main::VERSION lt '8.2.0';
-	$cb->( $tracks );
-}
-
 
 1;

@@ -21,25 +21,51 @@
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_SORTING" desc="PLUGIN_YOUTUBE_SORTING_DESC" %]
 		<script type="text/javascript">
 		function querysize(input) {
-			var mode = input.options[input.selectedIndex].value || 'none';							
-			document.getElementById('query_size').style.display = (mode === 'none') ? 'none' : 'inline';
+			var mode = (document.getElementById('pref_search_sort').value === '') &&
+					   (document.getElementById('pref_channel_sort').value === '') &&
+					   (document.getElementById('pref_playlist_sort').value === '');
+			document.getElementById('query_size').style.display = mode ? 'none' : 'inline';
 		}
 		</script>
+		
+		[% RANK = [ ['PLUGIN_YOUTUBE_ORDERRELEVANCE','relevance'], ['TITLE','title'], ['DATE','date'], ['PLUGIN_YOUTUBE_ORDERRATING','rating'], ['PLUGIN_YOUTUBE_ORDERVIEWS','viewCount'] ] %]
+		[% SORT = [ ['NONE',''], ['TITLE', 'title'], ['DATE','date'] ] %]
 
-		[% "PLUGIN_YOUTUBE_SEARCHORDER" | string %]
-		<select class="stdedit" id="pref_search_order" name="pref_search_order">
-		[% FOREACH entry IN [ ['PLUGIN_YOUTUBE_ORDERRELEVANCE','relevance'], ['PLUGIN_YOUTUBE_ORDERTITLE','title'], ['PLUGIN_YOUTUBE_ORDERDATE','date'] ] %]
-			<option label="[% entry.0 | string %]" [% IF entry.1 == prefs.pref_search_order %]selected[% END %] value="[% entry.1 %]">
-		[% END %]
-		&nbps</select>
-		[% "PLUGIN_YOUTUBE_DISPLAYORDER" | string %]
-		<select class="stdedit" id="pref_display_order" name="pref_display_order" onchange="querysize(this)">
-		[% FOREACH entry IN [ ['PLUGIN_YOUTUBE_ORDERNONE','none'], ['PLUGIN_YOUTUBE_ORDERTITLE','title'], ['PLUGIN_YOUTUBE_ORDERDATE','date'] ] %]
-			<option label="[% entry.0 | string %]" [% IF entry.1 == prefs.pref_display_order %]selected[% END %] value="[% entry.1 %]">
+		[% "PLUGIN_YOUTUBE_SEARCHRANK" | string %]
+		<select class="stdedit" id="pref_search_rank" name="pref_search_rank">
+		[% FOREACH entry IN RANK %]
+			<option label="[% entry.0 | string %]" [% IF entry.1 == prefs.pref_search_rank %]selected[% END %] value="[% entry.1 %]">
 		[% END %]
 		</select>
-		<span id="query_size" [% IF prefs.pref_display_order == 'none' %]hidden[% END %]>
-		&nbsp[% "PLUGIN_YOUTUBE_QUERYSIZE" | string %]
+		&nbsp[% "PLUGIN_YOUTUBE_SORTBY" | string %]
+		<select class="stdedit" id="pref_search_sort" name="pref_search_sort" onchange="querysize(this)">
+		[% FOREACH entry IN SORT %]
+			<option label="[% entry.0 | string %]" [% IF entry.1 == prefs.pref_search_sort %]selected[% END %] value="[% entry.1 %]">
+		[% END %]
+		</select>
+		<br><br>
+		[% "PLUGIN_YOUTUBE_CHANNELRANK" | string %]
+		<select class="stdedit" id="pref_channel_rank" name="pref_channel_rank" onchange="querysize(this)">
+		[% FOREACH entry IN RANK %]
+			<option label="[% entry.0 | string %]" [% IF entry.1 == prefs.pref_channel_rank %]selected[% END %] value="[% entry.1 %]">
+		[% END %]
+		</select>
+		&nbsp[% "PLUGIN_YOUTUBE_SORTBY" | string %]
+		<select class="stdedit" id="pref_channel_sort" name="pref_channel_sort" onchange="querysize(this)">
+		[% FOREACH entry IN SORT %]
+			<option label="[% entry.0 | string %]" [% IF entry.1 == prefs.pref_channel_sort %]selected[% END %] value="[% entry.1 %]">
+		[% END %]
+		</select>
+		<br><br>
+		[% "PLUGIN_YOUTUBE_PLAYLISTSORT" | string %]
+		<select class="stdedit" id="pref_playlist_sort" name="pref_playlist_sort" onchange="querysize(this)">
+		[% FOREACH entry IN SORT %]
+			<option label="[% entry.0 | string %]" [% IF entry.1 == prefs.pref_playlist_sort %]selected[% END %] value="[% entry.1 %]">
+		[% END %]
+		</select>
+		<span id="query_size" [% IF prefs.pref_search_sort == '' && prefs.pref_channel_sort == '' && prefs.pref_playlist_sort == '' %]hidden[% END %]>
+		<br><br>
+		[% "PLUGIN_YOUTUBE_QUERYSIZE" | string %]
 		<input type="text" class="stdedit" name="pref_query_size" id="pref_query_size" value="[% prefs.pref_query_size %]" size="2">
 		</span>
 	[% END %]
