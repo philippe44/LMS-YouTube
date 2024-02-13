@@ -1,3 +1,7 @@
+0.210
+ - playlist are now a sub-item of channels
+ - remove prefix and suffix when it's obviously a Channel or a Playlist
+ 
 0.200
  - fixed version with sorting, add channel sorting
  - don't add API key on subsequent pageToken in _call

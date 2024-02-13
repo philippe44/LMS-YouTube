@@ -78,12 +78,12 @@ sub _pagedCall {
 	$wantedItems += $args->{_index} || 0;
 
 	main::INFOLOG && $log->info("Searching by [$args->{order}]");
-	main::INFOLOG && $log->info("Query quantity [$args->{_quantity}] from index [$args->{_index}] to [$wantedItems] in mode [$method]");
+	main::INFOLOG && $log->info("Querying [$args->{_quantity}] from [$args->{_index}] to [", $wantedItems-1, "] using [$method]");
 
 	# doing a search with a display order, so need to give precedence to 'query_size'
 	if ($prefs->get('search_sort') || $prefs->get('channel_sort') || $prefs->get('playlist_sort')) {
-		$wantedItems = (int($wantedItems / $prefs->get('query_size')) + 1) * $prefs->get('query_size');
-		main::INFOLOG && $log->info("Stretching items to $wantedItems");
+		$wantedItems = (int(($wantedItems - 1) / $prefs->get('query_size')) + 1) * $prefs->get('query_size');
+		main::INFOLOG && $log->info("Stretching quantity to [$wantedItems] due to sorting");
 	}
 	
 	# that the maximum we'll get anyway
@@ -101,7 +101,7 @@ sub _pagedCall {
 		push @items, @{$results->{items}};
 		$pageIndex += scalar @{$results->{items}};
 
-		main::INFOLOG && $log->info("We want $wantedItems items from offset ", $wantedIndex, ", have " . scalar @items . " so far [acquired $pageIndex]");
+		main::INFOLOG && $log->info("Want $wantedItems items from offset ", $wantedIndex, ", have " . scalar @items . " so far [acquired $pageIndex]");
 
 		if (@items < $wantedItems && $results->{nextPageToken}) {
 			$args->{pageToken} = $results->{nextPageToken};
@@ -109,7 +109,7 @@ sub _pagedCall {
 			_call($method, $args, $pagingCb);
 		} else {
 			my $total = min($results->{'pageInfo'}->{'totalResults'} || $pageIndex, $prefs->get('max_items'));
-			main::INFOLOG && $log->info("Got all we wanted. Return " . scalar @items . " items over $total. (YouTube total ", $results->{'pageInfo'}->{'totalResults'} || 'N/A', ")");
+			main::INFOLOG && $log->info("Got all we wanted, return " . scalar @items . "/$total. (YT total ", $results->{'pageInfo'}->{'totalResults'} || 'N/A', ")");
 			$cb->( { items => \@items, offset => $wantedIndex, total  => $total } );
 		}
 	};
@@ -143,7 +143,7 @@ sub _call {
 		return;
 	}
 
-	main::INFOLOG && $log->info("Calling API (cached ", $args->{_cache_ttl} || DEFAULT_CACHE_TTL, "): $url");
+	main::INFOLOG && $log->info("Calling API (will cache for ", $args->{_cache_ttl} || DEFAULT_CACHE_TTL, "s): $url");
 
 	Slim::Networking::SimpleAsyncHTTP->new(
 		sub {
