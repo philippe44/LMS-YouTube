@@ -1,3 +1,7 @@
+0.211
+ - fix "playlists" hard-coded in english under channels
+ - remove channelplaylist if at end of line
+ 
 0.210
  - playlist are now a sub-item of channels
  - remove prefix and suffix when it's obviously a Channel or a Playlist

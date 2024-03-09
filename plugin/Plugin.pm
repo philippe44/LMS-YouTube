@@ -418,7 +418,7 @@ sub channelPlaylistHandler {
 sub channelHandler {
 	my ($client, $cb, $args, $params) = @_;
 
-	# because we insert a front menu, we must ofset the index by one
+	# because we insert a front menu, we must offset the index by one
 	$params->{_index} = $args->{index} - 1 if defined $args->{index};
 	$params->{_quantity} = $args->{quantity};
 	$params->{_cache_ttl} = $prefs->get('cache_ttl');	
@@ -432,13 +432,13 @@ sub channelHandler {
 		if (!@{$list->{items}}) {
 			# if playlistif directly displayed, there is no index shift
 			$params->{_index} = $args->{index};
-			channelPlaylistHandler($client, $cb, $args, $params) unless @{$list->{items}};
+			channelPlaylistHandler($client, $cb, $args, $params);
 			return;
 		}
 
 		# TODO: shall we do something about total?		
 		unshift @{$list->{items}}, {
-			name => 'Playlists',
+			name => cstring($client, 'PLAYLISTS'),
 			type => 'link',
 			image => 'html/images/playlists.png',
 			url => \&channelPlaylistHandler,
