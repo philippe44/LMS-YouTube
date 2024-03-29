@@ -640,7 +640,7 @@ sub getStartOffset {
 }
 
 sub setProperties {
-	my ($song, $props, $cb) = @_;
+	my ($song, $props, $cb, $ecb) = @_;
 	my $client = $song->master();
 	my $var = {	'inBuf'       => '',
 				'id'          => undef,   
@@ -681,14 +681,14 @@ sub setProperties {
 					return 0;
 				} elsif ( $res eq WEBM_ERROR ) {
 					$log->error( "could not get webm headers" );
-					$cb->();
+					$ecb->();
 					return 0;
 				}		
 		},
 		onError	=>	sub {
 				my ($self, $error) = @_;
 				$log->warn("could not get codec info $error");
-				$cb->();
+				$ecb->();
 		}
 	 } );	
 }

@@ -416,7 +416,7 @@ sub getNextTrack {
 								return $errorCb->() unless $props;
 								$song->pluginData(props => $props);
 								$song->pluginData(baseURL  => $props->{'baseURL'});
-								$setProperties->{$props->{'format'}}($song, $props, $successCb);
+								$setProperties->{$props->{'format'}}($song, $props, $successCb, $errorCb);
 							} );
 				} else {
 					# try adaptive format and see if they are escaped
@@ -450,7 +450,7 @@ sub getNextTrack {
 								main::DEBUGLOG && $log->is_debug && $log->debug("unobfuscated signature $sig");
 								$song->pluginData(props => $props);
 								$song->pluginData(baseURL  => "$streamInfo->{'url'}" . ($sig ? "&$streamInfo->{sp}=$sig" : ''));
-								$setProperties->{$props->{'format'}}($song, $props, $successCb);
+								$setProperties->{$props->{'format'}}($song, $props, $successCb, $errorCb);
 							} else {
 								$errorCb->();
 							}

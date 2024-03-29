@@ -97,7 +97,7 @@ sub getStartOffset {
 }	
 
 sub setProperties {
-	my ($song, $props, $cb) = @_;
+	my ($song, $props, $cb, $ecb) = @_;
 	my $url = $song->pluginData('baseURL');
 	my $http = Slim::Networking::Async::HTTP->new;
 	my $args = {};
@@ -138,14 +138,14 @@ sub setProperties {
 				return 1;
 			} else {	
 				$log->warn( "could not find get properties within $args->{offset} bytes" );
-				$cb->();
+				$ecb->();
 				return 0;
 			}	
 		},
 		onError     => sub {
 			my ($self, $error) = @_;
 			$log->warn( "could not find get properties $error" );
-			$cb->();
+			$ecb->();
 		},
 	} );
 }	
