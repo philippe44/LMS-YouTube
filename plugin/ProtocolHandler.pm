@@ -373,7 +373,7 @@ sub getNextTrack {
 	$masterUrl =~ s/&.*//;
 
 	my $id = $class->getId($masterUrl);
-
+	my $url = "http://www.youtube.com/watch?v=$id";
 	my @allow = ( [43, 'ogg', 0], [44, 'ogg', 0], [45, 'ogg', 0], [46, 'ogg', 0] );
 	my @allowDASH = ();
 
