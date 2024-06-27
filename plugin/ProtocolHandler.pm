@@ -406,12 +406,40 @@ sub getNextTrack {
 
             		my $streams = eval { decode_json($http_result) };
             		my $streamInfo = getStreamJSON($streams->{'streamingData'}->{'adaptiveFormats'}, \@allowDASH);
+			
+			if(!$streamInfo) {
+				
+				main::INFOLOG && $log->is_info && $log->info("no regular stream found, trying html extract...");
+				Slim::Networking::SimpleAsyncHTTP->new(
+					sub {
+						my $response = shift;
+						my $dashmpd;
 
-            		my $props = { format => $streamInfo->{'format'}, bitrate => $streamInfo->{'bitrate'} };
+						($dashmpd) = $response->content =~ /"dashManifestUrl":"(.*?)"/;
 
-            		$song->pluginData(props => $props);
-            		$song->pluginData(baseURL  => "$streamInfo->{'url'}");
-            		$setProperties->{$props->{'format'}}($song, $props, $successCb, $errorCb)
+						getMPD($dashmpd, \@allowDASH, sub {
+							my $props = shift;
+							return $errorCb->() unless $props;
+							$song->pluginData(props => $props);
+							$song->pluginData(baseURL  => $props->{'baseURL'});
+							$setProperties->{$props->{'format'}}($song, $props, $successCb, $errorCb);
+						});
+					},
+
+					sub {
+						$errorCb->($_[1]);
+					},
+
+				)->get($url);
+			}
+			else {
+
+	            		my $props = { format => $streamInfo->{'format'}, bitrate => $streamInfo->{'bitrate'} };
+
+        	    		$song->pluginData(props => $props);
+            			$song->pluginData(baseURL  => "$streamInfo->{'url'}");
+            			$setProperties->{$props->{'format'}}($song, $props, $successCb, $errorCb);
+			}
         	},
 
         	sub {
