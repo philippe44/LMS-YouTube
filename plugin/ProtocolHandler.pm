@@ -385,38 +385,38 @@ sub getNextTrack {
 
 	# need to set consent cookie if pending
 	my $cookieJar = Slim::Networking::Async::HTTP::cookie_jar();
-   	 my $socs = $cookieJar->get_cookies('www.youtube.com', 'SOCS');
-    	if (!$socs || $socs =~ /^CAA/) {
+	my $socs = $cookieJar->get_cookies('www.youtube.com', 'SOCS');
+		if (!$socs || $socs =~ /^CAA/) {
 		$cookieJar->set_cookie(0, 'SOCS', 'CAI', '/', '.youtube.com', undef, undef, 1, 3600*24*365);
 		$log->info("Acceping CONSENT cookie");
-    	}
+    }
 
 	# fetch new url(s)
+   	my $http_url = 'https://www.youtube.com/youtubei/v1/player?key='.$prefs->get('APIkey').'&prettyPrint=false';
+   	my $http_data = {context => {client => {clientName => "IOS", clientVersion => "19.09.3", deviceModel => "iPhone14,3", userAgent => "com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)", hl => "en", timeZone => "UTC", utcOffsetMinutes => 0}}, videoId => $id, playbackContext => {contentPlaybackContext => {html5Preference => "HTML5_PREF_WANTS"}}, contentCheckOk => "true", racyCheckOk => "true"};
 
-    	my $http_url = 'https://www.youtube.com/youtubei/v1/player?key='.$prefs->get('APIkey').'&prettyPrint=false';
-    	my $http_data = {context => {client => {clientName => "IOS", clientVersion => "19.09.3", deviceModel => "iPhone14,3", userAgent => "com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)", hl => "en", timeZone => "UTC", utcOffsetMinutes => 0}}, videoId => $id, playbackContext => {contentPlaybackContext => {html5Preference => "HTML5_PREF_WANTS"}}, contentCheckOk => "true", racyCheckOk => "true"};
+   	Slim::Networking::SimpleAsyncHTTP->new(
+	
+        sub {
+        	my $response = shift;
+        	my $http_result = $response->content;
 
-    	Slim::Networking::SimpleAsyncHTTP->new(
-     
-        	sub {
-            		my $response = shift;
-            		my $http_result = $response->content;
+       		main::DEBUGLOG && $log->is_debug && $log->debug($http_result);
 
-            		main::DEBUGLOG && $log->is_debug && $log->debug($http_result);
-
-            		my $streams = eval { decode_json($http_result) };
-            		my $streamInfo = getStreamJSON($streams->{'streamingData'}->{'adaptiveFormats'}, \@allowDASH);
+       		my $streams = eval { decode_json($http_result) };
+       		my $streamInfo = getStreamJSON($streams->{'streamingData'}->{'adaptiveFormats'}, \@allowDASH);
 			
-			if(!$streamInfo) {
+			if (!$streamInfo) {
+				main::INFOLOG && $log->is_info && $log->info("DASH/MPD stream, getting url $url");
 				
-				main::INFOLOG && $log->is_info && $log->info("no regular stream found, trying html extract...");
 				Slim::Networking::SimpleAsyncHTTP->new(
 					sub {
 						my $response = shift;
 						my $dashmpd;
 
 						($dashmpd) = $response->content =~ /"dashManifestUrl":"(.*?)"/;
-
+						main::INFOLOG && $log->is_info && $log->info("no regular stream found, using MPD");
+						
 						getMPD($dashmpd, \@allowDASH, sub {
 							my $props = shift;
 							return $errorCb->() unless $props;
@@ -427,28 +427,29 @@ sub getNextTrack {
 					},
 
 					sub {
+						$log->error("can't get url $url");
 						$errorCb->($_[1]);
 					},
 
 				)->get($url);
+			} else {
+           		my $props = { format => $streamInfo->{'format'}, bitrate => $streamInfo->{'bitrate'} };
+				
+				main::INFOLOG && $log->is_info && $log->info("not a DASH/MPD stream");
+				
+   	    		$song->pluginData(props => $props);
+				$song->pluginData(baseURL  => "$streamInfo->{'url'}");
+				$setProperties->{$props->{'format'}}($song, $props, $successCb, $errorCb);
 			}
-			else {
+        },
 
-	            		my $props = { format => $streamInfo->{'format'}, bitrate => $streamInfo->{'bitrate'} };
+        sub {
+            $log->error("could not load stream, $_[1]");
+			$log->warn(Data::Dump::dump(@_));
+        },
 
-        	    		$song->pluginData(props => $props);
-            			$song->pluginData(baseURL  => "$streamInfo->{'url'}");
-            			$setProperties->{$props->{'format'}}($song, $props, $successCb, $errorCb);
-			}
-        	},
-
-        	sub {
-            		warn Data::Dump::dump(@_);
-            		$log->error("could not load stream, $_[1]");
-        	},
-
-        	{
-            		timeout => 15,
+        {
+            timeout => 15,
 		}
   	)->post($http_url,encode_json($http_data));
 }

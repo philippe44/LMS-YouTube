@@ -1,3 +1,6 @@
+0.300
+ - use POST to get url (credist @VirtuousRivality)
+ 
 0.212
  - call ecb on webM and m4a setproperties fault
  
