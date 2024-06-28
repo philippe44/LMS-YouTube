@@ -385,138 +385,72 @@ sub getNextTrack {
 
 	# need to set consent cookie if pending
 	my $cookieJar = Slim::Networking::Async::HTTP::cookie_jar();
-    my $socs = $cookieJar->get_cookies('www.youtube.com', 'SOCS');
-    if (!$socs || $socs =~ /^CAA/) {
+   	 my $socs = $cookieJar->get_cookies('www.youtube.com', 'SOCS');
+    	if (!$socs || $socs =~ /^CAA/) {
 		$cookieJar->set_cookie(0, 'SOCS', 'CAI', '/', '.youtube.com', undef, undef, 1, 3600*24*365);
 		$log->info("Acceping CONSENT cookie");
-    }
+    	}
 
 	# fetch new url(s)
-	Slim::Networking::SimpleAsyncHTTP->new(
 
-		sub {
-			my $http = shift;
-			my $dashmpd;
+    	my $http_url = 'https://www.youtube.com/youtubei/v1/player?key='.$prefs->get('APIkey').'&prettyPrint=false';
+    	my $http_data = {context => {client => {clientName => "IOS", clientVersion => "19.09.3", deviceModel => "iPhone14,3", userAgent => "com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)", hl => "en", timeZone => "UTC", utcOffsetMinutes => 0}}, videoId => $id, playbackContext => {contentPlaybackContext => {html5Preference => "HTML5_PREF_WANTS"}}, contentCheckOk => "true", racyCheckOk => "true"};
 
-			main::DEBUGLOG && $log->is_debug && $log->debug($http->content);
+    	Slim::Networking::SimpleAsyncHTTP->new(
+     
+        	sub {
+            		my $response = shift;
+            		my $http_result = $response->content;
 
-			# first try non-DASH streams;
-			main::INFOLOG && $log->is_info && $log->info("trying regular streams");
-			my ($streams) = $http->content =~ /"url_encoded_fmt_stream_map":"(.*?)"/;
-			my $streamInfo = getStream($streams, \@allow);
+            		main::DEBUGLOG && $log->is_debug && $log->debug($http_result);
 
-			# then DASH/MPD streams
-			if (!$streamInfo) {
-				($dashmpd) = $http->content =~ /"dashManifestUrl":"(.*?)"/;
+            		my $streams = eval { decode_json($http_result) };
+            		my $streamInfo = getStreamJSON($streams->{'streamingData'}->{'adaptiveFormats'}, \@allowDASH);
+			
+			if(!$streamInfo) {
+				
+				main::INFOLOG && $log->is_info && $log->info("no regular stream found, trying html extract...");
+				Slim::Networking::SimpleAsyncHTTP->new(
+					sub {
+						my $response = shift;
+						my $dashmpd;
 
-				if ($dashmpd) {
-					main::INFOLOG && $log->is_info && $log->info("no regular stream found, using MPD");
-					getMPD($dashmpd, \@allowDASH, sub {
-								my $props = shift;
-								return $errorCb->() unless $props;
-								$song->pluginData(props => $props);
-								$song->pluginData(baseURL  => $props->{'baseURL'});
-								$setProperties->{$props->{'format'}}($song, $props, $successCb, $errorCb);
-							} );
-				} else {
-					# try adaptive format and see if they are escaped
-					(my $escaped, $streams) = $http->content =~ /adaptiveFormats(\\)?":(\[.*?\])/;
+						($dashmpd) = $response->content =~ /"dashManifestUrl":"(.*?)"/;
 
-					if ($streams) {
-						main::INFOLOG && $log->is_info && $log->info("no regular stream found, using DASH with JSON");
-						# cleanup JSON payloads when escaped, in right sequence (including replacing \u last)
-						if ($escaped) {
-							$streams =~ s/\\"/"/g;
-							$streams =~ s/\\{2}/\\/g;
-						}
-						$streams = eval { decode_json($streams) };
-						$streamInfo = getStreamJSON($streams, \@allowDASH);
-					} else {
-						main::INFOLOG && $log->is_info && $log->info("no regular stream found, using plain DASH");
-						($streams) = $http->content =~ /"adaptive_fmts":"(.*?)"/;
-						$streamInfo = getStream($streams, \@allowDASH);
-					}
+						getMPD($dashmpd, \@allowDASH, sub {
+							my $props = shift;
+							return $errorCb->() unless $props;
+							$song->pluginData(props => $props);
+							$song->pluginData(baseURL  => $props->{'baseURL'});
+							$setProperties->{$props->{'format'}}($song, $props, $successCb, $errorCb);
+						});
+					},
 
-					main::DEBUGLOG && $log->is_debug && $log->debug("DASH streams: $streams");
-				}
+					sub {
+						$errorCb->($_[1]);
+					},
+
+				)->get($url);
 			}
+			else {
 
-			# process non-mpd streams
-			if ($streamInfo) {
-				getSignature($http->content, $streamInfo->{'sig'}, $streamInfo->{'encrypted'}, sub {
-							my $sig = shift;
-							if (defined $sig) {
-								my $props = { format => $streamInfo->{'format'}, bitrate => $streamInfo->{'bitrate'} };
-								main::DEBUGLOG && $log->is_debug && $log->debug("unobfuscated signature $sig");
-								$song->pluginData(props => $props);
-								$song->pluginData(baseURL  => "$streamInfo->{'url'}" . ($sig ? "&$streamInfo->{sp}=$sig" : ''));
-								$setProperties->{$props->{'format'}}($song, $props, $successCb, $errorCb);
-							} else {
-								$errorCb->();
-							}
-				});
-			} elsif (!$dashmpd) {
-				$log->error("no stream/DASH found");
-				main::INFOLOG && $log->is_info && $log->info($http->content);
-				$errorCb->();
+	            		my $props = { format => $streamInfo->{'format'}, bitrate => $streamInfo->{'bitrate'} };
+
+        	    		$song->pluginData(props => $props);
+            			$song->pluginData(baseURL  => "$streamInfo->{'url'}");
+            			$setProperties->{$props->{'format'}}($song, $props, $successCb, $errorCb);
 			}
+        	},
 
-		},
+        	sub {
+            		warn Data::Dump::dump(@_);
+            		$log->error("could not load stream, $_[1]");
+        	},
 
-		sub {
-			$errorCb->($_[1]);
-		},
-
-	)->get($url);
-}
-
-sub getStream {
-	my ($streams, $allow) = @_;
-	my $streamInfo;
-	my $selected;
-
-	# transcode unicode escaped \uNNNN characters (mainly 0026 = &)
-	$streams =~ s/\\u(.{4})/chr(hex($1))/eg;
-
-	for my $stream (split(/,/, $streams)) {
-		my $index;
-		no strict 'subs';
-        my %props = map { $_ =~ /=(.+)/ ? split(/=/, $_) : () } split(/&/, $stream);
-
-		main::INFOLOG && $log->is_info && $log->info("found itag: $props{itag}");
-		main::DEBUGLOG && $log->is_debug && $log->debug($stream);
-
-		# check streams in preferred id order
-        next unless ($index) = grep { $$allow[$_][0] == $props{itag} } (0 .. @$allow-1);
-		main::INFOLOG && $log->is_info && $log->info("matching format $props{itag}");
-		next unless !defined $streamInfo || $index < $selected;
-
-		main::INFOLOG && $log->is_info && $log->info("selected itag: $props{itag}, props: $props{url}");
-
-		my $url = uri_unescape($props{url});
-		my $sig;
-		my $encrypted = 0;
-
-		if (exists $props{s}) {
-			$sig = $props{s};
-			$encrypted = 1;
-		} elsif (exists $props{sig}) {
-			$sig = $props{sig};
-		} elsif (exists $props{signature}) {
-			$sig = $props{signature};
-		} else {
-			$sig = '';
+        	{
+            		timeout => 15,
 		}
-
-		$sig = uri_unescape($sig);
-
-		main::INFOLOG && $log->is_info && $log->info("selected $$allow[$index][1] sig $sig encrypted $encrypted");
-
-		$streamInfo = { url => $url, sp => $props{sp} || 'signature', sig => $sig, encrypted => $encrypted, format => $$allow[$index][1], bitrate => $$allow[$index][2] };
-		$selected = $index;
-	}
-
-	return $streamInfo;
+  	)->post($http_url,encode_json($http_data));
 }
 
 sub getStreamJSON {
@@ -766,67 +700,6 @@ sub updateMPD {
 
 	)->get($props->{'mpd'}->{'url'});
 
-}
-
-sub getSignature {
-	my ($content, $sig, $encrypted, $cb) = @_;
-
-	# signature is not encrypted
-	if ( !$encrypted ) {
-		$cb->($sig);
-		return;
-	}
-
-	# get the player's url
-	my ($player_url) = ($content =~ /"assets":.+?"js":\s*("[^"]+")/);
-	($player_url) = ($content =~ /ytplayer\.[^=]*=.*"jsUrl":\s*("[^"]+")/) unless $player_url;
-	($player_url) = ($content =~ /".*_player"\s*,\s*"jsUrl":\s*("[^"]+")/) unless $player_url;
-
-	if ( !$player_url ) {
-		$log->error("no player url to unobfuscate signature");
-		$cb->();
-		return;
-	}
-
-	$player_url = JSON::XS->new->allow_nonref(1)->decode($player_url);
-	if ( $player_url  =~ m,^//, ) {
-		$player_url = "https:" . $player_url;
-	} elsif ($player_url =~ m,^/,) {
-		$player_url = "https://www.youtube.com" . $player_url;
-	}
-	main::DEBUGLOG && $log->is_debug && $log->debug("player_url: $player_url");
-
-	# is signature cached
-	if ( Plugins::YouTube::Signature::has_player($player_url) ) {
-		$cb->(Plugins::YouTube::Signature::unobfuscate_signature($player_url, $sig));
-	} else {
-		main::DEBUGLOG && $log->is_debug && $log->debug("Fetching new player $player_url");
-		Slim::Networking::SimpleAsyncHTTP->new(
-
-			sub {
-				my $http = shift;
-				my $jscode = $http->content;
-
-				eval {
-					Plugins::YouTube::Signature::cache_player($player_url, $jscode);
-					main::DEBUGLOG && $log->is_debug && $log->debug("Saved new player $player_url");
-					};
-
-				if ($@) {
-					$log->error("cannot load player code: $@");
-					$cb->();
-				} else {
-					$cb->(Plugins::YouTube::Signature::unobfuscate_signature($player_url, $sig));
-				}
-			},
-
-			sub {
-				$log->error->("Cannot fetch player");
-				$cb->();
-			},
-
-		)->get($player_url);
-	}
 }
 
 sub getMetadataFor {
