@@ -394,7 +394,7 @@ sub getNextTrack {
 	# fetch new url(s)
    	my $http_url = 'https://www.youtube.com/youtubei/v1/player?key='.$prefs->get('APIkey').'&prettyPrint=false';
    	my $http_data = {context => {client => {clientName => "IOS", clientVersion => "19.09.3", deviceModel => "iPhone14,3", userAgent => "com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)", hl => "en", timeZone => "UTC", utcOffsetMinutes => 0}}, videoId => $id, playbackContext => {contentPlaybackContext => {html5Preference => "HTML5_PREF_WANTS"}}, contentCheckOk => "true", racyCheckOk => "true"};
-
+	my $google_visitor = uri_unescape($cookieJar->get_cookies('www.youtube.com','GOOGLE_VISITOR'));	
    	Slim::Networking::SimpleAsyncHTTP->new(
 	
         sub {
@@ -403,8 +403,66 @@ sub getNextTrack {
 
        		main::DEBUGLOG && $log->is_debug && $log->debug($http_result);
 
-       		my $streams = eval { decode_json($http_result) };
-       		my $streamInfo = getStreamJSON($streams->{'streamingData'}->{'adaptiveFormats'}, \@allowDASH);
+       		my $fields = eval { decode_json($http_result) };
+			my $status = $fields->{'playabilityStatus'}->{'status'};
+
+			if($status eq 'LOGIN_REQUIRED') {
+			    main::INFOLOG && $log->is_info && $log->info("Storing google visitor ID and trying again...");
+				$google_visitor = $fields->{'responseContext'}->{'visitorData'};
+				$cookieJar->set_cookie(0, 'GOOGLE_VISITOR', uri_escape($google_visitor), '/', '.youtube.com', undef, undef, 1, 3600*24*365);
+				Slim::Networking::SimpleAsyncHTTP->new(                                                                                                                                                                                                             sub {                                                                                                                       my $response = shift;                                                                                                   my $http_result = $response->content;                                                                                                                                                                                                           main::DEBUGLOG && $log->is_debug && $log->debug($http_result);                                                                                                                                                                                  my $fields = eval { decode_json($http_result) };
+						my $streamInfo = getStreamJSON($fields->{'streamingData'}->{'adaptiveFormats'}, \@allowDASH);
+
+						if (!$streamInfo) {
+							main::INFOLOG && $log->is_info && $log->info("DASH/MPD stream, getting url $url");
+
+							Slim::Networking::SimpleAsyncHTTP->new(
+								sub {
+									
+									my $response = shift;
+									my $dashmpd;
+
+									($dashmpd) = $response->content =~ /"dashManifestUrl":"(.*?)"/;
+									main::INFOLOG && $log->is_info && $log->info("no regular stream found, using MPD");
+
+									getMPD($dashmpd, \@allowDASH, sub {
+										my $props = shift;
+										return $errorCb->() unless $props;
+										$song->pluginData(props => $props);
+										$song->pluginData(baseURL  => $props->{'baseURL'});
+										$setProperties->{$props->{'format'}}($song, $props, $successCb, $errorCb);
+									});
+								},
+
+								sub {
+									$log->error("can't get url $url");
+									$errorCb->($_[1]);
+								},
+
+							)->get($url);
+						} else {
+							my $props = { format => $streamInfo->{'format'}, bitrate => $streamInfo->{'bitrate'} };
+
+							main::INFOLOG && $log->is_info && $log->info("not a DASH/MPD stream");
+
+							$song->pluginData(props => $props);
+							$song->pluginData(baseURL  => "$streamInfo->{'url'}");
+							$setProperties->{$props->{'format'}}($song, $props, $successCb, $errorCb);
+						}
+					},
+
+					sub {
+						$log->error("could not load stream, $_[1]");
+						$log->warn(Data::Dump::dump(@_));
+					},
+
+					{
+						timeout => 15,
+					}							
+				)->post($http_url,'Content-Type' => 'application/json','X-Goog-Visitor-Id' => $google_visitor,encode_json($http_data));
+			}
+
+			my $streamInfo = getStreamJSON($fields->{'streamingData'}->{'adaptiveFormats'}, \@allowDASH);
 			
 			if (!$streamInfo) {
 				main::INFOLOG && $log->is_info && $log->info("DASH/MPD stream, getting url $url");
@@ -451,7 +509,8 @@ sub getNextTrack {
         {
             timeout => 15,
 		}
-  	)->post($http_url,encode_json($http_data));
+  	)->post($http_url,'Content-Type' => 'application/json','X-Goog-Visitor-Id' => $google_visitor,encode_json($http_data));
+
 }
 
 sub getStreamJSON {
