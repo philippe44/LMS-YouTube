@@ -1,3 +1,7 @@
+0.310
+ - add GoogleVisitor cookier (credits @VirtuousReality)
+ - add Danish translation (credits @cfuttrup)
+
 0.300
  - use POST to get url (credist @VirtuousRivality)
  
