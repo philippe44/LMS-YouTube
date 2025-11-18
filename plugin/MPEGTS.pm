@@ -32,7 +32,7 @@ use constant TABLE_SYNTAX_OFS 	=> TABLE_OFS + 3;
 use constant TABLE_DATA_OFS 	=> TABLE_SYNTAX_OFS + 5;
 
 {
-	__PACKAGE__->mk_accessor('rw', qw(bitrate samplerate channels url));
+	__PACKAGE__->mk_accessor('rw', qw(bitrate samplerate channels format url));
 	__PACKAGE__->mk_accessor('rw', qw( _context));
 }
 
@@ -78,15 +78,39 @@ sub initialize {
 			$self->addBytes(shift->contentRef),
 			$self->getAudio(\$outBuf);
 			
-			my @rates = (96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350);
-				
+			$self->format($self->_context->{stream}->{format});
+			
+# AAAAAAAA AAAABCCD EEFFFFGH HHIJKLMM MMMMMMMM MMMOOOOO OOOOOOPP 
+#
+# Header consists of 7 bytes without CRC.
+#
+# Letter	Length (bits)	Description
+# A	12	syncword 0xFFF, all bits must be 1
+# B	1	MPEG Version: 0 for MPEG-4, 1 for MPEG-2
+# C	2	Layer: always 0
+# D	1	set to 1 as there is no CRC 
+# E	2	profile, the MPEG-4 Audio Object Type minus 1
+# F	4	MPEG-4 Sampling Frequency Index (15 is forbidden)
+# G	1	private bit, guaranteed never to be used by MPEG, set to 0 when encoding, ignore when decoding
+# H	3	MPEG-4 Channel Configuration (in the case of 0, the channel configuration is sent via an inband PCE)
+# I	1	originality, set to 0 when encoding, ignore when decoding
+# J	1	home, set to 0 when encoding, ignore when decoding
+# K	1	copyrighted id bit, the next bit of a centrally registered copyright identifier, set to 0 when encoding, ignore when decoding
+# L	1	copyright id start, signals that this frame's copyright id bit is the first bit of the copyright id, set to 0 when encoding, ignore when decoding
+# M	13	frame length, this value must include 7 bytes of header 
+# O	11	Buffer fullness
+# P	2	Number of AAC frames (RDBs) in ADTS frame minus 1, for maximum compatibility always use 1 AAC frame per ADTS frame			
+			
 			# search pattern
-			$outBuf =~ /\xff(?:\xf1|\xf0)(.{2})/;
-			my $adts = unpack("n", $1);
-						
-			#$self->bitrate(  );
-			$self->samplerate( $rates[($adts >> 10) & 0x0f] );
-			$self->channels( ($adts >> 6) & 0x3 ); 
+			$outBuf =~ /\xff(?:\xf1|\xf0)(.{4})/;
+			my $header = unpack("N", $1);
+			
+			my @rates = (96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350);			
+			$self->samplerate( $rates[($header >> 26) & 0x0f] );
+			$self->channels( ($header >> 22) & 0x3 );
+
+			my $len = ($header >> 5) & 0x1fff;
+			$self->bitrate( int($len * 8 * $self->samplerate / 1024) );
 			
 			$cb->();
 		}, 

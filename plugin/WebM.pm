@@ -71,7 +71,7 @@ use constant ID_CUE_CLUSTER_POS	=> "\xF1";
 my $log = logger('plugin.youtube');
 
 {
-	__PACKAGE__->mk_accessor('rw', qw(bitrate samplerate channels url));
+	__PACKAGE__->mk_accessor('rw', qw(bitrate samplerate channels format url));
 	__PACKAGE__->mk_accessor('rw', qw(_webm _context));
 }
 
@@ -705,6 +705,16 @@ sub initialize {
 				if ( $res eq WEBM_MORE ) {
 					return 1;
 				} elsif ( $res eq WEBM_DONE ) {	
+					my $info = $self->_webm->{track};
+				
+					$self->channels($info->{channels});
+					$self->samplerate($info->{samplerate});
+					$self->bitrate($info->{bitrate});
+					for ($info->{codec}->{id}) {
+						/A_VORBIS/  && do { $self->format('ogg'); last };
+						/A_OPUS/    && do { $self->format('ops'); last };
+					}
+
 					$cb->();
 					return 0;
 				} elsif ( $res eq WEBM_ERROR ) {

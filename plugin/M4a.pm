@@ -45,7 +45,7 @@ use constant PARSING  => 2;
 use constant DATA	  => 3;
 
 {
-	__PACKAGE__->mk_accessor('rw', qw(bitrate samplerate channels url));
+	__PACKAGE__->mk_accessor('rw', qw(bitrate samplerate channels format url));
 	__PACKAGE__->mk_accessor('rw', qw(_mp4a _context));
 }
 
@@ -56,6 +56,7 @@ sub new {
 	# _context is to be flushed/initialized each time the getAudio is restarted
 	# but _mp4a is to be used for the duration of the objects, i.e. when seeking	
 	$self->init_accessor(
+		format => 'aac',
 		url => $url,
 		_context => {},
 		_mp4a => {},

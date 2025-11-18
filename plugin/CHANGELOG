@@ -1,3 +1,10 @@
+0.400.4
+ - add Win32 (really)
+ 
+0.400.3
+ - add bitrate in MPEG
+ - add format in all initializers
+ 
 0.400.2
  - indeed, -x ...
  
