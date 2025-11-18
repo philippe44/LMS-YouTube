@@ -5,6 +5,14 @@
 	[% END %]
 
 	<div class="prefDesc">
+	
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_YTDLPBINARY" desc="PLUGIN_YOUTUBE_YTDLPBINARY_DESC" %]
+		<select class="stdedit" name="binary" id="binary">
+		[% FOREACH entry IN binaries %]
+			<option [% IF entry == binary %]selected[% END %] value="[% entry %]">[% entry %]</option>
+		[% END %]
+		</select>
+	[% END %]
 		
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_APIKEY" desc="PLUGIN_YOUTUBE_APIKEY_DESC" %]
 		<input type="text" class="stdedit" name="pref_APIkey" id="pref_APIkey" value="[% prefs.pref_APIkey %]" size="45">
@@ -77,7 +85,11 @@
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_CODECS" desc="PLUGIN_YOUTUBE_CODECS_DESC" %]
 		<input name="pref_aac" type="checkbox" [% IF prefs.pref_aac %] checked [% END %]> aac
 		&nbsp
-		<input value='vorbis/opus' name="pref_ogg" type="checkbox" [% IF prefs.pref_ogg %] checked [% END %]> vorbis/opus
+		<input name="pref_opus" type="checkbox" [% IF prefs.pref_opus %] checked [% END %]> opus
+		&nbsp
+		<input name="pref_vorbis" type="checkbox" [% IF prefs.pref_vorbis %] checked [% END %]> vorbis
+		&nbsp
+		<input name="pref_use_video" type="checkbox" [% IF prefs.pref_use_video %] checked [% END %]> [% "PLUGIN_YOUTUBE_USE_VIDEO" | string %]
 	[% END %]
 	
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_LIVEOPTIONS" desc="PLUGIN_YOUTUBE_LIVEOPTIONS_DESC" %]

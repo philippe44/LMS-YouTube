@@ -23,6 +23,8 @@ use strict;
 use Config;
 use bytes;
 
+use base qw(Slim::Utils::Accessor);
+
 use Slim::Utils::Log;
 use Slim::Utils::Cache;
 
@@ -42,72 +44,92 @@ use constant ATOM     => 1;
 use constant PARSING  => 2;
 use constant DATA	  => 3;
 
+{
+	__PACKAGE__->mk_accessor('rw', qw(bitrate samplerate channels url));
+	__PACKAGE__->mk_accessor('rw', qw(_mp4a _context));
+}
+
+sub new {
+	my ($class, $url) = @_;
+	my $self = $class->SUPER::new;
+
+	# _context is to be flushed/initialized each time the getAudio is restarted
+	# but _mp4a is to be used for the duration of the objects, i.e. when seeking	
+	$self->init_accessor(
+		url => $url,
+		_context => {},
+		_mp4a => {},
+	);	
+	
+	return bless $self, $class;
+}	
+
+sub flush {
+	$_[0]->_context( { } );
+}	
+
+sub addBytes {
+	my ($self, $data) = @_;
+	$self->_context->{'inBuf'} .= ref $data ? $$data : $data;
+}	
+
+sub bufferLength {
+	return length $_[0]->_context->{'inBuf'};
+}	
+
 sub getStartOffset {
-	my ($url, $startTime, $props, $cb) = @_;
+	my ($self, $url, $startTime, $cb) = @_;
 	my $index = 0;
 	my $time = 0;
 	
 	return $cb->(0) unless $startTime;
 	
-	# use MPD timeline if possible, otherwise it's plain mp4
-	if (defined $props->{'segmentTimeline'}) {
-		foreach (@{$props->{'segmentTimeline'}}) {
-			$time += $_->{'d'} / $props->{'timescale'};
-			last if $time >= $startTime;
-			$index++;
-		}	
-		main::INFOLOG && $log->is_info && $log->info("using MPD segment timeline for offset");
-		$cb->($index);
-	} else {
-		my $http = Slim::Networking::Async::HTTP->new;
-		my $args = { startTime => $startTime };
+	my $http = Slim::Networking::Async::HTTP->new;
+	my $args = { startTime => $startTime };
 		
-		$http->send_request( {
-			request     => HTTP::Request->new( GET => $url ),
-			onStream  	=> sub {
-				my ($http, $dataref) = @_;
+	$http->send_request( {
+		request     => HTTP::Request->new( GET => $url ),
+		
+		onStream  	=> sub {
+			my ($http, $dataref) = @_;
 			
-				if (my $atom = parseAtoms('sidx', $dataref, $args)) {
-					my $offset = $args->{offset} || 0;
-					$startTime -= $atom->{time};
+			if (my $atom = parseAtoms('sidx', $dataref, $args)) {
+				my $offset = $args->{offset} || 0;
+				$startTime -= $atom->{time};
 
-					foreach my $item (@{$atom->{indexes}}) {
-						last if ($args->{startTime} -= $item->{duration} / $atom->{timescale}) <= 0;
-						$offset += $item->{size};
-					}
+				foreach my $item (@{$atom->{indexes}}) {
+					last if ($args->{startTime} -= $item->{duration} / $atom->{timescale}) <= 0;
+					$offset += $item->{size};
+				}
 
-					main::INFOLOG && $log->is_info && $log->info("using sidx for offset");
-					$cb->($offset);
-					return 0;
-				} elsif ($args->{offset} < 128*1024) {
-					return 1;
-				} else {	
-					$log->warn( "could not find get offset within $args->{offset} bytes" );
-					$cb->();
-					return 0;
-				}	
-			},
-			onError     => sub {
-				my ($self, $error) = @_;
-				$log->warn( "could not find start offset $error " );
-				$cb->(0);
-			},
-		} );
-	}	
+				main::INFOLOG && $log->is_info && $log->info("using sidx for offset");
+				$cb->($offset);
+				return 0;
+			} elsif ($args->{offset} < 128*1024) {
+				return 1;
+			} else {	
+				$log->warn( "could not find get offset within $args->{offset} bytes" );
+				$cb->();
+				return 0;
+			}	
+		},
+		
+		onError     => sub {
+			my ($self, $error) = @_;
+			$log->warn( "could not find start offset $error " );
+			$cb->(0);
+		},
+	} );
+
 }	
 
-sub setProperties {
-	my ($song, $props, $cb, $ecb) = @_;
-	my $url = $song->pluginData('baseURL');
+sub initialize {
+	my ($self, $cb, $ecb, $url) = @_;
 	my $http = Slim::Networking::Async::HTTP->new;
 	my $args = {};
 	
-	# if this is MPD, get the initialization segment
-	if ($props->{'initializeURL'}) {
-		main::INFOLOG && $log->is_info && $log->info("using initialize url $props->{'initializeURL'}");
-		$url .= $props->{'initializeURL'};
-		$song->track->secs( $props->{'duration'} );
-	}
+	# we might have received an initialize url
+	$url ||= $self->url;
 	
 	$http->send_request( {
 		request     => HTTP::Request->new( GET => $url ),
@@ -115,22 +137,13 @@ sub setProperties {
 			my ($http, $dataref) = @_;
 						
 			if (my $atom = parseAtoms('moov', $dataref, $args)) {
-				$props->{mp4a} = $atom->{'trak'}->{'mdia'}->{'minf'}->{'stbl'}->{'stsd'}->{'entries'}->{'mp4a'};	
-				$song->track->bitrate( $props->{bitrate} || $props->{mp4a}->{'esds'}->{'avgbitrate'} );
-				$song->track->samplerate( $props->{'samplingRate'} || $props->{mp4a}->{'samplerate'} );
-				$song->track->channels( $props->{'channels'} || $props->{mp4a}->{'channelcount'} ); 
-				# $song->track->samplesize( $props->{'track'}->{'samplesize'} );
+				$self->_mp4a($atom->{'trak'}->{'mdia'}->{'minf'}->{'stbl'}->{'stsd'}->{'entries'}->{'mp4a'});	
+				$self->bitrate($self->_mp4a->{'esds'}->{'avgbitrate'});
+				$self->samplerate($self->_mp4a->{'samplerate'});
+				$self->channels($self->_mp4a->{'channelcount'}); 
 	
-				my $id = Plugins::YouTube::ProtocolHandler->getId($song->track()->url);
-				if (my $meta = $cache->get("yt:meta-$id")) {
-					$meta->{type} = 'YouTube (aac@'. $song->track->samplerate . 'Hz)';
-					$cache->set("yt:meta-$id", $meta);
-				}
-	
-				$song->master->currentPlaylistUpdateTime( Time::HiRes::time() );
-				Slim::Control::Request::notifyFromArray( $song->master, [ 'newmetadata' ] );	
-				main::INFOLOG && $log->is_info && $log->info("found moov (in $args->{offset} bytes) and set properties abr: ", $song->track->bitrate, 
-															 " sr:",$song->track->samplerate, " ch:", $song->track->channels); 
+				main::INFOLOG && $log->is_info && $log->info("found moov (in $args->{offset} bytes) and set properties abr: ", $self->bitrate, 
+															 " sr:",$self->samplerate, " ch:", $self->channels); 															 
 				
 				$cb->();
 				return 0;
@@ -144,7 +157,7 @@ sub setProperties {
 		},
 		onError     => sub {
 			my ($self, $error) = @_;
-			$log->warn( "could not find get properties $error" );
+			$log->warn( "could not get properties $error" );
 			$ecb->();
 		},
 	} );
@@ -194,37 +207,38 @@ sub parseAtoms {
 }
 
 sub getAudio {
-	my ($v, $props) = @_;
+	my ($self, $outBuf) = @_;
+	my $v = $self->_context;
 	
 	$v->{state} //= ATOM;
 	$v->{need}	//= ATOM_NEED;
 	
 	# process all we can ... might be over the MAX_OUTBUF
-	while ($v->{need} <= length $v->{inBuf}) {
+	while ($v->{need} <= length $v->{'inBuf'}) {
 								
 		if ($v->{state} == ATOM) {
-			my ($atom, $size) = get_next_atom($v->{inBuf});
+			my ($atom, $size) = get_next_atom($v->{'inBuf'});
 					
 			$v->{need} = $size - 8;
 			$v->{atom} = $atom;
 			$v->{state} = PARSING;
-			substr($v->{inBuf}, 0, 8, '');
+			substr($v->{'inBuf'}, 0, 8, '');
 		}	
 
-		return 1 if $v->{need} > length $v->{inBuf};
+		return 1 if $v->{need} > length $v->{'inBuf'};
 	
 		# process the atom (just what we need)
-		$v->{$v->{atom}} = process_atom($v->{atom}, $v->{need}, substr($v->{inBuf}, 0, $v->{need}));
+		$v->{$v->{atom}} = process_atom($v->{atom}, $v->{need}, substr($v->{'inBuf'}, 0, $v->{need}));
 			
-		substr($v->{inBuf}, 0, $v->{need}, '');
+		substr($v->{'inBuf'}, 0, $v->{need}, '');
 		$v->{state} = ATOM;
 		$v->{need} = ATOM_NEED;
 		
 		if ($v->{mdat}) {
 			# mp4a data can come from segment (MPD) or be unique for a file (regular stream)
-			my $mp4a = $v->{'moov'}->{'trak'}->{'mdia'}->{'minf'}->{'stbl'}->{'stsd'}->{'entries'}->{'mp4a'} || $props->{'mp4a'};	
-			$v->{outBuf} .= convertDashSegtoADTS($mp4a->{'esds'}, $v->{mdat}->{data}, $v->{'moof'}->{'traf'});
-			main::DEBUGLOG && $log->is_debug && $log->debug("extracted ", length $v->{mdat}->{data}, " bytes, out ", length $v->{outBuf});
+			my $mp4a = $v->{'moov'}->{'trak'}->{'mdia'}->{'minf'}->{'stbl'}->{'stsd'}->{'entries'}->{'mp4a'} || $self->_mp4a;	
+			$$outBuf .= convertDashSegtoADTS($mp4a->{'esds'}, $v->{mdat}->{data}, $v->{'moof'}->{'traf'});
+			main::DEBUGLOG && $log->is_debug && $log->debug("extracted ", length $v->{mdat}->{data}, " bytes, out ", length $$outBuf);
 			$v->{mdat} = undef;
 		}	
 	}	

@@ -4,15 +4,15 @@ use base qw(Slim::Web::Settings);
 use strict;
 
 use List::Util qw(min max);
-use Data::Dumper;
 
 use Slim::Utils::Prefs;
 use Slim::Utils::Log;
 
 my $log   = logger('plugin.youtube');
 my $cache = Slim::Utils::Cache->new();
+my $prefs = preferences('plugin.youtube');
 
-my @bool = qw(live_edge aac ogg highres_icons);
+my @bool = qw(live_edge aac vorbis opus use_video highres_icons);
 
 sub name {
 	return 'PLUGIN_YOUTUBE';
@@ -39,6 +39,10 @@ sub handler {
 	}
 =cut
 
+	if ($params->{saveSettings}) {
+		$prefs->set( 'yt_dlp', $params->{binary} );
+	}
+
 	Plugins::YouTube::Oauth2::getCode if $params->{get_code};
 	
 	$params->{user_code} = $cache->get('yt:user_code');
@@ -56,6 +60,9 @@ sub handler {
 	foreach (@bool) {
 		$params->{"pref_$_"} = 0 unless defined $params->{"pref_$_"};
 	}
+	
+	$params->{binary} = $prefs->get('yt_dlp') || Plugins::YouTube::Utils::yt_dlp_binary();
+	$params->{binaries} = [ '', Plugins::YouTube::Utils::yt_dlp_binaries() ];
 				
 	$callback->($client, $params, $class->SUPER::handler($client, $params), @args);
 }

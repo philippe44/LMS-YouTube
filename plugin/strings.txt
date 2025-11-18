@@ -585,4 +585,14 @@ PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X
 	DA	Afspil fra seneste position (%s)
 	DE	Von der letzten Position wiedergeben (%s)
 	EN	Play from last position (%s)
+	
+PLUGIN_YOUTUBE_USE_VIDEO
+	EN	Extract from video
+	
+PLUGIN_YOUTUBE_YTDLPBINARY
+	EN	YT-dlp url extractor
+	
+PLUGIN_YOUTUBE_YTDLPBINARY_DESC
+	EN	Due to increasing complexity in url extraction, this plugin uses yt-dlp.
+	
 

@@ -1,3 +1,13 @@
+0.400.2
+ - indeed, -x ...
+ 
+0.400.1
+ - use -x and not -e ... really !!!
+ 
+0.400.0
+ - move to yt-dlp
+ - refactor the streaming engin
+ 
 0.310
  - add GoogleVisitor cookier (credits @VirtuousReality)
  - add Danish translation (credits @cfuttrup)

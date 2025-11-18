@@ -11,6 +11,8 @@ use List::Util qw(first);
 use Encode qw(encode decode);
 use JSON::XS::VersionOneAndTwo;
 use HTML::Entities;
+use File::Spec;
+use File::Spec::Functions;
 
 use Slim::Utils::Strings qw(string cstring);
 use Slim::Utils::Prefs;
@@ -27,7 +29,6 @@ use constant STREAM_BASE_URL => 'youtube://' . BASE_URL;
 use constant VIDEO_BASE_URL  => 'http://www.youtube.com/watch?v=%s';
 
 my $WEBLINK_SUPPORTED_UA_RE = qr/iPeng|SqueezePad|OrangeSqueeze/i;
-
 
 my	$log = Slim::Utils::Log->addLogCategory({
 	'category'     => 'plugin.youtube',
@@ -49,7 +50,9 @@ $prefs->init({
 	live_delay => 60,
 	live_edge => 1,
 	aac => 1,
-	ogg => 1,
+	vorbis => 1,
+	opus => 1,
+	use_video => 1,
 	cache_ttl => 300,
 	search_rank => 'relevance',
 	search_sort => '',
@@ -57,6 +60,7 @@ $prefs->init({
 	channel_sort => '',
 	playlist_sort => '',
 	query_size => 50,
+	yt_dlp => '',
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
