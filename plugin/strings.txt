@@ -261,9 +261,7 @@ PLUGIN_YOUTUBE_BANNER_TEXT
 	DE	Beachte auch, dass SSL benötigt wird. Falls das Plugin auf Linux nicht funktioniiert, öffne ein Terminal und
 	DE	führe folgenden Befehl aus:
 	DE	"sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl"
-	EN	Please note that this plugin streams the entire YouTube video file to playback the audio stream.
-	EN	This will use use significantly more network bandwidth than audio only streaming. Please consider
-	EN	this if your internet connection has a usage charge.<br>
+	EN	Please note that this plugin might streams the entire YouTube video file to playback the audio stream.
 	EN	Note that SSL is required, but on some Linux installation, a few libraries are missing. If the plugin
 	EN	does not work, open a command line and run:
 	EN	"sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl"

@@ -1,3 +1,27 @@
+0.400.11
+ - realy do the fix this time...
+ 
+0.400.10
+ - incorrect yt-dlp armv7l name
+ 
+0.400.9
+ - add packaged yt-dlp armv7l version
+ 
+0.400.8
+ - fix finding binary
+ 
+0.400.7
+ - fix broken execpath
+ - disable redir optmimization to handle multiple levels
+ 
+0.400.6
+ - try to add armv7l
+ - for HLS, at least use keep-alive session for redirected urls (2nd call)
+ 
+0.400.5
+ - really add Win32
+ - change STDOUT option on Windows
+ 
 0.400.4
  - add Win32 (really)
  

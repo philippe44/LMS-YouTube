@@ -92,12 +92,12 @@
 		<input name="pref_use_video" type="checkbox" [% IF prefs.pref_use_video %] checked [% END %]> [% "PLUGIN_YOUTUBE_USE_VIDEO" | string %]
 	[% END %]
 	
-	[% WRAPPER setting title="PLUGIN_YOUTUBE_LIVEOPTIONS" desc="PLUGIN_YOUTUBE_LIVEOPTIONS_DESC" %]
+	<!-- [% WRAPPER setting title="PLUGIN_YOUTUBE_LIVEOPTIONS" desc="PLUGIN_YOUTUBE_LIVEOPTIONS_DESC" %]
 		<input name="pref_live_edge" type="checkbox" [% IF prefs.pref_live_edge %] checked [% END %]>
 		[% "PLUGIN_YOUTUBE_LIVEEDGE" | string %]
 		<input type="text" class="stdedit" name="pref_live_delay" id="pref_live_delay" value="[% prefs.pref_live_delay %]" size="2">
 		[% "PLUGIN_YOUTUBE_LIVEDELAY" | string %]
-	[% END %]
+	[% END %] -->
 	
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_CHANNELTAGS" desc="PLUGIN_YOUTUBE_CHANNELTAGS_DESC" %]
 

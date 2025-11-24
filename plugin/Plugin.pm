@@ -81,7 +81,7 @@ sub initPlugin {
 		is_app => 1,
 		weight => 10,
 	);
-
+	
 	Slim::Menu::TrackInfo->registerInfoProvider( youtube => (
 		after => 'middle',
 		func  => \&trackInfoMenu,
