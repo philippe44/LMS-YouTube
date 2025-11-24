@@ -12,75 +12,60 @@ PLUGIN_YOUTUBE_MISSINGKEY
 	CS	- Přejděte na https://console.cloud.google.com/apis/dashboard
 	CS	- Klikněte na: Create Project
 	CS	- Projekt pojmenujte. Příklad: Projekt YouTube-API-Key
-	CS	- Ponechte položku Organization prázdnou
+	CS	- Ponechte položku Location prázdnou
 	CS	- Klikněte na tlačítko Create
-	CS	- Jakmile se dostanete na řídicí panel projektu, klikněte v poli API na: Go to APIs Overview
-	CS	- Na obrazovce APIs & Services klikněte na: ENABLE APIS AND SERVICES
-	CS	- V API Library vyhledejte "youtube" a klikněte na: YouTube Data API v3
-	CS	- Na obrazovce YouTube Data API v3 klikněte na ENABLE
-	CS	- V přehledu YouTube Data API v3 klikněte na: CREATE CREDENTIALS
-	CS	- V části "Which API are you using?" vyberte: YouTube Data API v3
-	CS	- V části "Where will you be calling the API from?" vyberte: Web browser (Javascript)
-	CS	- V části "What data will you be accessing?" vyberte: Public data
-	CS	- Poté klikněte na tlačítko "What credentials do I need?".
+	CS	- Jakmile se dostanete na řídicí panel projektu, klikněte v poli APIs na: Go to APIs Overview
+	CS	- Na obrazovce APIs & Services klikněte na: Enable APIs and services
+	CS	- V API Library vyhledejte „youtube“ a klikněte na: YouTube Data API v3
+	CS	- Na obrazovce YouTube Data API v3 klikněte na Enable
+	CS	- V přehledu YouTube Data API v3 klikněte na: Credentials, poté Create credentials a poté API key
+	CS	- V části „API restriction“ vyberte: Restrict key a zaškrtněte políčko „YouTube Data API v3“
+	CS	- Klikněte na tlačítko Create
 	CS	- Nyní byste měli vidět svůj API key. Zkopírujte jej do schránky.
-	CS	- Klikněte na odkaz: "Restrict key"
-	CS	- V části "API restrictions" vyberte možnost Restrict key a zaškrtněte políčko "YouTube Data API v3".
-	CS	- Klikněte na tlačítko SAVE
 	CS	- Vraťte se do zásuvného modulu YouTube a vložte svůj klíč, přičemž se ujistěte, že v tom, co vkládáte, nejsou žádné předcházející ani koncové mezery.
 	DA	Mangler YouTube API nøgle (se indstillinger). For at få en nøgle:
 	DA	- Gå til https://console.cloud.google.com/apis/dashboard
 	DA	- Klik "Create Project"
 	DA	- Navngiv projektet. Eksempel: YouTube-API-key-Project
-	DA	- Lad Organization forblive tom
+	DA	- Lad Location forblive tom
 	DA	- Klik "Create"
 	DA	- Når du er på dit projektets dashboard, skal du i APIs-boksen klikke på: Go to APIs Overview
-	DA	- I APIs & Services Dashboard skal du klikke på: ENABLE APIS AND SERVICES
+	DA	- I APIs & Services Dashboard skal du klikke på: Enable APIs and services
 	DA	- I API Library, søg efter "youtube" og klik på: YouTube Data API v3
-	DA	- I YouTube Data API v3 skærmbilledet, klik: ENABLE
-	DA	- I YouTube Data API v3 Overview, klik: CREATE CREDENTIALS
-	DA	- Under "Which API are you using?" vælg: YouTube Data API v3
-	DA	- Under "Where will you be calling the API from?" vælg: Web browser (Javascript)
-	DA	- Under "What data will you be accessing?" vælg: Public data
-	DA	- Klik på "What credentials do I need?" knappen.
+	DA	- I YouTube Data API v3 skærmbilledet, klik: Enable
+	DA	- I YouTube Data API v3 Overview, klik: Credentials, derefter Create credentials og derefter API key
+	DA	- Under "API restriction" vælg: Restrict key, og check "YouTube Data API v3"
+	DA	- Klik Create
 	DA	- Nu skulle du kunne se din API-nøgle. Kopier den til din udklipsholder.
-	DA	- Klik på linken: "Restrict key"
-	DA	- Under "API restrictions" vælg Restrict key, og check "YouTube Data API v3"
-	DA	- Klik SAVE
 	DA	- Vend tilbage til YouTube-udvidelsesmodulet og indsæt din nøgle, og sørg for, at der ikke er nogen forudgående eller efterfølgende mellemrum i det, du indsætter.
 	DE	Fehlender YouTube API Schlüssel (siehe Einstellungen). Um einen Schlüssel zu erhalten:
 	DE	- mit deinem Gmail Konto
 	DE	- https://console.cloud.google.com/apis/api/youtube/overview
 	DE	- klicke "Create a Project", falls du noch keins hast
 	DE	- im nächsten Bildschirm auf "Credentials" gehen
-	DE	- klicke "Create Credentials", "API Key", dann "Browser Key"
+	DE	- klicke "Create credentials", "API Key", dann "Browser Key"
 	DE	- klicke "Create", dann kopiere den Schlüssel
 	DE	- gehe zurück nach https://console.cloud.google.com/apis/api/youtube/overview
-	DE	- klicke "ENABLE"
+	DE	- klicke "Enable"
 	DE	- füge den Schlüssel in den YouTube Plugin Einstellungen ein
 	EN	Missing YouTube API key (see settings). To get a key:
 	EN	- Goto https://console.cloud.google.com/apis/dashboard
 	EN	- Click: Create Project
 	EN	- Name the project. Example: YouTube-API-Key-Project
-	EN	- Leave Organization Blank
+	EN	- Leave Location Blank
 	EN	- Click Create
 	EN	- Once at your project dashboard, in the APIs box, click: Go to APIs Overview
-	EN	- In the APIs & Services Dashboard, click: ENABLE APIS AND SERVICES
+	EN	- In the APIs & Services Dashboard, click: Enable APIs and services
 	EN	- In the API Library, search for "youtube" and click: YouTube Data API v3
-	EN	- In the YouTube Data API v3 screen, click: ENABLE
-	EN	- In the YouTube Data API v3 Overview, click: CREATE CREDENTIALS
-	EN	- Under "Which API are you using?" choose: YouTube Data API v3
-	EN	- Under "Where will you be calling the API from?" choose: Web browser (Javascript)
-	EN	- Under "What data will you be accessing?" choose: Public data
-	EN	- Then click "What credentials do I need?" button.
+	EN	- In the YouTube Data API v3 screen, click: Enable
+	EN	- In the YouTube Data API v3 Overview, click: Credentials, then Create credentials, and then API key
+	EN	- Under "API restriction" choose: Restrict key, and check "YouTube Data API v3"
+	EN	- Click Create
 	EN	- You should now see your API key. Copy it to your clipboard.
-	EN	- Click the link: "Restrict key"
-	EN	- Under "API restrictions" select Restrict key, and check "YouTube Data API v3"
-	EN	- Click SAVE
 	EN	- Return to the YouTube plugin and paste your key, making sure there are no preceeding or trailing spaces in what you paste.
 
 PLUGIN_YOUTUBE_MISSINGSSL
-	CS	SSL je vyžadováno (zkuste jej nainstalovat pomocí CPAN a/nebo v Linuxu proveďte "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
+	CS	SSL je vyžadováno (zkuste jej nainstalovat pomocí CPAN a/nebo v Linuxu proveďte „sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl„)
 	DA	SSL er påkrævet (prøv at installere det ved hjælp af CPAN og/eller på Linux kør "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
 	DE	SSL wird benögtig (installiere mit dem Paket-Manager deines Betriebssystems, z.B. "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
 	EN	SSL required (try to install it using CPAN and/or on Linux do "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
@@ -166,7 +151,7 @@ PLUGIN_YOUTUBE_CHANNELID
 	EN	Channel id
 
 PLUGIN_YOUTUBE_CHANNELIDPLAYLIST
-	CS	ID kanálu (pouze seznam skladeb)
+	CS	ID kanálu (pouze seznamy skladeb)
 	DA	Kanal ID (kun afspillelister)
 	EN	Channel id (return playlists only)
 
@@ -177,7 +162,7 @@ PLUGIN_YOUTUBE_GUIDECATEGORIES
 	EN	Guided Channels
 
 PLUGIN_YOUTUBE_VIDEOCATEGORIES
-	CS	Kategorie videa
+	CS	Kategorie videí
 	DA	Videokategorier
 	DE	Video Kategorien
 	EN	Video Categories
@@ -213,7 +198,7 @@ PLUGIN_YOUTUBE_PLAYALL
 	EN	All tracks
 
 PLUGIN_YOUTUBE_BADURL
-	CS	Špatná adresa YouTube URL
+	CS	Neplatná adresa YouTube URL
 	DA	Ugyldig YouTube URL
 	DE	Ungültige YouTube URL
 	EN	Bad YouTube URL
@@ -225,7 +210,7 @@ PLUGIN_YOUTUBE_ON_YOUTUBE
 	EN	On YouTube
 
 PLUGIN_YOUTUBE_WEBLINK
-	CS	Sledovat YouTube video
+	CS	Sledovat video na YouTube
 	DA	Vis YouTube video
 	DE	YouTube Video anschauen
 	EN	Watch YouTube Video
@@ -237,7 +222,7 @@ PLUGIN_YOUTUBE_PLAYLINK
 	EN	Play Video
 
 PLUGIN_YOUTUBE_BANNER
-	CS	Varování
+	CS	Upozornění
 	DA	ADVARSEL
 	DE	Warnung
 	EN	WARNING
@@ -248,7 +233,7 @@ PLUGIN_YOUTUBE_BANNER_TEXT
 	CS	pokud je používání vašeho internetového připojení zpoplatněno.<br>
 	CS	Všimněte si, že je vyžadováno SSL, ale na některých instalacích Linuxu chybí několik knihoven. Pokud zásuvný modul
 	CS	nefunguje, otevřete příkazový řádek a spusťte:
-	CS	"sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl".
+	CS	„sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl„.
 	DE	Beachte bitte, dass dieses Plugin das ganze YouTube Video herunterlädt um die Audiowiedergabe zu ermöglichen.
 	DA	Bemærk venligst, at dette udvidelsesmodul streamer hele YouTube-videofilen for at afspille lyden.
 	DA	Dette vil bruge væsentligt mere netværksbåndbredde end kun lydstreaming.
@@ -279,7 +264,7 @@ PLUGIN_YOUTUBE_APIKEY_DESC
 	EN	YouTube API v3 needs a key to access. Goto https://console.cloud.google.com/apis/dashboard
 
 PLUGIN_YOUTUBE_MAXITEMS
-	CS	Položek per hledání
+	CS	Položek na vyhledávání
 	DA	Antal søgeresultater
 	DE	Anzahl Suchresultate
 	EN	Items per search
@@ -289,12 +274,24 @@ PLUGIN_YOUTUBE_MAXITEMS_DESC
 	DA	Maks antal elementer en søgning kan returnere.
 	DE	Maximale Anzahl Resultate von Suchresultaten.
 	EN	Maximum number of items a search can return.
-	
+
 PLUGIN_YOUTUBE_SORTING
+	CS	Možnosti řazení
 	DA	Sorteringsmuligheder
 	EN	Sorting options
-	
+
 PLUGIN_YOUTUBE_SORTING_DESC
+	CS	Při vyhledávání na YouTube serverech existují často tisíce odpovídajících výsledků. Ty jsou hodnocené
+	CS	a pouze první „položky na vyhledávání“ jsou vráceny. Seřazení použité pro jejich zobrazení se může lišit
+	CS	od kritérií hodnocení. Například můžete chtít hodnocení podle „relevance“, ale seřazení podle „názvu“ pro snadné
+	CS	procházení a to je to, co tyto možnosti umožňují. Hodnocení podle „názvu“ je pravděpodobně špatný nápad,
+	CS	protože pravděpodobně dostanete irelevantní výsledky. Všimněte si, že obsah kanálu může mít vlastní kritéria hodnocení/seřazení,
+	CS	zatímco seznamy skladeb mají pouze lokální seřazení. Plugin navíc normálně nezískává všechny „položky na vyhledávání“ najednou,
+	CS	ale pokračuje v dávkách po 50, když procházíte výsledky. To šetří čas a API kvótu, která má denní limit.
+	CS	To bohužel koliduje s požadavkem na seřazení, protože budete řadit pouze to, co jste již obdrželi.
+	CS	Opět, pokud použijete „relevanci“ jako hodnocení a seřazení podle „názvu“, zpočátku dostanete pouze abecední
+	CS	seřazení prvních 50 (zvýší se při procházení, ale může to působit trochu zvláštně). Můžete vynutit větší dávky
+	CS	použitím „velikost dávky dotazu“, ale uvědomte si, že to bude pomalejší a spotřebuje více API kreditů.
 	DA	Når en søgning udføres på YouTube-servere, er der ofte 10.000-vis af matchende resultater. Disse rangeres,
 	DA	og kun de første elementer pr. søgning returneres. Sorteringen, der bruges til at vise dem, kan være forskellig
 	DA	ift. rangeringskriterierne. For eksempel ønsker du måske rangering efter "relevans", men sortering efter "titel" for nem
@@ -319,37 +316,45 @@ PLUGIN_YOUTUBE_SORTING_DESC
 	EN	larger using the "query batch size" but be aware that it will be slower and will consume more API credits.
 	
 PLUGIN_YOUTUBE_SEARCHRANK
+	CS	Obecné vyhledávání hodnocené podle
 	DA	Generel søgning rangeret efter
 	EN	General search ranked by
 
 PLUGIN_YOUTUBE_CHANNELRANK
+	CS	Vyhledávání kanálu hodnocené podle
 	DA	Kanalsøgning rangeret efter
-	EN	Channel search ranked by	
-	
+	EN	Channel search ranked by
+
 PLUGIN_YOUTUBE_SORTBY
+	CS	seřadit výsledky podle
 	DA	Sortér resultater efter
 	EN	sort results by
-	
+
 PLUGIN_YOUTUBE_QUERYSIZE
+	CS	Velikost dávky dotazu
 	DA	Batchstørrelse for forespørgsler
 	EN	Query batch size
-	
+
 PLUGIN_YOUTUBE_ORDERRELEVANCE
+	CS	Relevance
 	DA	Relevans
 	EN	Relevance
-	
+
 PLUGIN_YOUTUBE_ORDERRATING
+	CS	Hodnocení
 	DA	Bedømmelse
 	EN	Rating
-	
+
 PLUGIN_YOUTUBE_ORDERVIEWS
+	CS	Počet zhlédnutí
 	DA	Visninger
 	EN	Views
 
 PLUGIN_YOUTUBE_PLAYLISTSORT
+	CS	Položky seznamu skladeb seřadit podle
 	DA	Afspillelisteemner sorteret efter
 	EN	Playlist items sorted by
-	
+
 PLUGIN_YOUTUBE_ICONRES
 	CS	Ikony s vysokým rozlišením
 	DA	Højopløste ikoner
@@ -358,10 +363,10 @@ PLUGIN_YOUTUBE_ICONRES
 
 PLUGIN_YOUTUBE_ICONRES_DESC
 	CS	Vyberte ikony s vysokým rozlišením (hezčí zobrazení s některými aplikacemi třetích stran, jako je iPeng,
-	CS	ale vyžaduje delší čas pro načítání dlouhého seznamu skladeb).
+	CS	ale načítání dlouhých seznamů skladeb trvá déle).
 	DA	Benyt højopløste ikoner (bedre visning med nogle tredjeparts apps, som f.eks. iPeng, men tager længere tid at indlæse).
 	DE	Benutze hochauflösende Vorschaubilder (benötigt mehr Zeit zum Laden).
-	EN	Select high resolution icons (nicer display with some 3rd party apps like iPeng but requires smore time for
+	EN	Select high resolution icons (nicer display with some 3rd party apps like iPeng but requires more time for
 	EN	loading long playlist).
 
 PLUGIN_YOUTUBE_COUNTRY
@@ -371,7 +376,7 @@ PLUGIN_YOUTUBE_COUNTRY
 	EN	Country for categories
 
 PLUGIN_YOUTUBE_COUNTRY_DESC
-	CS	Nastavte 2 písmennou zemi pro hledání v dostupných kategoriích.
+	CS	Nastavte dvoupísmenný kód země pro vyhledávání dostupných kategorií.
 	DA	Sæt to-bogstavs landekode, der bruges til at søge efter tilgængelige kategorier.
 	DE	Setze den zweistelligen Buchstabencode für das Land, das bei der Suche nach Kategorien verwendet werden soll.
 	EN	Set the 2-letters country used to search available categories.
@@ -383,13 +388,13 @@ PLUGIN_YOUTUBE_CACHE
 	EN	Flush cache
 
 PLUGIN_YOUTUBE_CACHE_DESC
-	CS	Výsledky hledání jsou uloženy v mezipaměti po dobu jednoho dne. Kliknutím je vyprázděte.
+	CS	Výsledky hledání jsou uloženy v mezipaměti po dobu jednoho dne. Kliknutím je vyprázdníte.
 	DA	Søgeresultater gemmes i et mellemlager i en dag. Klik for at slette dem.
 	DE	Suchresultate werden für einen Tage zwischengespeichert. Klicke, um Speicher zu löschen.
 	EN	Search results are cached for a day. Click to flush them.
 
 PLUGIN_YOUTUBE_CHANNELTAGS
-	CS	Identifikační štítky kanálů
+	CS	Identifikační značky kanálů
 	DA	Identifikationsmærker for kanaler
 	DE	Kanal-Identifikationstags
 	EN	Channel identification tags
@@ -401,13 +406,13 @@ PLUGIN_YOUTUBE_PLAYLISTTAGS
 	EN	Playlist identification tags
 
 PLUGIN_YOUTUBE_PLAYLISTTAGS_DESC
-	CS	Chcete-li ve výsledku hledání identifikovat položky seznamů skladeb, nastavte řetězec nebo modifikátor písma (např. &ltb&gt a &lt/b&gt pro tučné písmo), který se přidá před a za název.
+	CS	Chcete-li ve výsledcích hledání identifikovat položky seznamů skladeb, nastavte řetězec nebo modifikátor písma (např. &ltb&gt a &lt/b&gt pro tučné písmo), který se přidá před a za název.
 	DA	For at fremhæve afspillelister i søgeresultater, benyt en streng eller formateringsinstruktion (f.eks. &ltb&gt og &lt/b&gt for fed skrift), der skal indsættes før og efter titlen.
 	DE	Um Wiedergabelisten in Suchresultaten hervorzuheben, verwende Zeichenkette oder Formatierungsanweisung (z.B. &ltb&gt...&lt/b&gt für fett) die vor und nach dem Titel eingefügt werden sollen.
 	EN	To identify playlists items in a search result, set string or font modifier (eg &ltb&gt and &lt/b&gt for bold) to be added before and after then title.
 
 PLUGIN_YOUTUBE_CHANNELTAGS_DESC
-	CS	Chcete-li ve výsledku hledání identifikovat položky kanálů, nastavte řetězec nebo modifikátor písma (např. &ltb&gt a &lt/b&gt pro tučné písmo), který se přidá před a za název.
+	CS	Chcete-li ve výsledcích hledání identifikovat položky kanálů, nastavte řetězec nebo modifikátor písma (např. &ltb&gt a &lt/b&gt pro tučné písmo), který se přidá před a za název.
 	DA	For at fremhæve kanaler i søgeresultater, benyt en streng eller formateringsinstruktion (f.eks. &ltb&gt og &lt/b&gt for fed skrift), der skal indsættes før og efter titlen.
 	DE	Um Kanäle in Suchresultaten hervorzuheben, verwende Zeichenkette oder Formatierungsanweisung (z.B. &ltb&gt...&lt/b&gt für fett) die vor und nach dem Titel eingefügt werden sollen.
 	EN	To identify channels items in a search result, set string or font modifier (eg &ltb&gt and &lt/b&gt for bold) to be added before and after then title.
@@ -418,7 +423,7 @@ PLUGIN_YOUTUBE_CACHETTL
 	EN	Channels & Playlists cache duration
 
 PLUGIN_YOUTUBE_CACHETTL_DESC
-	CS	Nastavení doby trvání v sekundách, po kterou bude seznam obsahu kanálu nebo seznamů skladeb uložen v mezipaměti. Nastavení nízkého čísla znamená mnohem více volání rozhraní API služby YouTube.
+	CS	Nastavte dobu trvání v sekundách, po kterou bude seznam obsahu kanálu nebo seznamů skladeb uložen v mezipaměti. Nastavení nízké hodnoty znamená mnohem více volání rozhraní API YouTube.
 	DA	Indstil varigheden i sekunder for, hvor længe indholdslisten for en kanal eller en afspilleliste er mellemlagret. Indstilling af et lavt tal betyder mange flere YouTube API-kald.
 	EN	Set the duration in seconds for how long the content list of a channel or a playlist is cached. Setting a low number means a lot more YouTube API calls.
 
@@ -433,14 +438,14 @@ PLUGIN_YOUTUBE_SUFFIX
 	EN	Suffix
 
 PLUGIN_YOUTUBE_LIVEOPTIONS
-	CS	Možnosti živého vysílání
+	CS	Možnosti živých přenosů
 	DA	Live Stream indstillinger
 	DE	Live Stream Einstellungen
 	EN	Live stream options
 
 PLUGIN_YOUTUBE_LIVEOPTIONS_DESC
-	CS	Možnosti živých přenosů. Nastavením "Přehrát živý okraj" přehrajete živý okraj a nastavíte zpoždění pro správné načtení vyrovnávací paměti (>30s). Při stisknutí tlačítka 'rew' se přehrávání
-	CS	znovu spustí od nejstarší pozice ve vyrovnávací paměti (timeshift).
+	CS	Možnosti živých přenosů. Nastavením „Přehrát živý okraj“ přehrajete živý okraj a nastavíte zpoždění pro správné načtení vyrovnávací paměti (>30s).
+	CS	Při stisknutí tlačítka „rew“ se přehrávání znovu spustí od nejstarší pozice ve vyrovnávací paměti (timeshift).
 	DA	Muligheder for livestreams. Sæt 'Play live edge' for at afspille live edge og indstil en forsinkelse for korrekt buffering (>30s).
 	DA	Når du trykker på 'rew', vil afspilningen genstarte fra den ældste bufferposition (timeshift).
 	EN	Options for live streams. Set 'Play live edge' to play the live edge and set a delay for proper buffering (>30s). When pressing 'rew', playback
@@ -464,7 +469,7 @@ PLUGIN_YOUTUBE_CLIENTID
 	EN	Client ID
 
 PLUGIN_YOUTUBE_CLIENTID_DESC
-	CS	Client ID nalezené na stránce Google Cloud Platform https://console.cloud.google.com/apis/dashboard
+	CS	Client ID naleznete na stránce Google Cloud Platform https://console.cloud.google.com/apis/dashboard
 	DA	Klient ID som findes på din Google Cloud Platform-side https://console.cloud.google.com/apis/dashboard
 	DE	Eine Client-ID, wie du sie in der Google Cloud Platform finden kannst (https://console.cloud.google.com/apis/dashboard)
 	EN	Client ID as found on your Google Cloud Platform page https://console.cloud.google.com/apis/dashboard
@@ -476,7 +481,7 @@ PLUGIN_YOUTUBE_CLIENTSECRET
 	EN	Client Secret
 
 PLUGIN_YOUTUBE_CLIENTSECRET_DESC
-	CS	Client Secret nalezený na stránce Google Cloud Platform https://console.cloud.google.com/apis/dashboard
+	CS	Client Secret naleznete na stránce Google Cloud Platform https://console.cloud.google.com/apis/dashboard
 	DA	En klientnøgle, som du kan finde den i Google Cloud Platform (https://console.cloud.google.com/apis/dashboard)
 	DE	Eine Clientschlüssel, wie du es in der Google Cloud Platform finden kannst (https://console.cloud.google.com/apis/dashboard)
 	EN	Client Secret as found on your Google Cloud Platform page https://console.cloud.google.com/apis/dashboard
@@ -534,43 +539,43 @@ PLUGIN_YOUTUBE_OAUTHHOWTO
 PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT
 	CS	- přejděte na <a href="https://console.cloud.google.com/apis/credentials" target="none">Google Cloud Platform Credentials</a>
 	CS	a vyberte svůj projekt YouTube
-	CS	<br>- vyberte "CREATE CREDENTIALS", poté "OAuth client ID" a poté "TVs and Limited Input devices"
-	CS	<br>- vyberte název nebo ponechte výchozí hodnotu
-	CS	<br>- klikněte na "CREATE", čímž se vygeneruje Client ID a Client Secret
-	CS	<br>- vložte sem "Your Client ID" a "Your Client Secret" a klikněte na "Použít"
-	CS	<br>- klikněte na "Získat kód" a pokud se vpravo od něj nic neobjeví, stačí kliknout na "Obnovit" nebo obnovit tuto stránku LMS
-	CS	<br>- zkopírujte červeně vyznačený kód a klikněte na odkaz "Klikněte zde pro autorizaci". YouTube vás vyzve k zadání kódu
-	CS	<br>- vraťte se na hlavní obrazovku LMS, nyní můžete používat "Moje odběry" a "Moje seznamy skladeb"
-	CS	<br>- chcete-li odebrat oprávnění, přejděte na <a href="https://myaccount.google.com/permissions" target="none">Aplikace s přístupem k vašemu účtu</a>
+	CS	<br>- vyberte „Create credentials“, poté „OAuth client ID“ a poté „TVs and Limited Input devices“
+	CS	<br>- zvolte název nebo ponechte výchozí hodnotu
+	CS	<br>- klikněte na „Create“, tím se vygeneruje Client ID a Client Secret
+	CS	<br>- vložte sem „Client ID“ a „Client Secret“ a klikněte na „Použít“
+	CS	<br>- klikněte na „Získat kód“ a pokud se vpravo od něj nic neobjeví, klikněte na „Obnovit“ nebo obnovte tuto stránku LMS
+	CS	<br>- zkopírujte červeně vyznačený kód a klikněte na odkaz „Klikněte zde pro autorizaci“. YouTube vás vyzve k zadání kódu
+	CS	<br>- vraťte se na hlavní obrazovku LMS, nyní můžete používat „Moje odběry“ a „Moje seznamy skladeb“
+	CS	<br>- chcete-li odebrat oprávnění, přejděte na <a href="https://myaccount.google.com/connections" target="none">Aplikace a služby třetích stran</a>
 	DA	- gå til <a href="https://console.cloud.google.com/apis/credentials" target="none">Google Cloud Platform Credentials</a>
 	DA	og vælg dit YouTube-projekt
-	DA	<br>- vælg "CREATE CREDENTIALS", derefter "OAuth Client ID" og derefter "TVs and Limited Input devices"
+	DA	<br>- vælg "Create credentials", derefter "OAuth Client ID" og derefter "TVs and Limited Input devices"
 	DA	<br>- vælg et navn, eller lad standarden være uændret
-	DA	<br>- klik på "CREATE", dette vil generere et klient ID og en klientnøgle
+	DA	<br>- klik på "Create", dette vil generere et klient ID og en klientnøgle
 	DA	<br>- indsæt "Klient ID" og "klientnøgle" her, og klik på "Apply"
 	DA	<br>- klik på "Get Code", og hvis intet vises til højre, skal du blot klikke på "Refresh" eller opdater denne LMS-side
 	DA	<br>- kopier den røde kode, og klik på linket "Click here to authorize". Du bliver bedt af YouTube om at indtaste koden
 	DA	<br>- vend tilbage til LMS-hovedskærmen, du kan nu bruge "Mine abonnementer" og "Mine afspillelister"
-	DA	<br>- for at fjerne login godkendelser skal du gå til <a href="https://myaccount.google.com/permissions" target="none">Google Cloud Platform Permissions</a>
+	DA	<br>- for at fjerne login godkendelser skal du gå til <a href="https://myaccount.google.com/connections" target="none">Tredjepartsapps og -tjenester</a>
 	DE	- gehe nach <a href="https://console.cloud.google.com/apis/credentials" target="none">Google Cloud Platform Credentials</a>
 	DE	und wähle dein YouTube Projekt
-	DE	<br>- wähle "ANMELDEDATEN ERSTELLEN", dann "OAuth-Client-ID", dann "Fernsehgeräte und Geräte mit begrenzter Eingabe"
+	DE	<br>- wähle "Anmeldedaten erstellen", dann "OAuth-Client-ID", dann "Fernsehgeräte und Geräte mit begrenzter Eingabe"
 	DE	<br>- gib einen Namen
-	DE	<br>- klicke "ERSTELLEN", das wird eine Client-ID und Clientschlüssel generieren
+	DE	<br>- klicke "Erstellen", das wird eine Client-ID und Clientschlüssel generieren
 	DE	<br>- Füge Ihre Client-ID und Ihr Clientschlüssel hier ein, speichere die Einstellungen
 	DE	<br>- klicke "Erhalte Code". Falls rechts nichts passiert, klicke "Aktualisieren"
 	DE	<br>- kopiere den roten Code, und "Klicke hier, um Zugriff zu gewähren". YouTube wird dich auffordern, den Code einzugeben.
 	DE	<br>- zurück in LMS solltest du nun "Meine Abonnements" und "Meine Wiedergabelisten" verwenden können
 	EN	- go to <a href="https://console.cloud.google.com/apis/credentials" target="none">Google Cloud Platform Credentials</a>
 	EN	and select your YouTube project
-	EN	<br>- select "CREATE CREDENTIALS", then "OAuth client ID" and then "TVs and Limited Input devices"
+	EN	<br>- select "Create credentials", then "OAuth client ID" and then "TVs and Limited Input devices"
 	EN	<br>- choose a name or leave the default
-	EN	<br>- click "CREATE", this will generate a Client ID and Client Secret
-	EN	<br>- paste "Your Client ID" and "Your Client Secret" here and click "Apply"
+	EN	<br>- click "Create", this will generate a Client ID and Client Secret
+	EN	<br>- paste "Client ID" and "Client Secret" here and click "Apply"
 	EN	<br>- click "Get Code" and if nothing appears to its right, just click "Refresh" or refresh this LMS page
 	EN	<br>- copy the code in red and click "Click here to authorize" link. You'll be prompted by YouTube to enter the code
 	EN	<br>- return to the LMS main screen, you can now use "My Subscriptions" and "My Playlists"
-	EN	<br>- to remove authorizations, go to <a href="https://myaccount.google.com/permissions" target="none">Google Cloud Platform Permissions</a>
+	EN	<br>- to remove authorizations, go to <a href="https://myaccount.google.com/connections" target="none">Third-party apps & services</a>
 
 PLUGIN_YOUTUBE_PLAY_FROM_BEGINNING
 	CS	Přehrát od začátku
@@ -585,12 +590,13 @@ PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X
 	EN	Play from last position (%s)
 	
 PLUGIN_YOUTUBE_USE_VIDEO
+	CS	Extrahovat z videa
 	EN	Extract from video
 	
 PLUGIN_YOUTUBE_YTDLPBINARY
+	CS	YT-dlp extraktor adres URL
 	EN	YT-dlp url extractor
 	
 PLUGIN_YOUTUBE_YTDLPBINARY_DESC
+	CS	Kvůli rostoucí složitosti extrakce adres URL používá tento plugin yt-dlp.
 	EN	Due to increasing complexity in url extraction, this plugin uses yt-dlp.
-	
-
