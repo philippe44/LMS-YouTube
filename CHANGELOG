@@ -1,6 +1,7 @@
 0.400.12
  - optimize socket management (keep-alive)
  - hide some un-needed settings
+ - update translation (credits @mipa87)
  
 0.400.11
  - realy do the fix this time...

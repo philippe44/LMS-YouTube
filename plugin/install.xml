@@ -1,12 +1,12 @@
 <?xml version='1.0' standalone='yes'?>
 <extensions>
   <icon>plugins/YouTube/html/images/youtube.png</icon>
+  <optionsURL>plugins/YouTube/settings/basic.html</optionsURL>
   <targetApplication>
     <maxVersion>*</maxVersion>
     <id>SlimServer</id>
     <minVersion>7.7</minVersion>
   </targetApplication>
-  <optionsURL>plugins/YouTube/settings/basic.html</optionsURL>
   <creator>Philippe</creator>
   <version>0.400.12</version>
   <name>PLUGIN_YOUTUBE</name>

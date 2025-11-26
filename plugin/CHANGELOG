@@ -1,6 +1,7 @@
 0.400.12
- - use better persistence with mpeg-ts streams
- - hide live edge settings as they are not usable for now (no DASH file)
+ - optimize socket management (keep-alive)
+ - hide some un-needed settings
+ - update translation (credits @mipa87)
  
 0.400.11
  - realy do the fix this time...
@@ -44,7 +45,7 @@
  - refactor the streaming engin
  
 0.310
- - add GoogleVisitor cookie (credits @VirtuousReality)
+ - add GoogleVisitor cookier (credits @VirtuousReality)
  - add Danish translation (credits @cfuttrup)
 
 0.300
