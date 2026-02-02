@@ -12,4 +12,3 @@ repo*.xml
 /doc
 /test
 *.old
-install.sh
