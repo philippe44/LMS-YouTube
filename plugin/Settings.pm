@@ -43,14 +43,19 @@ sub handler {
 =cut
 
 	# Clear version cache if binary selection changed
-	if ($params->{saveSettings} && $params->{binary}) {
-		my $old_binary = $prefs->get('yt_dlp') || Plugins::YouTube::Utils::yt_dlp_binary();
-		if ($params->{binary} ne $old_binary) {
-			$log->info("Binary changed from $old_binary to $params->{binary}, clearing version cache");
-			$cache->remove('yt:version:' . $old_binary);
-			$cache->remove('yt:version:' . $params->{binary});
+	if ($params->{saveSettings} && defined $params->{binary}) {
+		my %allowed = map { $_ => 1 } ('', Plugins::YouTube::Utils::yt_dlp_binaries());
+		if (exists $allowed{$params->{binary}}) {
+			my $old_binary = $prefs->get('yt_dlp') || Plugins::YouTube::Utils::yt_dlp_binary();
+			if ($params->{binary} ne $old_binary) {
+				$log->info("Binary changed from $old_binary to $params->{binary}, clearing version cache");
+				$cache->remove('yt:version:' . $old_binary);
+				$cache->remove('yt:version:' . $params->{binary});
+			}
+			$prefs->set('yt_dlp', $params->{binary});
+		} else {
+			$log->error("Attempted to save non-whitelisted binary: $params->{binary}");
 		}
-		$prefs->set('yt_dlp', $params->{binary});
 	}
 
 	# Handle yt-dlp update
@@ -156,6 +161,14 @@ sub _getCurrentVersion {
 	my $params = shift;
 
 	my $binary = $params->{binary} || $prefs->get('yt_dlp') || Plugins::YouTube::Utils::yt_dlp_binary();
+
+	my %allowed = map { $_ => 1 } ('', Plugins::YouTube::Utils::yt_dlp_binaries());
+	unless (exists $allowed{$binary}) {
+		$params->{current_version} = 'Invalid Binary';
+		$log->error("Attempted to get version for non-whitelisted binary: $binary");
+		return;
+	}
+
 	my $bin_path = Plugins::YouTube::Utils::yt_dlp_bin($binary);
 
 	# Check cache first (cache for 1 hour to avoid repeated calls)
@@ -259,15 +272,17 @@ sub _updateYtDlpWindows {
 		my $output_buffer = '';
 		my $exit_code;
 
-		# Use safer piped open with list form to prevent shell injection
-		if (open(my $fh, '-|', $bin_path, '-U', '2>&1')) {
+		# Use shell to handle I/O redirection. Quote path to be safe.
+		my $cmd = "\"$bin_path\" -U 2>&1";
+		if (open(my $fh, '-|', $cmd)) {
 			local $/;  # Slurp mode
 			$output_buffer = <$fh>;
 			close($fh);
 			$exit_code = $? >> 8;
 		} else {
-			die "Cannot execute $bin_path: $!";
+			die "Cannot execute command '$cmd': $!";
 		}
+
 		# Clean up output
 		$output_buffer =~ s/\r?\n/ /g;
 		$output_buffer =~ s/^\s+|\s+$//g;

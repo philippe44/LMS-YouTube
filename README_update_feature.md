@@ -67,7 +67,7 @@ This implementation adds a self-update capability for the yt-dlp binary in the L
 
 
 * **`_updateYtDlpWindows()`**:
-* Uses system backticks to execute the update command.
+* Uses a piped open to execute the update command.
 * Merges STDERR into STDOUT for complete log capture.
 
 
