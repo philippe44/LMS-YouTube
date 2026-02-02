@@ -648,10 +648,3 @@ PLUGIN_YOUTUBE_CURRENT_VERSION
 	DA	Nuværende version
 	DE	Aktuelle Version
 	EN	Current version
-
-PLUGIN_YOUTUBE_AVAILABLE_VERSION
-	CS	Dostupná verze
-	DA	Tilgængelig version
-	DE	Verfügbare Version
-	EN	Available version
-
