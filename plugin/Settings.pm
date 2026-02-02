@@ -220,7 +220,7 @@ sub _updateYtDlpUnix {
 		my $output_buffer = '';
 
 		# Set write permission (0755)
-		Plugins::YouTube::Utils::set_yt_dlp_writable($bin_path);
+        Plugins::YouTube::Utils::set_yt_dlp_writable($bin_path) or die "Failed to set write permissions on $bin_path";
 		$permissions_changed = 1;
 
         require AnyEvent::Util;
@@ -233,10 +233,6 @@ sub _updateYtDlpUnix {
         );
 
         my $exit_code = $cv->recv;
-
-        # Clean up output: replace newlines with spaces and trim ends
-        $output_buffer =~ s/\r?\n/ /g;
-        $output_buffer =~ s/^\s+|\s+$//g;
 
         _handleYtDlpUpdateResult($params, $output_buffer, $exit_code);
 
@@ -282,10 +278,6 @@ sub _updateYtDlpWindows {
 		} else {
 			die "Cannot execute command '$cmd': $!";
 		}
-
-		# Clean up output
-		$output_buffer =~ s/\r?\n/ /g;
-		$output_buffer =~ s/^\s+|\s+$//g;
 
         _handleYtDlpUpdateResult($params, $output_buffer, $exit_code);
 
