@@ -25,6 +25,9 @@
 			function showUpdateProgress(btn) {
 				btn.value = 'Updating...';
 				btn.style.cursor = 'wait';
+				if (btn.form) {
+					btn.form.style.cursor = 'wait';
+				}
 			}
 		</script>
 

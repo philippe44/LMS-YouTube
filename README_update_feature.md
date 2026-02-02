@@ -176,5 +176,3 @@ This implementation adds a self-update capability for the yt-dlp binary in the L
 * [x] Unix: Permissions flip 0755 -> Update -> 0555.
 * [ ] Windows: Update command executes correctly via backticks.
 * [x] Success/Error messages render correctly in the template.
-fileName: README_UPDATE_FEATURE.md
-}

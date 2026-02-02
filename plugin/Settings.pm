@@ -15,6 +15,8 @@ my $prefs = preferences('plugin.youtube');
 
 my @bool = qw(live_edge aac vorbis opus use_video highres_icons);
 
+use constant VERSION_CACHE_TTL => 3600;  # 1 hour cache for version info
+
 sub name {
 	return 'PLUGIN_YOUTUBE';
 }
@@ -40,8 +42,15 @@ sub handler {
 	}
 =cut
 
-	if ($params->{saveSettings}) {
-		$prefs->set( 'yt_dlp', $params->{binary} );
+	# Clear version cache if binary selection changed
+	if ($params->{saveSettings} && $params->{binary}) {
+		my $old_binary = $prefs->get('yt_dlp') || Plugins::YouTube::Utils::yt_dlp_binary();
+		if ($params->{binary} ne $old_binary) {
+			$log->info("Binary changed from $old_binary to $params->{binary}, clearing version cache");
+			$cache->remove('yt:version:' . $old_binary);
+			$cache->remove('yt:version:' . $params->{binary});
+		}
+		$prefs->set('yt_dlp', $params->{binary});
 	}
 
 	# Handle yt-dlp update
@@ -70,16 +79,60 @@ sub handler {
 	$params->{binary} = $prefs->get('yt_dlp') || Plugins::YouTube::Utils::yt_dlp_binary();
 	$params->{binaries} = [ '', Plugins::YouTube::Utils::yt_dlp_binaries() ];
 
-	# Get current version on every page load
+	# Get current version AFTER potential update
 	_getCurrentVersion($params);
 				
 	$callback->($client, $params, $class->SUPER::handler($client, $params), @args);
 }
 
+sub _handleYtDlpUpdateResult {
+	my ($params, $output, $exit_code) = @_;
+
+	$output =~ s/\r?\n/ /g;
+	$output =~ s/^\s+|\s+$//g;
+
+	if ($exit_code == 0) {
+		if ($output =~ /up to date/i) {
+			$params->{update_status} =
+				Slim::Utils::Strings::string('PLUGIN_YOUTUBE_VERSION_UP_TO_DATE');
+		}
+		elsif ($output =~ /updated.*(?:to|version)\s+(\S+)/i) {
+			$params->{update_status} =
+				Slim::Utils::Strings::string('PLUGIN_YOUTUBE_UPDATE_SUCCESS')
+				. " (version: $1)";
+		}
+		else {
+			$params->{update_status} =
+				Slim::Utils::Strings::string('PLUGIN_YOUTUBE_UPDATE_SUCCESS');
+		}
+
+		$params->{update_error} = 0;
+		$cache->remove('yt:version:' . $params->{binary});
+		$log->info("yt-dlp update output: $output");
+	}
+	else {
+		$params->{update_status} =
+			Slim::Utils::Strings::string('PLUGIN_YOUTUBE_UPDATE_FAILED')
+			. " (exit code: $exit_code)";
+		$params->{update_error} = 1;
+		$log->error("yt-dlp update failed (code $exit_code): $output");
+	}
+}
+
+
 sub _updateYtDlp {
 	my $params = shift;
 
 	my $binary = $params->{binary} || $prefs->get('yt_dlp') || Plugins::YouTube::Utils::yt_dlp_binary();
+	# Validate binary is in the allowed list to prevent arbitrary code execution
+	my %allowed = map { $_ => 1 } ('', Plugins::YouTube::Utils::yt_dlp_binaries());
+	unless ($allowed{$binary}) {
+		$params->{update_status} = "Invalid binary selection: $binary";
+		$params->{update_error} = 1;
+		$log->error("Attempted to update non-whitelisted binary: $binary");
+		return;
+	}
+
 	my $bin_path = Plugins::YouTube::Utils::yt_dlp_bin($binary);
 
 	unless ($bin_path && -e $bin_path) {
@@ -129,10 +182,10 @@ sub _getCurrentVersion {
 		chomp($version_output);
 
 		# Extract version (yt-dlp outputs just the version number, e.g., 2023.03.04)
-		if ($version_output && $version_output =~ /(\d{4}\.\d{2}\.\d{2})/) {
+		if ($version_output && $version_output =~ /(\d{4}\.\d{2}\.\d{2}(?:\.\d+)?(?:-\w+)?)/) {
 			$params->{current_version} = $1;
-			$cache->set($cache_key, $1, 3600); # Cache for 1 hour
-			$log->info("Current yt-dlp version: $1");
+			$cache->set($cache_key, $1, VERSION_CACHE_TTL);
+			$log->info("Current yt-dlp version ($binary): $1");
 		} else {
 			$params->{current_version} = 'Unknown';
 			$log->warn("Could not parse yt-dlp version from: $version_output");
@@ -148,62 +201,52 @@ sub _getCurrentVersion {
 sub _updateYtDlpUnix {
 	my ($bin_path, $params) = @_;
 
+	my $update_error;
+	my $permissions_changed = 0;
 	eval {
 		my $output_buffer = '';
 
 		# Set write permission (0755)
-		unless (Plugins::YouTube::Utils::set_yt_dlp_writable($bin_path)) {
-			die "Failed to set write permission on $bin_path";
-		}
+		Plugins::YouTube::Utils::set_yt_dlp_writable($bin_path);
+		$permissions_changed = 1;
 
-		require AnyEvent::Util;
+        require AnyEvent::Util;
+        my $cmd = [$bin_path, '-U'];
 
-		my $cmd = [$bin_path, '-U'];
+        # Capture output using subroutines
+        my $cv = AnyEvent::Util::run_cmd($cmd,
+            '>'  => sub { $output_buffer .= $_[0] if defined $_[0]; },
+            '2>' => sub { $output_buffer .= $_[0] if defined $_[0]; }
+        );
 
-		# Capture output using subroutines
-		my $cv = AnyEvent::Util::run_cmd($cmd,
-			'>'  => sub { $output_buffer .= $_[0] if defined $_[0]; },
-			'2>' => sub { $output_buffer .= $_[0] if defined $_[0]; }
-		);
+        my $exit_code = $cv->recv;
 
-		my $exit_code = $cv->recv;
+        # Clean up output: replace newlines with spaces and trim ends
+        $output_buffer =~ s/\r?\n/ /g;
+        $output_buffer =~ s/^\s+|\s+$//g;
 
-		# Restore safe permissions (0555)
-		Plugins::YouTube::Utils::set_yt_dlp_readonly($bin_path);
+        _handleYtDlpUpdateResult($params, $output_buffer, $exit_code);
 
-		# Clean up output: replace newlines with spaces and trim ends
-		$output_buffer =~ s/\r?\n/ /g;
-		$output_buffer =~ s/^\s+|\s+$//g;
-
-		if ($exit_code == 0) {
-			if ($output_buffer =~ /up to date/i) {
-				$params->{update_status} = Slim::Utils::Strings::string('PLUGIN_YOUTUBE_VERSION_UP_TO_DATE');
-				$log->info("yt-dlp update status: $output_buffer");
-			} else {
-				$params->{update_status} = Slim::Utils::Strings::string('PLUGIN_YOUTUBE_UPDATE_SUCCESS');
-				$log->info("yt-dlp update output: $output_buffer");
-			}
-			$params->{update_error} = 0;
-
-			# Clear version cache
-			my $binary = $params->{binary} || $prefs->get('yt_dlp') || Plugins::YouTube::Utils::yt_dlp_binary();
-			my $cache_key = 'yt:version:' . $binary;
-			$cache->remove($cache_key);
-		} else {
-			$params->{update_status} = Slim::Utils::Strings::string('PLUGIN_YOUTUBE_UPDATE_FAILED') . " (exit code: $exit_code)";
-			$params->{update_error} = 1;
-			$log->error("yt-dlp update failed (code $exit_code): $output_buffer");
-		}
 	};
+	$update_error = $@;
 
-	if ($@) {
-		my $error_msg = $@;
-		# Restore permissions safely
-		eval { Plugins::YouTube::Utils::set_yt_dlp_readonly($bin_path); };
+	# ALWAYS restore permissions, even if update failed or threw exception
+	if ($permissions_changed) {
+		eval {
+			Plugins::YouTube::Utils::set_yt_dlp_readonly($bin_path);
+			$log->info("Permissions successfully restored for $bin_path");
+		};
+		if ($@) {
+			# This is a critical error - log it prominently
+			$log->error("CRITICAL: Failed to restore safe permissions on $bin_path: $@");
+			$log->error("SECURITY RISK: Binary may remain writable!");
+		}
+	}
 
-		$params->{update_status} = Slim::Utils::Strings::string('PLUGIN_YOUTUBE_UPDATE_ERROR') . ": $error_msg";
+	if ($update_error) {
+		$params->{update_status} = Slim::Utils::Strings::string('PLUGIN_YOUTUBE_UPDATE_ERROR') . ": $update_error";
 		$params->{update_error} = 1;
-		$log->error("Error updating yt-dlp: $error_msg");
+		$log->error("Error updating yt-dlp: $update_error");
 	}
 }
 
@@ -211,37 +254,26 @@ sub _updateYtDlpWindows {
 	my ($bin_path, $params) = @_;
 
 	eval {
-		# Use backticks to capture output (STDOUT merged with STDERR)
-		my $cmd = "\"$bin_path\" -U 2>&1";
+		$log->info("Executing update: $bin_path -U");
 
-		$log->info("Executing update command: $cmd");
-		my $output_buffer = `$cmd`;
-		my $exit_code = $? >> 8;
+		my $output_buffer = '';
+		my $exit_code;
 
+		# Use safer piped open with list form to prevent shell injection
+		if (open(my $fh, '-|', $bin_path, '-U', '2>&1')) {
+			local $/;  # Slurp mode
+			$output_buffer = <$fh>;
+			close($fh);
+			$exit_code = $? >> 8;
+		} else {
+			die "Cannot execute $bin_path: $!";
+		}
 		# Clean up output
 		$output_buffer =~ s/\r?\n/ /g;
 		$output_buffer =~ s/^\s+|\s+$//g;
 
-		if ($exit_code == 0) {
-			if ($output_buffer =~ /up to date/i) {
-				$params->{update_status} = Slim::Utils::Strings::string('PLUGIN_YOUTUBE_VERSION_UP_TO_DATE');
-				$log->info("yt-dlp update status: $output_buffer");
-			} else {
-				$params->{update_status} = Slim::Utils::Strings::string('PLUGIN_YOUTUBE_UPDATE_SUCCESS');
-				$log->info("yt-dlp update output: $output_buffer");
-			}
-			$params->{update_error} = 0;
+        _handleYtDlpUpdateResult($params, $output_buffer, $exit_code);
 
-			# Clear version cache to force refresh
-			my $binary = $params->{binary} || $prefs->get('yt_dlp') || Plugins::YouTube::Utils::yt_dlp_binary();
-			my $cache_key = 'yt:version:' . $binary;
-			$cache->remove($cache_key);
-		} else {
-			# Even if exit code is non-zero, the output might contain useful info
-			$params->{update_status} = Slim::Utils::Strings::string('PLUGIN_YOUTUBE_UPDATE_FAILED') . " (exit code: $exit_code)";
-			$params->{update_error} = 1;
-			$log->error("yt-dlp update failed with exit code $exit_code: $output_buffer");
-		}
 	};
 
 	if ($@) {

@@ -136,5 +136,4 @@ sub set_yt_dlp_readonly {
 	return 1;
 }
 
-
 1;
