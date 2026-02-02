@@ -12,6 +12,27 @@
 			<option [% IF entry == binary %]selected[% END %] value="[% entry %]">[% entry %]</option>
 		[% END %]
 		</select>
+		[% IF current_version %]
+			<br><span style="color: #666; font-size: 0.9em;">[% "PLUGIN_YOUTUBE_CURRENT_VERSION" | string %]: <b>[% current_version %]</b></span>
+			[% IF available_version && available_version != current_version %]
+				<span style="color: orange; font-size: 0.9em;"> → [% "PLUGIN_YOUTUBE_AVAILABLE_VERSION" | string %]: <b>[% available_version %]</b></span>
+			[% END %]
+		[% END %]
+	[% END %]
+
+    [% WRAPPER setting title="PLUGIN_YOUTUBE_UPDATE_YTDLP" desc="PLUGIN_YOUTUBE_UPDATE_YTDLP_HELP" %]
+		<script type="text/javascript">
+			function showUpdateProgress(btn) {
+				btn.value = 'Updating...';
+				btn.style.cursor = 'wait';
+			}
+		</script>
+
+        <input name="update_ytdlp" type="submit" value="[% 'PLUGIN_YOUTUBE_UPDATE_YTDLP' | string %]" onclick="showUpdateProgress(this)">
+
+		[% IF update_status %]
+			<br><span style="[% IF update_error %]color: red;[% ELSE %]color: green;[% END %]">[% update_status %]</span>
+		[% END %]
 	[% END %]
 		
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_APIKEY" desc="PLUGIN_YOUTUBE_APIKEY_DESC" %]

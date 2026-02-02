@@ -600,3 +600,58 @@ PLUGIN_YOUTUBE_YTDLPBINARY
 PLUGIN_YOUTUBE_YTDLPBINARY_DESC
 	CS	Kvůli rostoucí složitosti extrakce adres URL používá tento plugin yt-dlp.
 	EN	Due to increasing complexity in url extraction, this plugin uses yt-dlp.
+
+PLUGIN_YOUTUBE_UPDATE_YTDLP
+	CS	Aktualizovat yt-dlp
+	DA	Opdater yt-dlp
+	DE	yt-dlp aktualisieren
+	EN	Update yt-dlp
+
+PLUGIN_YOUTUBE_UPDATE_YTDLP_HELP
+	CS	yt-dlp je velmi často aktualizován. Aktualizujte tento plugin na nejnovější verzi.
+	DA	yt-dlp opdateres meget ofte. Opdater dette plugin til den nyeste version.
+	DE	yt-dlp wird sehr oft aktualisiert. Aktualisieren Sie das Plugin auf die letzte Version.
+	EN	yt-dlp is very frequently updated. Update this plugin to the latest version. 
+
+PLUGIN_YOUTUBE_UPDATE_SUCCESS
+	CS	Aktualizace yt-dlp byla úspěšná
+	DA	yt-dlp opdatering lykkedes
+	DE	yt-dlp Aktualisierung erfolgreich
+	EN	yt-dlp update successful
+
+PLUGIN_YOUTUBE_VERSION_UP_TO_DATE
+	CS	yt-dlp je aktuální
+	DA	yt-dlp er opdateret
+	EN	yt-dlp already up to date
+	DE	yt-dlp bereits aktuell
+
+PLUGIN_YOUTUBE_UPDATE_FAILED
+	CS	Aktualizace yt-dlp se nezdařila
+	DA	yt-dlp opdatering mislykkedes
+	DE	yt-dlp Aktualisierung fehlgeschlagen
+	EN	yt-dlp update failed
+
+PLUGIN_YOUTUBE_UPDATE_ERROR
+	CS	Chyba aktualizace yt-dlp
+	DA	yt-dlp opdateringsfejl
+	DE	yt-dlp Aktualisierungsfehler
+	EN	yt-dlp update error
+
+PLUGIN_YOUTUBE_UPDATE_BINARY_NOT_FOUND
+	CS	Binární soubor yt-dlp nenalezen
+	DA	yt-dlp binær ikke fundet
+	DE	yt-dlp Binärdatei nicht gefunden
+	EN	yt-dlp binary not found
+
+PLUGIN_YOUTUBE_CURRENT_VERSION
+	CS	Aktuální verze
+	DA	Nuværende version
+	DE	Aktuelle Version
+	EN	Current version
+
+PLUGIN_YOUTUBE_AVAILABLE_VERSION
+	CS	Dostupná verze
+	DA	Tilgængelig version
+	DE	Verfügbare Version
+	EN	Available version
+

@@ -104,5 +104,37 @@ sub yt_dlp_binaries {
 	return qw ( yt-dlp_linux yt-dlp_linux_aarch64 yt-dlp_linux_armv7l yt-dlp_freebsd14 yt-dlp_macos yt-dlp.exe yt-dlp);
 }
 
+# Set writable permissions on yt-dlp binary (needed for self-update)
+# Returns: 1 on success, 0 on failure
+sub set_yt_dlp_writable {
+	my $bin_path = shift;
+
+	return 1 if $^O =~ /^MSWin/; # Windows doesn't need this
+
+	unless (chmod(0755, $bin_path)) {
+		$log->error("Failed to set write permission on $bin_path: $!");
+		return 0;
+	}
+
+	$log->info("Set write permissions (0755) on $bin_path");
+	return 1;
+}
+
+# Restore safe permissions on yt-dlp binary (after self-update)
+# Returns: 1 on success, 0 on failure
+sub set_yt_dlp_readonly {
+	my $bin_path = shift;
+
+	return 1 if $^O =~ /^MSWin/; # Windows doesn't need this
+
+	unless (chmod(0555, $bin_path)) {
+		$log->warn("Failed to restore safe permissions on $bin_path: $!");
+		return 0;
+	}
+
+	$log->info("Restored safe permissions (0555) on $bin_path");
+	return 1;
+}
+
 
 1;
