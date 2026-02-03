@@ -23,7 +23,7 @@
     [% WRAPPER setting title="PLUGIN_YOUTUBE_UPDATE_YTDLP" desc="PLUGIN_YOUTUBE_UPDATE_YTDLP_HELP" %]
 		<script type="text/javascript">
 			function showUpdateProgress(btn) {
-				btn.value = 'Updating...';
+				btn.value = "[% 'PLUGIN_YOUTUBE_UPDATING' | string %]";
 				btn.style.cursor = 'wait';
 				if (btn.form) {
 					btn.form.style.cursor = 'wait';

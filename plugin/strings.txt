@@ -613,6 +613,18 @@ PLUGIN_YOUTUBE_UPDATE_YTDLP_HELP
 	DE	yt-dlp wird sehr oft aktualisiert. Wenn das YouTube Plugin nicht mehr funktioniert, aktualisieren Sie yt-dlp.
 	EN	yt-dlp is updated very frequently. If the YouTube plugin stops working, update yt-dlp.
 
+PLUGIN_YOUTUBE_UPDATING
+	CS	Aktualizuji...
+	DA	Opdaterer...
+	DE	Aktualisiere...
+	EN	Updating...
+
+PLUGIN_YOUTUBE_EXIT
+	CS	Exit kód
+	DA	Exitkode
+	DE	Exit-Code
+	EN	Exit code
+
 PLUGIN_YOUTUBE_UPDATE_SUCCESS
 	CS	Aktualizace yt-dlp byla úspěšná
 	DA	yt-dlp opdatering lykkedes
@@ -624,6 +636,12 @@ PLUGIN_YOUTUBE_VERSION_UP_TO_DATE
 	DA	yt-dlp er opdateret
 	EN	yt-dlp already up to date
 	DE	yt-dlp bereits aktuell
+
+PLUGIN_YOUTUBE_VERSION
+	CS	Verze
+	DA	Version
+	EN	Version
+	DE	Version
 
 PLUGIN_YOUTUBE_UPDATE_FAILED
 	CS	Aktualizace yt-dlp se nezdařila

@@ -104,7 +104,8 @@ sub _handleYtDlpUpdateResult {
 		elsif ($output =~ /updated.*(?:to|version)\s+(\S+)/i) {
 			$params->{update_status} =
 				Slim::Utils::Strings::string('PLUGIN_YOUTUBE_UPDATE_SUCCESS')
-				. " (version: $1)";
+                . " (" . Slim::Utils::Strings::string('PLUGIN_YOUTUBE_VERSION')
+				. ": $1)";
 		}
 		else {
 			$params->{update_status} =
@@ -118,7 +119,8 @@ sub _handleYtDlpUpdateResult {
 	else {
 		$params->{update_status} =
 			Slim::Utils::Strings::string('PLUGIN_YOUTUBE_UPDATE_FAILED')
-			. " (exit code: $exit_code)";
+            . " (" . Slim::Utils::Strings::string('PLUGIN_YOUTUBE_EXIT')
+			. " : $exit_code)";
 		$params->{update_error} = 1;
 		$log->error("yt-dlp update failed (code $exit_code): $output");
 	}
