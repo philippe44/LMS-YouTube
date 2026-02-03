@@ -1,11 +1,17 @@
 [% PROCESS settings/header.html %]
+	<style type="text/css">
+		.wait, .wait *  { cursor: wait !important; }
+		.status-running { color: blue;  font-weight: bold; }
+		.status-error   { color: red;   font-weight: bold; }
+		.status-success { color: green; font-weight: bold; }
+	</style>
 
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_BANNER" %]
 		<div>[% "PLUGIN_YOUTUBE_BANNER_TEXT" | string %]</div>
 	[% END %]
 
 	<div class="prefDesc">
-	
+
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_YTDLPBINARY" desc="PLUGIN_YOUTUBE_YTDLPBINARY_DESC" %]
 		<select class="stdedit" name="binary" id="binary">
 		[% FOREACH entry IN binaries %]
@@ -13,43 +19,102 @@
 		[% END %]
 		</select>
 		[% IF current_version %]
-			<br><span style="color: #666; font-size: 0.9em;">[% "PLUGIN_YOUTUBE_CURRENT_VERSION" | string %]: <b>[% current_version %]</b></span>
+			<br><span id="ytdlp_current_version" style="color: #666; font-size: 0.9em;">[% "PLUGIN_YOUTUBE_CURRENT_VERSION" | string %]: <b>[% current_version %]</b></span>
 			[% IF available_version && available_version != current_version %]
 				<span style="color: orange; font-size: 0.9em;"> → [% "PLUGIN_YOUTUBE_AVAILABLE_VERSION" | string %]: <b>[% available_version %]</b></span>
 			[% END %]
 		[% END %]
 	[% END %]
 
-    [% WRAPPER setting title="PLUGIN_YOUTUBE_UPDATE_YTDLP" desc="PLUGIN_YOUTUBE_UPDATE_YTDLP_HELP" %]
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_UPDATE_YTDLP" desc="PLUGIN_YOUTUBE_UPDATE_YTDLP_HELP" %]
 		<script type="text/javascript">
-			function showUpdateProgress(btn) {
+			function startUpdate(btn) {
+				document.documentElement.classList.add('wait');
 				btn.value = "[% 'PLUGIN_YOUTUBE_UPDATING' | string %]";
-				btn.style.cursor = 'wait';
-				if (btn.form) {
-					btn.form.style.cursor = 'wait';
+				var statusSpan = document.getElementById('update_status_message');
+				if (statusSpan) {
+					statusSpan.innerHTML = '<br><span class="status-running">[% "PLUGIN_YOUTUBE_UPDATE_IN_PROGRESS" | string %]</span>';
 				}
+				return true;
 			}
+
+			// Status Polling
+			[% IF update_in_progress %]
+			(function() {
+				document.documentElement.classList.add('wait');
+
+				var pollInterval = setInterval(function() {
+					var xhr = new XMLHttpRequest();
+					xhr.open('GET', window.location.href + '&t=' + new Date().getTime(), true);
+					xhr.onload = function() {
+						if (this.status >= 200 && this.status < 400) {
+							// Parse the returned HTML to find the status message
+							var parser = new DOMParser();
+							var doc = parser.parseFromString(this.responseText, "text/html");
+
+							var newStatus = doc.getElementById('update_status_message');
+							var currentStatus = document.getElementById('update_status_message');
+
+							if (newStatus && currentStatus) {
+								currentStatus.innerHTML = newStatus.innerHTML;
+
+								// Check if the update is still running
+								var isRunning = newStatus.innerHTML.indexOf('status-running') !== -1;
+
+								if (!isRunning) {
+									document.documentElement.classList.remove('wait');
+									clearInterval(pollInterval);
+
+									// Update the version number dynamically if found
+									var newVersion = doc.getElementById('ytdlp_current_version');
+									var currentVersion = document.getElementById('ytdlp_current_version');
+									if (newVersion && currentVersion) {
+											currentVersion.innerHTML = newVersion.innerHTML;
+									}
+
+									// Re-enable the button
+									var btn = document.querySelector('input[name="update_ytdlp"]');
+									if (btn) {
+											btn.disabled = false;
+											btn.style.cursor = '';
+											btn.value = "[% 'PLUGIN_YOUTUBE_UPDATE_YTDLP' | string %]";
+									}
+								}
+							}
+						}
+					};
+					xhr.send();
+				}, 2000);
+			})();
+			[% END %]
 		</script>
 
-        <input name="update_ytdlp" type="submit" value="[% 'PLUGIN_YOUTUBE_UPDATE_YTDLP' | string %]" onclick="showUpdateProgress(this)">
+		<input name="update_ytdlp" type="submit"
+			value="[% 'PLUGIN_YOUTUBE_UPDATE_YTDLP' | string %]"
+			onclick="return startUpdate(this)"
+			[% IF update_in_progress %]disabled style="cursor: wait;"[% END %]>
 
+		<span id="update_status_message">
 		[% IF update_status %]
-			<br><span style="[% IF update_error %]color: red;[% ELSE %]color: green;[% END %]">[% update_status %]</span>
+			<br><span class="[% IF update_error %]status-error[% ELSIF update_in_progress %]status-running[% ELSE %]status-success[% END %]">
+				[% update_status %]
+			</span>
 		[% END %]
+		</span>
 	[% END %]
-		
+
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_APIKEY" desc="PLUGIN_YOUTUBE_APIKEY_DESC" %]
 		<input type="text" class="stdedit" name="pref_APIkey" id="pref_APIkey" value="[% prefs.pref_APIkey %]" size="45">
 	[% END %]
-	
+
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_ICONRES" desc="PLUGIN_YOUTUBE_ICONRES_DESC" %]
 		<input name="pref_highres_icons" type="checkbox" [% IF prefs.pref_highres_icons %] checked [% END %]>
 	[% END %]
-	
+
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_MAXITEMS" desc="PLUGIN_YOUTUBE_MAXITEMS_DESC" %]
 		<input type="text" class="stdedit" name="pref_max_items" id="pref_max_items" value="[% prefs.pref_max_items %]" size="5">
 	[% END %]
-	
+
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_SORTING" desc="PLUGIN_YOUTUBE_SORTING_DESC" %]
 		<script type="text/javascript">
 		function querysize(input) {
@@ -59,7 +124,7 @@
 			document.getElementById('query_size').style.display = mode ? 'none' : 'inline';
 		}
 		</script>
-		
+
 		[% RANK = [ ['PLUGIN_YOUTUBE_ORDERRELEVANCE','relevance'], ['TITLE','title'], ['DATE','date'], ['PLUGIN_YOUTUBE_ORDERRATING','rating'], ['PLUGIN_YOUTUBE_ORDERVIEWS','viewCount'] ] %]
 		[% SORT = [ ['NONE',''], ['TITLE', 'title'], ['DATE','date'] ] %]
 
@@ -101,11 +166,11 @@
 		<input type="text" class="stdedit" name="pref_query_size" id="pref_query_size" value="[% prefs.pref_query_size %]" size="2">
 		</span>
 	[% END %]
-			
+
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_COUNTRY" desc="PLUGIN_YOUTUBE_COUNTRY_DESC" %]
 		<input type="text" class="stdedit" name="pref_country" id="pref_country" value="[% prefs.pref_country %]" size="2">
 	[% END %]
-	
+
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_CODECS" desc="PLUGIN_YOUTUBE_CODECS_DESC" %]
 		<input name="pref_aac" type="checkbox" [% IF prefs.pref_aac %] checked [% END %]> aac
 		&nbsp
@@ -115,14 +180,14 @@
 		&nbsp
 		<input name="pref_use_video" type="checkbox" [% IF prefs.pref_use_video %] checked [% END %]> [% "PLUGIN_YOUTUBE_USE_VIDEO" | string %]
 	[% END %]
-	
+
 	<!-- [% WRAPPER setting title="PLUGIN_YOUTUBE_LIVEOPTIONS" desc="PLUGIN_YOUTUBE_LIVEOPTIONS_DESC" %]
 		<input name="pref_live_edge" type="checkbox" [% IF prefs.pref_live_edge %] checked [% END %]>
 		[% "PLUGIN_YOUTUBE_LIVEEDGE" | string %]
 		<input type="text" class="stdedit" name="pref_live_delay" id="pref_live_delay" value="[% prefs.pref_live_delay %]" size="2">
 		[% "PLUGIN_YOUTUBE_LIVEDELAY" | string %]
 	[% END %] -->
-	
+
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_CHANNELTAGS" desc="PLUGIN_YOUTUBE_CHANNELTAGS_DESC" %]
 
 		[% "PLUGIN_YOUTUBE_PREFIX" | string %]
@@ -131,7 +196,7 @@
 		&nbsp<input type="text" class="stdedit" name="pref_channel_suffix" id="pref_channel_suffix" value="[% prefs.pref_channel_suffix %]" size="5">
 
 	[% END %]
-	
+
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_PLAYLISTTAGS" desc="PLUGIN_YOUTUBE_PLAYLISTTAGS_DESC" %]
 
 		[% "PLUGIN_YOUTUBE_PREFIX" | string %]
@@ -140,13 +205,13 @@
 		&nbsp<input type="text" class="stdedit" name="pref_playlist_suffix" id="pref_playlist_suffix" value="[% prefs.pref_playlist_suffix %]" size="5">
 
 	[% END %]
-	
+
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_CACHETTL" desc="PLUGIN_YOUTUBE_CACHETTL_DESC" %]
 		<input type="text" class="stdedit" name="pref_cache_ttl" id="pref_cache_ttl" value="[% prefs.pref_cache_ttl %]" size="5">
 	[% END %]
-	
+
 	</div>
-	
+
 	<hr>
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_OAUTHHOWTO" %]
 		<div>[% "PLUGIN_YOUTUBE_OAUTHHOWTO_TEXT" | string %]</div>
@@ -157,7 +222,7 @@
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_CLIENTSECRET" desc="PLUGIN_YOUTUBE_CLIENTSECRET_DESC" %]
 		<input type="text" class="stdedit" name="pref_client_secret" id="client_secret" value="[% prefs.client_secret %]" size="25">
 	[% END %]
-		
+
 	[% IF prefs.client_id && prefs.client_secret %]
 		[% WRAPPER setting title="PLUGIN_YOUTUBE_OAUTH" desc="PLUGIN_YOUTUBE_CLIENTOAUTH_DESC" %]
 			<input name="get_code" type="submit" value=[% "PLUGIN_YOUTUBE_GETCODE" | string %]>

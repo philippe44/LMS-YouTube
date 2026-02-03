@@ -638,9 +638,9 @@ PLUGIN_YOUTUBE_VERSION_UP_TO_DATE
 	DE	yt-dlp bereits aktuell
 
 PLUGIN_YOUTUBE_VERSION
-	CS	Verze
-	DA	Version
-	EN	Version
+	CS	verze
+	DA	version
+	EN	version
 	DE	Version
 
 PLUGIN_YOUTUBE_UPDATE_FAILED
@@ -666,3 +666,27 @@ PLUGIN_YOUTUBE_CURRENT_VERSION
 	DA	Nuværende version
 	DE	Aktuelle Version
 	EN	Current version
+
+PLUGIN_YOUTUBE_INVALID_BINARY
+	EN	Invalid binary selection
+	CS	Neplatný výběr binárního souboru
+	DA	Ugyldigt valg af binær fil
+	DE	Ungültige Binärdatei ausgewählt
+
+PLUGIN_YOUTUBE_UNEXPECTED_RESPONSE
+	EN	Unexpected response from binary
+	CS	Neočekávaná odpověď z binárního souboru
+	DA	Uventet svar fra binær fil
+	DE	Unerwartete Antwort von der Binärdatei
+
+PLUGIN_YOUTUBE_RESTORE_PERMISSION_WARNING
+	EN	WARNING: Could not restore file permissions!
+	CS	VAROVÁNÍ: Nepodařilo se obnovit oprávnění k souboru!
+	DA	ADVARSEL: Kunne ikke gendanne filtilladelser!
+	DE	WARNUNG: Dateiberechtigungen konnten nicht wiederhergestellt werden!
+
+PLUGIN_YOUTUBE_VERSION_UNKNOWN
+	EN	Unknown
+	CS	Neznámý
+	DA	Ukendt
+	DE	Unbekannt

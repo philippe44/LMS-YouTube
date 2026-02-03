@@ -109,7 +109,7 @@ sub yt_dlp_binaries {
 sub set_yt_dlp_writable {
 	my $bin_path = shift;
 
-	return 1 if $^O =~ /^MSWin/; # Windows doesn't need this
+	return 1 if main::ISWINDOWS; # Windows doesn't need this
 
 	unless (chmod(0755, $bin_path)) {
 		$log->error("Failed to set write permission on $bin_path: $!");
@@ -125,7 +125,7 @@ sub set_yt_dlp_writable {
 sub set_yt_dlp_readonly {
 	my $bin_path = shift;
 
-	return 1 if $^O =~ /^MSWin/; # Windows doesn't need this
+	return 1 if main::ISWINDOWS; # Windows doesn't need this
 
 	unless (chmod(0555, $bin_path)) {
 		$log->warn("Failed to restore safe permissions on $bin_path: $!");

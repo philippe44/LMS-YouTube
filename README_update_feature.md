@@ -1,178 +1,397 @@
-# YT-DLP Update Feature Implementation
+# YT-DLP Update Feature
 
 ## Overview
 
-This implementation adds a self-update capability for the yt-dlp binary in the LMS-YouTube plugin settings interface. Users can view their currently installed yt-dlp version and update the binary directly from the plugin settings without manual intervention.
+This feature adds self-update capability for the yt-dlp binary directly from the LMS YouTube plugin settings interface. Users can view their currently installed version and update yt-dlp with a single click, without requiring manual binary replacement or command-line access.
 
-## Modified Files
+## Key Features
 
-### 1. basic.html (HTML/Settings Template)
+- **Version Display**: Current yt-dlp version shown automatically below binary selector
+- **One-Click Updates**: Single "Update yt-dlp" button triggers background update process
+- **Real-Time Status Updates**: AJAX polling provides live feedback without manual page refresh
+- **Cross-Platform**: Works on Linux, macOS, Windows, and FreeBSD
+- **Non-Blocking**: Update runs in background; server remains responsive
+- **Automatic Version Refresh**: Version number updates dynamically after successful update
+- **Visual Feedback**: Color-coded status messages, wait cursor, disabled button during update
+- **Secure**: Temporary permission elevation on Unix systems, restored immediately after
 
-**Location:** `plugin/HTML/EN/plugins/YouTube/settings/basic.html`
+## Architecture
 
-**Changes:**
+### Backend (Perl)
 
-* **Automatic Version Display:** Displays the current version immediately below the binary selector.
-* **Single Action Button:** A "Update yt-dlp" button handles the update process.
-* **Visual Feedback:** Added JavaScript to change the button text to "Updating..." and the cursor to 'wait' while the operation processes.
-* **Status Messages:** Conditional display of success (green) or error (red) messages.
+**Settings.pm**:
+- Non-blocking background updates using `Proc::Background`
+- Timer-based status polling (checks every 2 seconds, max 30 seconds)
+- Cache-based status management for persistence across page reloads
+- Unified cross-platform implementation with platform-specific permission handling only
+- Enhanced error detection via keyword scanning and output analysis
+- Binary whitelist validation for security
 
-**Code Addition:**
+**Utils.pm**:
+- `set_yt_dlp_writable()`: Temporarily sets write permissions (0755) on Unix
+- `set_yt_dlp_readonly()`: Restores read-only permissions (0555) on Unix
+- No permission changes on Windows (handled by OS)
 
-```html
-[% IF current_version %]
-    <br><span style="color: #666; font-size: 0.9em;">[% "PLUGIN_YOUTUBE_CURRENT_VERSION" | string %]: <b>[% current_version %]</b></span>
-    [% IF available_version && available_version != current_version %]
-        <span style="color: orange; font-size: 0.9em;"> → [% "PLUGIN_YOUTUBE_AVAILABLE_VERSION" | string %]: <b>[% available_version %]</b></span>
-    [% END %]
-[% END %]
-<br><br>
-<script type="text/javascript">
-    function showUpdateProgress(btn) {
-        btn.value = 'Updating...';
-        btn.style.cursor = 'wait';
-    }
-</script>
+### Frontend (HTML/JavaScript)
 
-<input name="update_ytdlp" type="submit" value="[% 'PLUGIN_YOUTUBE_UPDATE_YTDLP' | string %]" onclick="showUpdateProgress(this)">
+**basic.html**:
+- CSS classes for status states (`.status-running`, `.status-success`, `.status-error`)
+- AJAX polling via XMLHttpRequest to check update status every 2 seconds
+- Dynamic DOM updates for status messages and version number
+- Global wait cursor during updates
+- Button state management (disable/enable)
 
-[% IF update_status %]
-    <br><span style="[% IF update_error %]color: red;[% ELSE %]color: green;[% END %]">[% update_status %]</span>
-[% END %]
+## User Workflow
+
+1. **Navigate** to Settings → Advanced → YouTube
+2. **View** current yt-dlp version displayed below binary selector dropdown
+3. **Click** "Update yt-dlp" button
+   - Button shows "Updating..." and is disabled
+   - Wait cursor appears globally
+   - Status shows "Updating..." in blue
+4. **Status updates automatically** every 2 seconds via AJAX
+5. **Update completes** (typically 5-10 seconds):
+   - Success: Green message with new version number
+   - Already up-to-date: Green message
+   - Failure: Red message with error details
+6. **Version number updates** automatically without page reload
+7. **Button re-enables** automatically
+
+## Technical Implementation
+
+### Update Process Flow
 
 ```
+User clicks button
+    ↓
+handler() detects 'update_ytdlp' parameter
+    ↓
+_updateYtDlp() validates binary, sets cache status to 'in_progress'
+    ↓
+_startYtDlpUpdate() starts background process
+    ↓
+    ┌──────────────────────────────┐
+    │ Background Process           │
+    │ (yt-dlp -U)                  │
+    │ Output → temp file           │
+    └──────────────────────────────┘
+    ↓
+_checkUpdateProgress() polls every 2s (up to 15 times)
+    ↓
+When complete:
+    - Read output from temp file
+    - Parse success/failure
+    - Restore permissions (Unix)
+    - Update cache with final status
+    ↓
+    ┌──────────────────────────────┐
+    │ JavaScript AJAX Polling      │
+    │ (Every 2 seconds)            │
+    └──────────────────────────────┘
+    ↓
+Detects status changed from 'in_progress':
+    - Update status message
+    - Update version number
+    - Re-enable button
+    - Stop polling
+```
 
-### 2. Settings.pm (Perl Backend)
+### Unix/Linux/macOS Execution
 
-**Location:** `plugin/Settings.pm`
+```perl
+# Set temporary write permission
+Plugins::YouTube::Utils::set_yt_dlp_writable($bin_path);  # 0755
 
-**Changes:**
+# Execute update in background with shell redirection
+my $cmd = "'$bin_path' -U > '$temp_output' 2>&1";
+my $proc = Proc::Background->new($cmd);
 
-* **`handler()`**:
-* Calls `_getCurrentVersion` on every page load to populate the UI.
-* Detects `update_ytdlp` parameter to trigger the update process.
+# Poll for completion
+Slim::Utils::Timers::setTimer(..., sub { _checkUpdateProgress(...) });
 
+# After completion, always restore permissions
+Plugins::YouTube::Utils::set_yt_dlp_readonly($bin_path);  # 0555
+```
 
-* **`_getCurrentVersion()`**:
-* Runs `yt-dlp --version`.
-* **Caching:** Caches the result for 1 hour (3600 seconds) to prevent performance impact on repeated page loads.
-* Clears cache immediately after an update or if `update_ytdlp` is triggered.
+### Windows Execution
 
+```perl
+# No permission changes needed
+my $cmd = "\"$bin_path\" -U > \"$temp_output\" 2>&1";
+my $proc = Proc::Background->new($cmd);
 
-* **`_updateYtDlp()`**: Logic to determine OS and dispatch to specific handler.
-* **`_updateYtDlpUnix()`**:
-* Temporarily changes file permissions to `0755` (writable) to allow self-update.
-* Uses `AnyEvent::Util::run_cmd` for execution.
-* Restores permissions to `0555` (read-only) immediately after.
+# Same polling mechanism as Unix
+```
 
+### Status Management
 
-* **`_updateYtDlpWindows()`**:
-* Uses a piped open to execute the update command.
-* Merges STDERR into STDOUT for complete log capture.
+**Cache Keys**:
+- `yt:update_status` - Current status message (TTL: 300s)
+- `yt:update_error` - Boolean error flag (TTL: 300s)
+- `yt:version:{binary}` - Cached version info (TTL: 3600s)
 
+**Status Values**:
+- `'in_progress'` - Update is running (triggers AJAX polling)
+- Success message - Update completed successfully
+- Error message - Update failed with details
 
+**Flow**:
+1. Button click → `'in_progress'` set in cache
+2. Page reload → Detects `'in_progress'` → Shows blue status → AJAX polling starts
+3. Background completes → Cache updated with final status
+4. Next AJAX poll → Detects change → Updates UI → Stops polling
 
-### 3. Utils.pm (Utility Functions)
+### AJAX Polling Implementation
 
-**Location:** `plugin/Utils.pm`
+```javascript
+[% IF update_in_progress %]
+var pollInterval = setInterval(function() {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', window.location.href + '&t=' + Date.now(), true);
+    xhr.onload = function() {
+        var doc = new DOMParser().parseFromString(this.responseText, "text/html");
+        var newStatus = doc.getElementById('update_status_message');
+        var currentStatus = document.getElementById('update_status_message');
+        
+        if (newStatus && currentStatus) {
+            currentStatus.innerHTML = newStatus.innerHTML;
+            
+            // Check if still running
+            var isRunning = newStatus.innerHTML.indexOf('status-running') !== -1;
+            
+            if (!isRunning) {
+                clearInterval(pollInterval);
+                document.documentElement.classList.remove('wait');
+                
+                // Update version number
+                var newVersion = doc.getElementById('ytdlp_current_version');
+                var currentVersion = document.getElementById('ytdlp_current_version');
+                if (newVersion && currentVersion) {
+                    currentVersion.innerHTML = newVersion.innerHTML;
+                }
+                
+                // Re-enable button
+                var btn = document.querySelector('input[name="update_ytdlp"]');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.value = "Update yt-dlp";
+                }
+            }
+        }
+    };
+    xhr.send();
+}, 2000);
+[% END %]
+```
 
-**New Functions Added:**
+## Error Handling
 
-* `set_yt_dlp_writable($bin_path)`: Sets permissions to 0755 (rwxr-xr-x) for self-update.
-* `set_yt_dlp_readonly($bin_path)`: Restores permissions to 0555 (r-xr-xr-x) for security.
+### Validation Errors
+- **Invalid binary**: Selected binary not in whitelist → error before execution
+- **Binary not found**: File doesn't exist → error before execution
+- **Binary not executable**: Auto-corrected to 0555 permissions
 
-**Permission Management Strategy:**
+### Permission Errors (Unix)
+- **Cannot set writable**: Update aborted, error logged and displayed
+- **Cannot restore readonly**: Update succeeds but warning added to status message
+- Critical security warning logged to server logs
 
-* **Default state**: Binary has 0555 permissions (read + execute only).
-* **During update**: Temporarily elevated to 0755 (read + write + execute for owner).
-* **After update**: Restored to 0555 (prevents accidental modification).
-* **Windows**: No permission changes needed (Windows handles this differently).
+### Execution Errors
+- **Process fails to start**: Error caught and displayed with exception message
+- **Non-zero exit code**: Failure message with exit code displayed
+- **Timeout (>30s)**: Status checks stop, informational message shown, process continues
 
-### 4. strings.txt (Localization)
+### Output Parsing
+- **Empty output + exit 0**: Success with warning (silent update)
+- **Contains "denied" or "error"**: Treated as error regardless of exit code
+- **Exit 0 with suspicious output**: Flagged and logged, may show as success with warning
+- **Cannot read output file**: Warning logged, relies on exit code only
 
-**Location:** `plugin/strings.txt`
+### Recovery
+- **Permissions remain writable**: Logged as critical security risk, needs manual intervention
+- **Temp file not cleaned**: Logged but not critical, will be overwritten next time
+- **Cache corruption**: Status automatically cleared after 5 minutes (TTL expires)
 
-**Added Strings:**
+## Security
 
-* `PLUGIN_YOUTUBE_UPDATE_YTDLP` - Update button label
-* `PLUGIN_YOUTUBE_CURRENT_VERSION` - Current version label
-* `PLUGIN_YOUTUBE_AVAILABLE_VERSION` - Available version label
-* `PLUGIN_YOUTUBE_VERSION_UP_TO_DATE` - Up to date message
-* `PLUGIN_YOUTUBE_UPDATE_SUCCESS` - Success message
-* `PLUGIN_YOUTUBE_UPDATE_FAILED` - Failure message
-* `PLUGIN_YOUTUBE_UPDATE_ERROR` - Error message
-* `PLUGIN_YOUTUBE_UPDATE_BINARY_NOT_FOUND` - Binary not found error
+### Binary Whitelist
+```perl
+my %ALLOWED_BINARIES = map { $_ => 1 } ('', Plugins::YouTube::Utils::yt_dlp_binaries());
+```
+Only binaries from `yt_dlp_binaries()` can be updated. Prevents arbitrary binary execution.
 
-## Usage
+### Path Escaping
+```perl
+# Unix: Escape single quotes for shell
+my $escaped_bin = $bin_path;
+$escaped_bin =~ s/'/'\\''/g;
+my $cmd = "'$escaped_bin' -U > '$escaped_out' 2>&1";
 
-1. Navigate to Settings → Plugins → YouTube.
-2. Locate the "YT-dlp url extractor" section.
-3. **View Current Version**: The installed version (e.g., `2023.03.04`) is displayed automatically below the dropdown.
-4. **Update yt-dlp**:
-* Click the **"Update yt-dlp"** button.
-* The button text will change to "Updating...".
-* The page will reload.
+# Windows: Escape double quotes
+my $quoted_bin = $bin_path;
+$quoted_bin =~ s/"/\\"/g;
+my $cmd = "\"$quoted_bin\" -U > \"$quoted_out\" 2>&1";
+```
 
+### Permission Management (Unix)
+- **Default**: 0555 (r-xr-xr-x) - Read and execute only
+- **During update**: 0755 (rwxr-xr-x) - Owner can write
+- **After update**: 0555 restored immediately
+- **On error**: Restoration attempted in all cases
 
-5. **Verify Result**:
-* A message will appear indicating success ("Update successful", "Up to date") or failure.
-* The "Current version" display will update to reflect the new version.
+### Cache Isolation
+Update status stored in separate cache keys, not mixed with API or content cache.
 
+## Configuration
 
+### Constants (Settings.pm)
+```perl
+use constant VERSION_CACHE_TTL => 3600;       # 1 hour
+use constant UPDATE_CHECK_INTERVAL => 2;      # 2 seconds
+use constant UPDATE_MAX_CHECKS => 15;         # 30 seconds max
+```
 
-## Technical Details
+### Adjusting Behavior
+- **Faster polling**: Change `UPDATE_CHECK_INTERVAL` to 1
+- **Longer timeout**: Increase `UPDATE_MAX_CHECKS` to 30
+- **Shorter version cache**: Reduce `VERSION_CACHE_TTL` to 1800
 
-### Update Process Flow:
+## Localization
 
-1. **On Page Load**:
-* `_getCurrentVersion` checks the cache (`yt:version:binary_name`).
-* If not cached, it runs `binary --version`, parses the output, and caches it for 1 hour.
-
-
-2. **Update Button Clicked**:
-* `Settings.pm` detects `update_ytdlp` param.
-* **[Unix/Linux/macOS]**:
-* Permissions set to **0755**.
-* Command `binary -U` executed via `AnyEvent::Util`.
-* Permissions restored to **0555**.
-
-
-* **[Windows]**:
-* Command `binary -U` executed via system shell.
-
-
-* **Post-Update**:
-* Output is parsed for "up to date" or success messages.
-* The version cache is cleared to force a refresh on the reloaded page.
-
-
-
-
-
-### Error Handling:
-
-* **Binary not found**: Returns specific error string.
-* **Permission Errors**: If `chmod` fails, the update is aborted and logged.
-* **Execution Errors**: Caught via `eval` blocks; exceptions are logged and displayed in the UI (red text).
-
-### Security Considerations
-
-* **Read-Only Default**: The binary is kept read-only (0555) during normal operation to prevent tampering.
-* **Temporary Escalation**: Write permissions are only granted for the exact duration of the update command.
-* **Safe Restoration**: The `finally` logic (implemented via `set_yt_dlp_readonly`) attempts to restore safe permissions even if the update crashes.
+Strings available in 4 languages (CS, DA, DE, EN):
+- `PLUGIN_YOUTUBE_UPDATE_YTDLP` - "Update yt-dlp"
+- `PLUGIN_YOUTUBE_UPDATING` - "Updating..."
+- `PLUGIN_YOUTUBE_UPDATE_SUCCESS` - "yt-dlp update successful"
+- `PLUGIN_YOUTUBE_VERSION_UP_TO_DATE` - "yt-dlp already up to date"
+- `PLUGIN_YOUTUBE_UPDATE_FAILED` - "yt-dlp update failed"
+- `PLUGIN_YOUTUBE_UPDATE_ERROR` - "yt-dlp update error"
+- `PLUGIN_YOUTUBE_UPDATE_BINARY_NOT_FOUND` - "yt-dlp binary not found"
+- `PLUGIN_YOUTUBE_CURRENT_VERSION` - "Current version"
+- `PLUGIN_YOUTUBE_VERSION` - "version"
+- `PLUGIN_YOUTUBE_EXIT` - "Exit code"
+- `PLUGIN_YOUTUBE_INVALID_BINARY` - "Invalid binary selection"
+- `PLUGIN_YOUTUBE_UNEXPECTED_RESPONSE` - "Unexpected response from binary"
+- `PLUGIN_YOUTUBE_RESTORE_PERMISSION_WARNING` - "WARNING: Could not restore file permissions!"
+- `PLUGIN_YOUTUBE_VERSION_UNKNOWN` - "Unknown"
+- `PLUGIN_YOUTUBE_UPDATE_IN_PROGRESS` - "Update in progress..."
+- `NOT_AVAILABLE` - "N/A"
 
 ## Dependencies
 
-### Perl Modules Required:
+### Required Perl Modules
+- **Proc::Background** - Cross-platform background process management
+- **File::Spec** - Path manipulation (core module)
+- **Time::HiRes** - High-resolution timers (core module)
+- **List::Util** - Utility functions (core module)
+- **Slim::Utils::** - LMS framework modules (already present)
 
-* **Unix/Linux/macOS:** `AnyEvent::Util` (Standard LMS dependency).
-* **All Systems:** Standard Perl core modules (`File::Spec`, `List::Util`).
+### Browser Requirements (for AJAX polling)
+- XMLHttpRequest support (all modern browsers, IE10+)
+- DOMParser support (all modern browsers)
+- ClassList API (all modern browsers, IE10+)
+
+**Graceful Degradation**: Without JavaScript, updates still work but require manual page refresh to see results.
+
+## Files Modified
+
+### New Files
+- `README_update_feature.md` - This documentation
+
+### Modified Files
+- `plugin/HTML/EN/plugins/YouTube/settings/basic.html` - UI with AJAX polling
+- `plugin/Settings.pm` - Backend update logic
+- `plugin/Utils.pm` - Permission management functions
+- `plugin/strings.txt` - Localized strings
+- `plugin/install.xml` - Version bump to 0.400.12.1
+
+### Renamed Files (case change)
+- `plugin/bin/*` → `plugin/Bin/*` - Standardized directory name capitalization
+
+## Performance Considerations
+
+### Version Caching
+- Version checked only once per hour (3600s TTL)
+- Reduces repeated `--version` calls
+- Cache cleared immediately after update
+- Prevents stale version display
+
+### Update Polling
+- Only active during updates (2s intervals)
+- Stops automatically on completion or timeout
+- Minimal HTTP overhead (fetches only HTML page)
+- No database queries involved
+
+### Server Load
+- Non-blocking process execution
+- Timer-based polling adds negligible CPU
+- Cache operations are fast (in-memory)
+- Single background process per update
+
+## Troubleshooting
+
+### Update button doesn't work
+- **Check**: JavaScript console for errors
+- **Test**: Disable JavaScript and verify button still submits form
+- **Verify**: Browser supports XMLHttpRequest
+
+### Status doesn't update automatically
+- **Check**: Network tab shows AJAX requests every 2 seconds
+- **Verify**: Requests return 200 status
+- **Test**: Manual page refresh shows updated status
+- **Debug**: Server logs show `_checkUpdateProgress()` calls
+
+### Update times out
+- **Symptom**: "Update taking longer than expected" message
+- **Reason**: Slow network or large download
+- **Solution**: Increase `UPDATE_MAX_CHECKS` in Settings.pm
+- **Note**: Process continues in background even after timeout
+
+### Permission errors (Unix)
+- **Symptom**: "Failed to set write permission"
+- **Check**: Binary file location is writable
+- **Check**: LMS user has write access to directory
+- **Check**: SELinux/AppArmor not blocking chmod
+- **Fix**: Move binary to writable location or adjust permissions
+
+### Output file not found
+- **Symptom**: Warning in logs but update succeeds
+- **Reason**: Shell redirection failed
+- **Check**: Cache directory is writable
+- **Check**: Disk space available
+- **Impact**: Status relies on exit code only (still works)
+
+### Version shows "Unknown"
+- **Symptom**: Current version displays "Unknown"
+- **Reason**: Cannot parse `--version` output
+- **Check**: Binary is executable
+- **Check**: Binary is not corrupted
+- **Fix**: Re-download binary or select different version
 
 ## Testing Checklist
 
-* [x] Current version displays on page load.
-* [x] Version is cached (logs show "Current yt-dlp version: ..." only once per hour unless updated).
-* [x] Update button changes visual state (JavaScript).
-* [x] Unix: Permissions flip 0755 -> Update -> 0555.
-* [x] Windows: Update command executes correctly via piped open.
-* [x] Success/Error messages render correctly in the template.
+- [x] Version displays correctly on page load
+- [x] Version is cached (logs show check once per hour)
+- [x] Button shows "Updating..." when clicked
+- [x] Wait cursor appears during update
+- [x] AJAX polling updates status without page reload
+- [x] Version number updates automatically on success
+- [x] Button re-enables when complete
+- [x] Unix: Permissions change 0555 → 0755 → 0555
+- [x] Success message shows in green with version
+- [x] "Already up to date" message shows in green
+- [x] Error messages show in red
+- [x] Cache cleanup happens after status display
+
+## Future Enhancements
+
+Possible improvements not currently implemented:
+
+1. **Scheduled Updates**: Automatic updates once a day
+
+## Known Limitations
+
+1. **Maximum timeout**: Status checks stop after 30 seconds (process continues)
+2. **No progress indicator**: Shows only "Updating..." until complete
+3. **Single update at a time**: No queuing for concurrent update attempts
+4. **Requires page visit**: No background automatic updates
+5. **No rollback**: Cannot revert to previous version automatically
