@@ -171,7 +171,7 @@ This implementation adds a self-update capability for the yt-dlp binary in the L
 ## Testing Checklist
 
 * [x] Current version displays on page load.
-* [ ] Version is cached (logs show "Current yt-dlp version: ..." only once per hour unless updated).
+* [x] Version is cached (logs show "Current yt-dlp version: ..." only once per hour unless updated).
 * [x] Update button changes visual state (JavaScript).
 * [x] Unix: Permissions flip 0755 -> Update -> 0555.
 * [x] Windows: Update command executes correctly via piped open.
