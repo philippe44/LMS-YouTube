@@ -106,34 +106,17 @@ sub yt_dlp_binaries {
 
 # Set writable permissions on yt-dlp binary (needed for self-update)
 # Returns: 1 on success, 0 on failure
-sub set_yt_dlp_writable {
-	my $bin_path = shift;
+sub _set_bin_mode {
+	my ($file, $mode) = @_;
+	return 1 if main::ISWINDOWS;
 
-	return 1 if main::ISWINDOWS; # Windows doesn't need this
-
-	unless (chmod(0755, $bin_path)) {
-		$log->error("Failed to set write permission on $bin_path: $!");
-		return 0;
+	if ($file && -e $file) {
+		return chmod(oct($mode), $file);
 	}
-
-	$log->info("Set write permissions (0755) on $bin_path");
-	return 1;
+	return 0;
 }
 
-# Restore safe permissions on yt-dlp binary (after self-update)
-# Returns: 1 on success, 0 on failure
-sub set_yt_dlp_readonly {
-	my $bin_path = shift;
-
-	return 1 if main::ISWINDOWS; # Windows doesn't need this
-
-	unless (chmod(0555, $bin_path)) {
-		$log->warn("Failed to restore safe permissions on $bin_path: $!");
-		return 0;
-	}
-
-	$log->info("Restored safe permissions (0555) on $bin_path");
-	return 1;
-}
+sub set_yt_dlp_writable { return _set_bin_mode(shift, '0755'); }
+sub set_yt_dlp_readonly { return _set_bin_mode(shift, '0555'); }
 
 1;

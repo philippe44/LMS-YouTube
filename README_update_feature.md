@@ -20,10 +20,12 @@ This feature adds self-update capability for the yt-dlp binary directly from the
 ### Backend (Perl)
 
 **Settings.pm**:
-- Non-blocking background updates using `Proc::Background`
+- Non-blocking background updates using platform-specific process management
+  - Windows: `Win32::Process` for process creation
+  - Unix: `Proc::Background` for process management
 - Timer-based status polling (checks every 2 seconds, max 30 seconds)
 - Cache-based status management for persistence across page reloads
-- Unified cross-platform implementation with platform-specific permission handling only
+- Cross-platform implementation with platform-specific execution handling
 - Enhanced error detection via keyword scanning and output analysis
 - Binary whitelist validation for security
 
@@ -31,6 +33,7 @@ This feature adds self-update capability for the yt-dlp binary directly from the
 - `set_yt_dlp_writable()`: Temporarily sets write permissions (0755) on Unix
 - `set_yt_dlp_readonly()`: Restores read-only permissions (0555) on Unix
 - No permission changes on Windows (handled by OS)
+- Automatic permission correction for non-executable binaries
 
 ### Frontend (HTML/JavaScript)
 
@@ -38,7 +41,7 @@ This feature adds self-update capability for the yt-dlp binary directly from the
 - CSS classes for status states (`.status-running`, `.status-success`, `.status-error`)
 - AJAX polling via XMLHttpRequest to check update status every 2 seconds
 - Dynamic DOM updates for status messages and version number
-- Global wait cursor during updates
+- Global wait cursor during updates (`document.documentElement.classList.add('wait')`)
 - Button state management (disable/enable)
 
 ## User Workflow
@@ -96,14 +99,18 @@ Detects status changed from 'in_progress':
     - Stop polling
 ```
 
-### Unix/Linux/macOS Execution
+### Unix/Linux/macOS/FreeBSD Execution
 
 ```perl
 # Set temporary write permission
 Plugins::YouTube::Utils::set_yt_dlp_writable($bin_path);  # 0755
 
 # Execute update in background with shell redirection
-my $cmd = "'$bin_path' -U > '$temp_output' 2>&1";
+my $escaped_bin = $bin_path;
+$escaped_bin =~ s/'/'\\''/g;  # Escape single quotes for shell
+my $escaped_out = $temp_output;
+$escaped_out =~ s/'/'\\''/g;
+my $cmd = "'$escaped_bin' -U > '$escaped_out' 2>&1";
 my $proc = Proc::Background->new($cmd);
 
 # Poll for completion
@@ -117,8 +124,17 @@ Plugins::YouTube::Utils::set_yt_dlp_readonly($bin_path);  # 0555
 
 ```perl
 # No permission changes needed
-my $cmd = "\"$bin_path\" -U > \"$temp_output\" 2>&1";
-my $proc = Proc::Background->new($cmd);
+my $inner_cmd = qq{"$bin_path" -U > "$temp_output" 2>&1};
+my $cmd_line = qq{cmd.exe /c "$inner_cmd"};
+
+Win32::Process::Create(
+    $proc,
+    $ENV{COMSPEC} || 'C:\\Windows\\System32\\cmd.exe',
+    $cmd_line,
+    0,
+    Win32::Process::NORMAL_PRIORITY_CLASS(),
+    '.'
+);
 
 # Same polling mechanism as Unix
 ```
@@ -128,6 +144,7 @@ my $proc = Proc::Background->new($cmd);
 **Cache Keys**:
 - `yt:update_status` - Current status message (TTL: 300s)
 - `yt:update_error` - Boolean error flag (TTL: 300s)
+- `yt:update_in_progress` - Update progress flag (TTL: 300s)
 - `yt:version:{binary}` - Cached version info (TTL: 3600s)
 
 **Status Values**:
@@ -152,33 +169,36 @@ var pollInterval = setInterval(function() {
         var doc = new DOMParser().parseFromString(this.responseText, "text/html");
         var newStatus = doc.getElementById('update_status_message');
         var currentStatus = document.getElementById('update_status_message');
-        
+
         if (newStatus && currentStatus) {
             currentStatus.innerHTML = newStatus.innerHTML;
-            
+
             // Check if still running
-            var isRunning = newStatus.innerHTML.indexOf('status-running') !== -1;
-            
+            var isRunning = newStatus.innerHTML.indexOf('status-running') !== -1 ||
+                            newStatus.innerHTML.indexOf('[% "PLUGIN_YOUTUBE_UPDATING" | string %]') !== -1;
+
             if (!isRunning) {
                 clearInterval(pollInterval);
                 document.documentElement.classList.remove('wait');
-                
+
                 // Update version number
                 var newVersion = doc.getElementById('ytdlp_current_version');
                 var currentVersion = document.getElementById('ytdlp_current_version');
                 if (newVersion && currentVersion) {
                     currentVersion.innerHTML = newVersion.innerHTML;
                 }
-                
+
                 // Re-enable button
                 var btn = document.querySelector('input[name="update_ytdlp"]');
                 if (btn) {
                     btn.disabled = false;
-                    btn.value = "Update yt-dlp";
+                    btn.style.cursor = '';
+                    btn.value = "[% 'PLUGIN_YOUTUBE_UPDATE_YTDLP' | string %]";
                 }
             }
         }
     };
+    xhr.onerror = function() { isPolling = false; };
     xhr.send();
 }, 2000);
 [% END %]
@@ -189,7 +209,7 @@ var pollInterval = setInterval(function() {
 ### Validation Errors
 - **Invalid binary**: Selected binary not in whitelist → error before execution
 - **Binary not found**: File doesn't exist → error before execution
-- **Binary not executable**: Auto-corrected to 0555 permissions
+- **Binary not executable**: Auto-corrected to 0555 permissions by `yt_dlp_bin()`
 
 ### Permission Errors (Unix)
 - **Cannot set writable**: Update aborted, error logged and displayed
@@ -203,7 +223,7 @@ var pollInterval = setInterval(function() {
 
 ### Output Parsing
 - **Empty output + exit 0**: Success with warning (silent update)
-- **Contains "denied" or "error"**: Treated as error regardless of exit code
+- **Contains "permission denied", "fatal error", "cannot update", "not found", or "no such file"**: Treated as error regardless of exit code
 - **Exit 0 with suspicious output**: Flagged and logged, may show as success with warning
 - **Cannot read output file**: Warning logged, relies on exit code only
 
@@ -227,10 +247,10 @@ my $escaped_bin = $bin_path;
 $escaped_bin =~ s/'/'\\''/g;
 my $cmd = "'$escaped_bin' -U > '$escaped_out' 2>&1";
 
-# Windows: Escape double quotes
-my $quoted_bin = $bin_path;
-$quoted_bin =~ s/"/\\"/g;
-my $cmd = "\"$quoted_bin\" -U > \"$quoted_out\" 2>&1";
+# Windows: Quote paths and use cmd.exe
+my $inner_cmd = qq{"$bin_path" -U > "$temp_output" 2>&1};
+my $cmd_line = qq{cmd.exe /c "$inner_cmd"};
+
 ```
 
 ### Permission Management (Unix)
@@ -238,6 +258,7 @@ my $cmd = "\"$quoted_bin\" -U > \"$quoted_out\" 2>&1";
 - **During update**: 0755 (rwxr-xr-x) - Owner can write
 - **After update**: 0555 restored immediately
 - **On error**: Restoration attempted in all cases
+- **Automatic correction**: Non-executable binaries are automatically set to 0555
 
 ### Cache Isolation
 Update status stored in separate cache keys, not mixed with API or content cache.
@@ -274,12 +295,14 @@ Strings available in 4 languages (CS, DA, DE, EN):
 - `PLUGIN_YOUTUBE_RESTORE_PERMISSION_WARNING` - "WARNING: Could not restore file permissions!"
 - `PLUGIN_YOUTUBE_VERSION_UNKNOWN` - "Unknown"
 - `PLUGIN_YOUTUBE_UPDATE_IN_PROGRESS` - "Update in progress..."
+- `PLUGIN_YOUTUBE_UPDATE_TIMEOUT` - "Update is taking longer than expected..."
 - `NOT_AVAILABLE` - "N/A"
 
 ## Dependencies
 
 ### Required Perl Modules
-- **Proc::Background** - Cross-platform background process management
+- **Windows**: `Win32::Process` - Windows process management
+- **Unix**: `Proc::Background` - Unix background process management
 - **File::Spec** - Path manipulation (core module)
 - **Time::HiRes** - High-resolution timers (core module)
 - **List::Util** - Utility functions (core module)
@@ -294,15 +317,12 @@ Strings available in 4 languages (CS, DA, DE, EN):
 
 ## Files Modified
 
-### New Files
-- `README_update_feature.md` - This documentation
-
 ### Modified Files
-- `plugin/HTML/EN/plugins/YouTube/settings/basic.html` - UI with AJAX polling
-- `plugin/Settings.pm` - Backend update logic
-- `plugin/Utils.pm` - Permission management functions
-- `plugin/strings.txt` - Localized strings
-- `plugin/install.xml` - Version bump to 0.400.12.1
+- `plugins/YouTube/HTML/EN/plugins/YouTube/settings/basic.html` - UI with AJAX polling
+- `plugins/YouTube/Settings.pm` - Backend update logic
+- `plugins/YouTube/Utils.pm` - Permission management functions and binary detection
+- `strings.txt` - Localized strings (in plugin directory)
+
 
 ### Renamed Files (case change)
 - `plugin/bin/*` → `plugin/Bin/*` - Standardized directory name capitalization
@@ -360,8 +380,8 @@ Strings available in 4 languages (CS, DA, DE, EN):
 - **Check**: Disk space available
 - **Impact**: Status relies on exit code only (still works)
 
-### Version shows "Unknown"
-- **Symptom**: Current version displays "Unknown"
+### Version shows "N/A" or "Unknown"
+- **Symptom**: Current version displays "N/A" or "Unknown"
 - **Reason**: Cannot parse `--version` output
 - **Check**: Binary is executable
 - **Check**: Binary is not corrupted
@@ -377,7 +397,8 @@ Strings available in 4 languages (CS, DA, DE, EN):
 - [x] Version number updates automatically on success
 - [x] Button re-enables when complete
 - [x] Unix: Permissions change 0555 → 0755 → 0555
-- [x] Success message shows in green with version
+- [x] Windows: Update executes without permission changes
+- [x] Success message shows in green
 - [x] "Already up to date" message shows in green
 - [x] Error messages show in red
 - [x] Cache cleanup happens after status display
@@ -386,12 +407,12 @@ Strings available in 4 languages (CS, DA, DE, EN):
 
 Possible improvements not currently implemented:
 
-1. **Scheduled Updates**: Automatic updates once a day
+1. **Scheduled Updates**: Automatic updates once a day/week
 
 ## Known Limitations
 
 1. **Maximum timeout**: Status checks stop after 30 seconds (process continues)
 2. **No progress indicator**: Shows only "Updating..." until complete
-3. **Single update at a time**: No queuing for concurrent update attempts
-4. **Requires page visit**: No background automatic updates
-5. **No rollback**: Cannot revert to previous version automatically
+3. **Requires page visit**: No background automatic updates
+4. **No rollback**: Cannot revert to previous version automatically
+5. **Temp file cleanup**: May leave temp files on abrupt process termination

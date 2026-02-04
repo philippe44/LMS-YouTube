@@ -20,9 +20,6 @@
 		</select>
 		[% IF current_version %]
 			<br><span id="ytdlp_current_version" style="color: #666; font-size: 0.9em;">[% "PLUGIN_YOUTUBE_CURRENT_VERSION" | string %]: <b>[% current_version %]</b></span>
-			[% IF available_version && available_version != current_version %]
-				<span style="color: orange; font-size: 0.9em;"> → [% "PLUGIN_YOUTUBE_AVAILABLE_VERSION" | string %]: <b>[% available_version %]</b></span>
-			[% END %]
 		[% END %]
 	[% END %]
 
@@ -33,7 +30,7 @@
 				btn.value = "[% 'PLUGIN_YOUTUBE_UPDATING' | string %]";
 				var statusSpan = document.getElementById('update_status_message');
 				if (statusSpan) {
-					statusSpan.innerHTML = '<br><span class="status-running">[% "PLUGIN_YOUTUBE_UPDATE_IN_PROGRESS" | string %]</span>';
+					statusSpan.innerHTML = '<br><span class="status-running">[% "PLUGIN_YOUTUBE_UPDATING" | string %]</span>';
 				}
 				return true;
 			}
@@ -42,11 +39,18 @@
 			[% IF update_in_progress %]
 			(function() {
 				document.documentElement.classList.add('wait');
+				var isPolling = false;
 
 				var pollInterval = setInterval(function() {
+					if (isPolling) return; // Skip if previous request is still out
+					isPolling = true;
 					var xhr = new XMLHttpRequest();
-					xhr.open('GET', window.location.href + '&t=' + new Date().getTime(), true);
+					var url = window.location.href;
+					var separator = url.indexOf('?') !== -1 ? '&' : '?';
+					xhr.open('GET', url + separator + 't=' + new Date().getTime(), true);
+
 					xhr.onload = function() {
+						isPolling = false; // Reset flag
 						if (this.status >= 200 && this.status < 400) {
 							// Parse the returned HTML to find the status message
 							var parser = new DOMParser();
@@ -59,7 +63,8 @@
 								currentStatus.innerHTML = newStatus.innerHTML;
 
 								// Check if the update is still running
-								var isRunning = newStatus.innerHTML.indexOf('status-running') !== -1;
+								var isRunning = newStatus.innerHTML.indexOf('status-running') !== -1 || 
+																newStatus.innerHTML.indexOf('[% "PLUGIN_YOUTUBE_UPDATING" | string %]') !== -1;
 
 								if (!isRunning) {
 									document.documentElement.classList.remove('wait');
@@ -72,7 +77,7 @@
 											currentVersion.innerHTML = newVersion.innerHTML;
 									}
 
-									// Re-enable the button
+									// Reset the button
 									var btn = document.querySelector('input[name="update_ytdlp"]');
 									if (btn) {
 											btn.disabled = false;
@@ -83,6 +88,7 @@
 							}
 						}
 					};
+					xhr.onerror = function() { isPolling = false; };
 					xhr.send();
 				}, 2000);
 			})();

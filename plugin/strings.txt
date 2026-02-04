@@ -619,12 +619,6 @@ PLUGIN_YOUTUBE_UPDATING
 	DE	Aktualisiere...
 	EN	Updating...
 
-PLUGIN_YOUTUBE_EXIT
-	CS	Exit kód
-	DA	Exitkode
-	DE	Exit-Code
-	EN	Exit code
-
 PLUGIN_YOUTUBE_UPDATE_SUCCESS
 	CS	Aktualizace yt-dlp byla úspěšná
 	DA	yt-dlp opdatering lykkedes
@@ -636,12 +630,6 @@ PLUGIN_YOUTUBE_VERSION_UP_TO_DATE
 	DA	yt-dlp er opdateret
 	EN	yt-dlp already up to date
 	DE	yt-dlp bereits aktuell
-
-PLUGIN_YOUTUBE_VERSION
-	CS	verze
-	DA	version
-	EN	version
-	DE	Version
 
 PLUGIN_YOUTUBE_UPDATE_FAILED
 	CS	Aktualizace yt-dlp se nezdařila
@@ -685,8 +673,8 @@ PLUGIN_YOUTUBE_RESTORE_PERMISSION_WARNING
 	DA	ADVARSEL: Kunne ikke gendanne filtilladelser!
 	DE	WARNUNG: Dateiberechtigungen konnten nicht wiederhergestellt werden!
 
-PLUGIN_YOUTUBE_VERSION_UNKNOWN
-	EN	Unknown
-	CS	Neznámý
-	DA	Ukendt
-	DE	Unbekannt
+PLUGIN_YOUTUBE_UPDATE_TIMEOUT
+	CS	Aktualizace trvá déle, než se očekávalo, zkontrolujte protokol.
+	DA	Opdateringen tager længere tid end forventet, tjek loggen.
+	DE	Die Aktualisierung dauert länger als erwartet, bitte Log überprüfen.
+	EN	Update is taking longer than expected, check log.
