@@ -8,6 +8,7 @@ This feature adds self-update capability for the yt-dlp binary directly from the
 
 - **Version Display**: Current yt-dlp version shown automatically below binary selector
 - **One-Click Updates**: Single "Update yt-dlp" button triggers background update process
+- **Automatic Updates**: Optional daily automatic updates at configurable time
 - **Real-Time Status Updates**: AJAX polling provides live feedback without manual page refresh
 - **Cross-Platform**: Works on Linux, macOS, Windows, and FreeBSD
 - **Non-Blocking**: Update runs in background; server remains responsive
@@ -24,6 +25,7 @@ This feature adds self-update capability for the yt-dlp binary directly from the
   - Windows: `Win32::Process` for process creation
   - Unix: `Proc::Background` for process management
 - Timer-based status polling (checks every 2 seconds, max 30 seconds)
+- **Automatic scheduling**: Daily auto-updates with configurable hour
 - Cache-based status management for persistence across page reloads
 - Cross-platform implementation with platform-specific execution handling
 - Enhanced error detection via keyword scanning and output analysis
@@ -35,6 +37,11 @@ This feature adds self-update capability for the yt-dlp binary directly from the
 - No permission changes on Windows (handled by OS)
 - Automatic permission correction for non-executable binaries
 
+**Plugin.pm**:
+- Initializes auto-update schedule on plugin startup
+- Shuts down auto-update timers on plugin shutdown
+- Persistent preference storage for auto-update configuration
+
 ### Frontend (HTML/JavaScript)
 
 **basic.html**:
@@ -43,9 +50,13 @@ This feature adds self-update capability for the yt-dlp binary directly from the
 - Dynamic DOM updates for status messages and version number
 - Global wait cursor during updates (`document.documentElement.classList.add('wait')`)
 - Button state management (disable/enable)
+- **Auto-update settings**: Checkbox with configurable hour selector (00:56 to 23:56)
+- **Last update display**: Shows timestamp and result of most recent auto-update
+- **Dynamic UI**: Auto-update hour settings show/hide based on checkbox state
 
 ## User Workflow
 
+### Manual Updates
 1. **Navigate** to Settings → Advanced → YouTube
 2. **View** current yt-dlp version displayed below binary selector dropdown
 3. **Click** "Update yt-dlp" button
@@ -60,14 +71,23 @@ This feature adds self-update capability for the yt-dlp binary directly from the
 6. **Version number updates** automatically without page reload
 7. **Button re-enables** automatically
 
+### Automatic Updates
+1. **Enable** "Automatic daily updates" checkbox
+2. **Select** desired update time (00:56 to 23:56)
+3. **Plugin automatically checks for updates daily** at selected time
+4. **View results** in settings page:
+   - Last update timestamp and status displayed
+   - Success/failure indicated by color (green/red)
+5. **Disable** automatic updates anytime by unchecking the box
+
 ## Technical Implementation
 
 ### Update Process Flow
 
 ```
-User clicks button
+User clicks button OR scheduled timer fires
     ↓
-handler() detects 'update_ytdlp' parameter
+handler() detects 'update_ytdlp' parameter OR _performAutoUpdate() called
     ↓
 _updateYtDlp() validates binary, sets cache status to 'in_progress'
     ↓
@@ -86,6 +106,7 @@ When complete:
     - Parse success/failure
     - Restore permissions (Unix)
     - Update cache with final status
+    - If auto-update: store in prefs; else: cache for UI
     ↓
     ┌──────────────────────────────┐
     │ JavaScript AJAX Polling      │
@@ -98,6 +119,28 @@ Detects status changed from 'in_progress':
     - Re-enable button
     - Stop polling
 ```
+
+### Automatic Scheduling System
+
+```perl
+# Scheduled at 56 minutes past selected hour (e.g., 03:56)
+sub _calculateNextUpdateTime {
+    my $target_hour = shift;
+    my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time);
+    my $today_target = POSIX::mktime(0, 56, $target_hour, $mday, $mon, $year);
+
+    if (time >= $today_target) {
+        return POSIX::mktime(0, 56, $target_hour, $mday + 1, $mon, $year);
+    }
+    return $today_target;
+}
+```
+
+**Key Scheduling Logic**:
+- Updates scheduled at `:56` minutes to avoid peak times
+- Automatically reschedules for next day if current time is past target
+- Timer automatically re-schedules after each auto-update completes
+- Shutdown-safe: timers cleaned up on plugin shutdown
 
 ### Unix/Linux/macOS/FreeBSD Execution
 
@@ -145,7 +188,15 @@ Win32::Process::Create(
 - `yt:update_status` - Current status message (TTL: 300s)
 - `yt:update_error` - Boolean error flag (TTL: 300s)
 - `yt:update_in_progress` - Update progress flag (TTL: 300s)
+- `yt:auto_update` - Auto-update in progress flag (TTL: 3600s)
 - `yt:version:{binary}` - Cached version info (TTL: 3600s)
+
+**Auto-update Result Storage**:
+- `last_auto_update` preference stores hash with:
+  - `time`: Unix timestamp
+  - `binary`: Binary name updated
+  - `status`: Result message
+  - `success`: Boolean success flag
 
 **Status Values**:
 - `'in_progress'` - Update is running (triggers AJAX polling)
@@ -231,6 +282,7 @@ var pollInterval = setInterval(function() {
 - **Permissions remain writable**: Logged as critical security risk, needs manual intervention
 - **Temp file not cleaned**: Logged but not critical, will be overwritten next time
 - **Cache corruption**: Status automatically cleared after 5 minutes (TTL expires)
+- **Auto-update scheduling failure**: Logs error, continues with current schedule
 
 ## Security
 
@@ -270,12 +322,25 @@ Update status stored in separate cache keys, not mixed with API or content cache
 use constant VERSION_CACHE_TTL => 3600;       # 1 hour
 use constant UPDATE_CHECK_INTERVAL => 2;      # 2 seconds
 use constant UPDATE_MAX_CHECKS => 15;         # 30 seconds max
+use constant DEFAULT_AUTO_UPDATE_HOUR => 3;   # 3:56 AM default
+```
+
+### Preferences (Plugin.pm)
+```perl
+$prefs->init({
+    # Existing preferences...
+    yt_dlp => '',
+    auto_update_ytdlp => 0,            # Auto-update disabled by default
+    auto_update_check_hour => 3,       # Default 3:56 AM
+    last_auto_update => undef,         # Stores last auto-update result
+});
 ```
 
 ### Adjusting Behavior
 - **Faster polling**: Change `UPDATE_CHECK_INTERVAL` to 1
 - **Longer timeout**: Increase `UPDATE_MAX_CHECKS` to 30
 - **Shorter version cache**: Reduce `VERSION_CACHE_TTL` to 1800
+- **Different default hour**: Change `DEFAULT_AUTO_UPDATE_HOUR`
 
 ## Localization
 
@@ -296,6 +361,11 @@ Strings available in 4 languages (CS, DA, DE, EN):
 - `PLUGIN_YOUTUBE_VERSION_UNKNOWN` - "Unknown"
 - `PLUGIN_YOUTUBE_UPDATE_IN_PROGRESS` - "Update in progress..."
 - `PLUGIN_YOUTUBE_UPDATE_TIMEOUT` - "Update is taking longer than expected..."
+- `PLUGIN_YOUTUBE_AUTO_UPDATE` - "Automatic Updates"
+- `PLUGIN_YOUTUBE_AUTO_UPDATE_DESC` - "Automatically check for and install yt-dlp updates daily"
+- `PLUGIN_YOUTUBE_ENABLE_AUTO_UPDATE` - "Enable automatic daily updates"
+- `PLUGIN_YOUTUBE_AUTO_UPDATE_HOUR` - "Update check time"
+- `PLUGIN_YOUTUBE_LAST_AUTO_UPDATE` - "Last automatic update"
 - `NOT_AVAILABLE` - "N/A"
 
 ## Dependencies
@@ -303,6 +373,7 @@ Strings available in 4 languages (CS, DA, DE, EN):
 ### Required Perl Modules
 - **Windows**: `Win32::Process` - Windows process management
 - **Unix**: `Proc::Background` - Unix background process management
+- **POSIX** - Time calculation functions (`mktime`)
 - **File::Spec** - Path manipulation (core module)
 - **Time::HiRes** - High-resolution timers (core module)
 - **List::Util** - Utility functions (core module)
@@ -318,10 +389,11 @@ Strings available in 4 languages (CS, DA, DE, EN):
 ## Files Modified
 
 ### Modified Files
-- `plugins/YouTube/HTML/EN/plugins/YouTube/settings/basic.html` - UI with AJAX polling
-- `plugins/YouTube/Settings.pm` - Backend update logic
+- `plugins/YouTube/HTML/EN/plugins/YouTube/settings/basic.html` - UI with AJAX polling and auto-update settings
+- `plugins/YouTube/Settings.pm` - Backend update logic with auto-update scheduling
 - `plugins/YouTube/Utils.pm` - Permission management functions and binary detection
-- `strings.txt` - Localized strings (in plugin directory)
+- `plugins/YouTube/Plugin.pm` - Plugin initialization with auto-update support
+- `plugins/YouTube/strings.txt` - Localized strings for new features
 
 
 ### Renamed Files (case change)
@@ -341,6 +413,12 @@ Strings available in 4 languages (CS, DA, DE, EN):
 - Minimal HTTP overhead (fetches only HTML page)
 - No database queries involved
 
+### Auto-update Scheduling
+- Single timer per plugin instance
+- Efficient time calculation using `POSIX::mktime`
+- Timer automatically rescheduled after each update
+- Clean shutdown to prevent orphaned timers
+
 ### Server Load
 - Non-blocking process execution
 - Timer-based polling adds negligible CPU
@@ -359,6 +437,12 @@ Strings available in 4 languages (CS, DA, DE, EN):
 - **Verify**: Requests return 200 status
 - **Test**: Manual page refresh shows updated status
 - **Debug**: Server logs show `_checkUpdateProgress()` calls
+
+### Auto-updates not running
+- **Check**: Auto-update checkbox is enabled
+- **Verify**: Server is running at scheduled time
+- **Check logs**: Look for "Auto-update scheduled for:" messages
+- **Test**: Change hour to current time + 1 minute to test
 
 ### Update times out
 - **Symptom**: "Update taking longer than expected" message
@@ -396,18 +480,16 @@ Strings available in 4 languages (CS, DA, DE, EN):
 - [x] AJAX polling updates status without page reload
 - [x] Version number updates automatically on success
 - [x] Button re-enables when complete
+- [x] Auto-update checkbox shows/hides hour selector correctly
+- [x] Auto-update schedule runs at configured time
+- [x] Auto-update results stored and displayed
 - [x] Unix: Permissions change 0555 → 0755 → 0555
 - [x] Windows: Update executes without permission changes
 - [x] Success message shows in green
 - [x] "Already up to date" message shows in green
 - [x] Error messages show in red
 - [x] Cache cleanup happens after status display
-
-## Future Enhancements
-
-Possible improvements not currently implemented:
-
-1. **Scheduled Updates**: Automatic updates once a day/week
+- [x] Auto-update timer cleaned up on plugin shutdown
 
 ## Known Limitations
 
@@ -416,3 +498,5 @@ Possible improvements not currently implemented:
 3. **Requires page visit**: No background automatic updates
 4. **No rollback**: Cannot revert to previous version automatically
 5. **Temp file cleanup**: May leave temp files on abrupt process termination
+6. **Time drift**: Server time changes may affect scheduled updates
+7. **Single binary**: Only one binary can be auto-updated at a time

@@ -678,3 +678,33 @@ PLUGIN_YOUTUBE_UPDATE_TIMEOUT
 	DA	Opdateringen tager længere tid end forventet, tjek loggen.
 	DE	Die Aktualisierung dauert länger als erwartet, bitte Log überprüfen.
 	EN	Update is taking longer than expected, check log.
+
+PLUGIN_YOUTUBE_AUTO_UPDATE
+	EN	Automatic Updates
+	CS	Automatické aktualizace
+	DA	Automatiske opdateringer
+	DE	Automatische Updates
+
+PLUGIN_YOUTUBE_AUTO_UPDATE_DESC
+	EN	Automatically check for and install yt-dlp updates daily
+	CS	Automaticky kontrolovat a instalovat aktualizace yt-dlp denně
+	DA	Tjek automatisk for og installer yt-dlp opdateringer dagligt
+	DE	Automatisch täglich nach yt-dlp Updates suchen und installieren
+
+PLUGIN_YOUTUBE_ENABLE_AUTO_UPDATE
+	EN	Enable automatic daily updates
+	CS	Povolit automatické denní aktualizace
+	DA	Aktiver automatiske daglige opdateringer
+	DE	Automatische tägliche Updates aktivieren
+
+PLUGIN_YOUTUBE_AUTO_UPDATE_HOUR
+	EN	Update time
+	CS	Čas aktualizace
+	DA	Opdateringstidspunkt
+	DE	Aktualisierungszeit
+
+PLUGIN_YOUTUBE_LAST_AUTO_UPDATE
+	EN	Last automatic update
+	CS	Poslední automatická aktualizace
+	DA	Sidste automatiske opdatering
+	DE	Letzte automatische Aktualisierung

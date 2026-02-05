@@ -1,9 +1,11 @@
 [% PROCESS settings/header.html %]
 	<style type="text/css">
 		.wait, .wait *  { cursor: wait !important; }
-		.status-running { color: blue;  font-weight: bold; }
-		.status-error   { color: red;   font-weight: bold; }
-		.status-success { color: green; font-weight: bold; }
+		.status-running { color: blue;     font-weight: bold; }
+		.status-error   { color: red;      font-weight: bold; }
+		.status-success { color: green;    font-weight: bold; }
+		.muted          { color: dimgray;  font-size:   0.9em; }
+		.dnone          { display: none; }
 	</style>
 
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_BANNER" %]
@@ -19,7 +21,7 @@
 		[% END %]
 		</select>
 		[% IF current_version %]
-			<br><span id="ytdlp_current_version" style="color: #666; font-size: 0.9em;">[% "PLUGIN_YOUTUBE_CURRENT_VERSION" | string %]: <b>[% current_version %]</b></span>
+			<br><span id="ytdlp_current_version" class="muted">[% "PLUGIN_YOUTUBE_CURRENT_VERSION" | string %]: <b>[% current_version %]</b></span>
 		[% END %]
 	[% END %]
 
@@ -98,7 +100,7 @@
 		<input name="update_ytdlp" type="submit"
 			value="[% 'PLUGIN_YOUTUBE_UPDATE_YTDLP' | string %]"
 			onclick="return startUpdate(this)"
-			[% IF update_in_progress %]disabled style="cursor: wait;"[% END %]>
+			[% IF update_in_progress %]disabled class="wait"[% END %]>
 
 		<span id="update_status_message">
 		[% IF update_status %]
@@ -107,6 +109,46 @@
 			</span>
 		[% END %]
 		</span>
+	[% END %]
+
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_AUTO_UPDATE" desc="PLUGIN_YOUTUBE_AUTO_UPDATE_DESC" %]
+		<input name="pref_auto_update_ytdlp" type="checkbox"
+			id="auto_update_ytdlp"
+			[% IF prefs.pref_auto_update_ytdlp %] checked [% END %]
+			onchange="toggleAutoUpdateHour()">
+		[% "PLUGIN_YOUTUBE_ENABLE_AUTO_UPDATE" | string %]
+
+		<span id="auto_update_hour_settings" class="[% IF !prefs.pref_auto_update_ytdlp %]dnone[% END %]">
+			<br><br>
+			[% "PLUGIN_YOUTUBE_AUTO_UPDATE_HOUR" | string %]:
+			<select class="stdedit" name="pref_auto_update_check_hour" id="auto_update_check_hour">
+			[% FOREACH hour IN [0..23] %]
+				<option [% IF hour == (prefs.pref_auto_update_check_hour.defined ? prefs.pref_auto_update_check_hour : 3) %]selected[% END %] value="[% hour %]">
+					[% hour FILTER format('%02d') %]:56
+				</option>
+			[% END %]
+			</select>
+
+			[% IF last_auto_update && last_auto_update.time %]
+				[% USE date %]
+				<br>
+				<span class="muted">
+					[% date.format(last_auto_update.time, '%Y-%m-%d %H:%M') %]
+					&rArr;
+					<span class="[% IF last_auto_update.success %]status-success[% ELSE %]status-error[% END %]">
+						[% last_auto_update.status %]
+					</span>
+				</span>
+			[% END %]
+		</span>
+
+		<script type="text/javascript">
+			function toggleAutoUpdateHour() {
+				var checkbox = document.getElementById('auto_update_ytdlp');
+				var settings = document.getElementById('auto_update_hour_settings');
+				settings.style.display = checkbox.checked ? 'inline' : 'none';
+			}
+		</script>
 	[% END %]
 
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_APIKEY" desc="PLUGIN_YOUTUBE_APIKEY_DESC" %]

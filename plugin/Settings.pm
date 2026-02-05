@@ -3,6 +3,7 @@ use base qw(Slim::Web::Settings);
 
 use strict;
 
+use POSIX qw(mktime);
 use List::Util qw(min max);
 use File::Spec;
 use Time::HiRes;
@@ -18,11 +19,12 @@ my $prefs = preferences('plugin.youtube');
 
 my %ALLOWED_BINARIES = map { $_ => 1 } ('', Plugins::YouTube::Utils::yt_dlp_binaries());
 
-my @bool = qw(live_edge aac vorbis opus use_video highres_icons);
+my @bool = qw(live_edge aac vorbis opus use_video highres_icons auto_update_ytdlp);
 
 use constant VERSION_CACHE_TTL => 3600;  # 1 hour cache for version info
 use constant UPDATE_CHECK_INTERVAL => 2; # Check every 2 seconds
 use constant UPDATE_MAX_CHECKS => 15;    # Maximum 15 checks (30 seconds total)
+use constant DEFAULT_AUTO_UPDATE_HOUR => 3;  # 3:56 AM default
 
 sub name {
 	return 'PLUGIN_YOUTUBE';
@@ -35,7 +37,68 @@ sub page {
 sub prefs {
 	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix 
 			playlist_suffix country max_items APIkey client_id client_secret live_delay 
-			cache_ttl search_rank search_sort channel_rank channel_sort playlist_sort query_size), @bool);
+			cache_ttl search_rank search_sort channel_rank channel_sort playlist_sort query_size auto_update_check_hour), @bool);
+}
+
+sub init {
+	if ($prefs->get('auto_update_ytdlp')) {
+		_scheduleAutoUpdate();
+	}
+
+	$prefs->setChange(sub {
+		my $pref = shift;
+		if ($pref eq 'auto_update_ytdlp') {
+			if ($prefs->get('auto_update_ytdlp')) {
+				_scheduleAutoUpdate();
+			} else {
+				_cancelAutoUpdate();
+			}
+		} elsif ($pref eq 'auto_update_check_hour') {
+			_scheduleAutoUpdate() if $prefs->get('auto_update_ytdlp');
+		}
+	}, 'auto_update_ytdlp', 'auto_update_check_hour');
+}
+
+sub _scheduleAutoUpdate {
+	Slim::Utils::Timers::killTimers(undef, \&_performAutoUpdate);
+
+	my $update_hour = $prefs->get('auto_update_check_hour');
+	$update_hour = DEFAULT_AUTO_UPDATE_HOUR unless defined $update_hour;
+
+	my $next_time = _calculateNextUpdateTime($update_hour);
+
+	$log->info("Auto-update scheduled for: " . scalar(localtime($next_time)));
+
+	Slim::Utils::Timers::setTimer(undef, $next_time, \&_performAutoUpdate);
+}
+
+sub _cancelAutoUpdate {
+	Slim::Utils::Timers::killTimers(undef, \&_performAutoUpdate);
+	$log->info("Auto-update cancelled");
+}
+
+sub _calculateNextUpdateTime {
+	my $target_hour = shift;
+	my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time);
+	my $today_target = POSIX::mktime(0, 56, $target_hour, $mday, $mon, $year);
+
+	if (time >= $today_target) {
+		return POSIX::mktime(0, 56, $target_hour, $mday + 1, $mon, $year);
+	}
+	return $today_target;
+}
+
+sub _performAutoUpdate {
+	my $binary = $prefs->get('yt_dlp') || Plugins::YouTube::Utils::yt_dlp_binary();
+
+	$log->info("Starting automatic update for $binary");
+
+	$cache->set('yt:auto_update', 1, 3600);
+
+	my $params = { binary => $binary };
+	_updateYtDlp($params, $binary);
+
+	_scheduleAutoUpdate();
 }
 
 # --- Helpers ---
@@ -160,6 +223,8 @@ sub handler {
 	# $params->{binary} = $prefs->get('yt_dlp') || Plugins::YouTube::Utils::yt_dlp_binary();
 	$params->{binary} = $current_binary;
 	$params->{binaries} = [ '', Plugins::YouTube::Utils::yt_dlp_binaries() ];
+
+	$params->{last_auto_update} = $prefs->get('last_auto_update');
 
 	_getCurrentVersion($params, $current_binary);
 
@@ -342,7 +407,6 @@ sub _checkUpdateProgress {
 
 sub _handleYtDlpUpdateResult {
 	my ($output, $exit_code, $binary) = @_;
-
 	$output =~ s/\r?\n/ /g;
 	$output =~ s/^\s+|\s+$//g;
 
@@ -350,7 +414,6 @@ sub _handleYtDlpUpdateResult {
 	my $error = 0;
 
 	# Check for errors in the output regardless of exit code
-	# Success handling - check for warnings separately
 	if ($output =~ /warning/i) {
 		$log->warn("Update succeeded with warnings: $output");
 	}
@@ -377,9 +440,26 @@ sub _handleYtDlpUpdateResult {
 		$log->warn("yt-dlp update ambiguous result: $output");
 	}
 
-	# Store result in cache for the web UI to retrieve
-	$cache->set('yt:update_status', $status, 300);
-	$cache->set('yt:update_error', $error, 300);
+	my $is_auto = $cache->get('yt:auto_update');
+	if ($is_auto) {
+		$cache->remove('yt:auto_update');
+		$prefs->set('last_auto_update', {
+			time => time(),
+			binary => $binary,
+			status => $status,
+			success => !$error,
+		});
+		$log->info("Auto-update completed: $status");
+
+		# For auto-updates: clear any update status cache to prevent duplicate display
+		$cache->remove('yt:update_status');
+		$cache->remove('yt:update_error');
+		$cache->set('yt:update_in_progress', 0, 300);
+	} else{
+		_setUpdateStatus(undef, $status, $error, 0); # for web UI
+	}
+
+	$cache->set('yt:update_in_progress', 0, 300);
 }
 
 sub _getCurrentVersion {

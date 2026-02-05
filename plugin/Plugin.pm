@@ -61,6 +61,8 @@ $prefs->init({
 	playlist_sort => '',
 	query_size => 50,
 	yt_dlp => '',
+	auto_update_ytdlp => 0,
+	auto_update_check_hour => 3,
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
@@ -111,6 +113,7 @@ sub initPlugin {
 	if ( main::WEBUI ) {
 		require Plugins::YouTube::Settings;
 		Plugins::YouTube::Settings->new;
+		Plugins::YouTube::Settings->init();
 	}
 
 	%recentlyPlayed = map { $_->{url} => $_ } reverse @{$prefs->get('recent')};
@@ -128,6 +131,10 @@ sub initPlugin {
 sub shutdownPlugin {
 	my @played = values %recentlyPlayed;
 	$prefs->set('recent', \@played);
+
+	if ( main::WEBUI ) {
+		Plugins::YouTube::Settings::_cancelAutoUpdate();
+	}
 }
 
 sub getDisplayName { 'PLUGIN_YOUTUBE' }
