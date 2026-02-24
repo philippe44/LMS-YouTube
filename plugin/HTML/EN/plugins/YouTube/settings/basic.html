@@ -100,7 +100,7 @@
 		<input name="update_ytdlp" type="submit"
 			value="[% 'PLUGIN_YOUTUBE_UPDATE_YTDLP' | string %]"
 			onclick="return startUpdate(this)"
-			[% IF update_in_progress %]disabled class="wait"[% END %]>
+			[% IF update_in_progress %]disabled[% END %]>
 
 		<span id="update_status_message">
 		[% IF update_status %]

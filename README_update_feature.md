@@ -20,7 +20,7 @@ This feature adds self-update capability for the yt-dlp binary directly from the
 
 ### Backend (Perl)
 
-**Settings.pm**:
+**Update_yt_dlp.pm** (new module):
 - Non-blocking background updates using platform-specific process management
   - Windows: `Win32::Process` for process creation
   - Unix: `Proc::Background` for process management
@@ -30,6 +30,12 @@ This feature adds self-update capability for the yt-dlp binary directly from the
 - Cross-platform implementation with platform-specific execution handling
 - Enhanced error detection via keyword scanning and output analysis
 - Binary whitelist validation for security
+- Clean public API for Settings.pm to interact with
+
+**Settings.pm**:
+- Delegates all yt-dlp update functionality to Update_yt_dlp.pm
+- Handles plugin-specific settings only
+- Calls Update_yt_dlp.pm methods for version display, updates, and status
 
 **Utils.pm**:
 - `set_yt_dlp_writable()`: Temporarily sets write permissions (0755) on Unix
@@ -38,8 +44,8 @@ This feature adds self-update capability for the yt-dlp binary directly from the
 - Automatic permission correction for non-executable binaries
 
 **Plugin.pm**:
-- Initializes auto-update schedule on plugin startup
-- Shuts down auto-update timers on plugin shutdown
+- Initializes auto-update schedule on plugin startup via Update_yt_dlp.pm
+- Shuts down auto-update timers on plugin shutdown via Update_yt_dlp.pm
 - Persistent preference storage for auto-update configuration
 
 ### Frontend (HTML/JavaScript)
@@ -317,7 +323,7 @@ Update status stored in separate cache keys, not mixed with API or content cache
 
 ## Configuration
 
-### Constants (Settings.pm)
+### Constants (Update_yt_dlp.pm)
 ```perl
 use constant VERSION_CACHE_TTL => 3600;       # 1 hour
 use constant UPDATE_CHECK_INTERVAL => 2;      # 2 seconds
@@ -386,13 +392,16 @@ Strings available in 4 languages (CS, DA, DE, EN):
 
 **Graceful Degradation**: Without JavaScript, updates still work but require manual page refresh to see results.
 
-## Files Modified
+## Files Modified/Added
+
+### New File
+- `plugins/YouTube/Update_yt_dlp.pm` - New module containing all yt-dlp update functionality
 
 ### Modified Files
 - `plugins/YouTube/HTML/EN/plugins/YouTube/settings/basic.html` - UI with AJAX polling and auto-update settings
-- `plugins/YouTube/Settings.pm` - Backend update logic with auto-update scheduling
+- `plugins/YouTube/Settings.pm` - Changed to call update logic in Update_yt_dlp.pm
 - `plugins/YouTube/Utils.pm` - Permission management functions and binary detection
-- `plugins/YouTube/Plugin.pm` - Plugin initialization with auto-update support
+- `plugins/YouTube/Plugin.pm` - Plugin initialization with auto-update support via new module
 - `plugins/YouTube/strings.txt` - Localized strings for new features
 
 
@@ -447,7 +456,7 @@ Strings available in 4 languages (CS, DA, DE, EN):
 ### Update times out
 - **Symptom**: "Update taking longer than expected" message
 - **Reason**: Slow network or large download
-- **Solution**: Increase `UPDATE_MAX_CHECKS` in Settings.pm
+- **Solution**: Increase `UPDATE_MAX_CHECKS` in Update_yt_dlp.pm
 - **Note**: Process continues in background even after timeout
 
 ### Permission errors (Unix)
