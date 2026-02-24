@@ -1,6 +1,8 @@
 package Plugins::YouTube::Update_yt_dlp;
 
 use strict;
+use warnings;
+use feature qw(say state);
 
 use POSIX qw(mktime);
 use File::Spec;
@@ -22,34 +24,28 @@ use constant VERSION_CACHE_TTL => 3600;  # 1 hour cache for version info
 use constant UPDATE_CHECK_INTERVAL => 2; # Check every 2 seconds
 use constant UPDATE_MAX_CHECKS => 15;    # Maximum 15 checks (30 seconds total)
 use constant DEFAULT_AUTO_UPDATE_HOUR => 3;  # 3:56 AM default
-
-# Public API
-sub new {
-	my $class = shift;
-	my $self = bless {}, $class;
-	return $self;
-}
+use constant AUTO_UPDATE_MINUTE => 56;   # scheduled at 56 minutes to avoid peak times
 
 sub init {
-    my ($class) = @_;
-    if ($prefs->get('auto_update_ytdlp')) {
-        _scheduleAutoUpdate();
-    }
+	my ($class) = @_;
+	if ($prefs->get('auto_update_ytdlp')) {
+		_scheduleAutoUpdate();
+	}
 
-    $prefs->setChange(sub {
-        my $pref = shift;
-        if ($pref eq 'auto_update_ytdlp') {
-            if ($prefs->get('auto_update_ytdlp')) {
-                _scheduleAutoUpdate();
-            } else {
-                _cancelAutoUpdate();
-            }
-        } elsif ($pref eq 'auto_update_check_hour') {
-            _scheduleAutoUpdate() if $prefs->get('auto_update_ytdlp');
-        }
-    }, 'auto_update_ytdlp', 'auto_update_check_hour');
-    
-    return 1;
+	$prefs->setChange(sub {
+		my $pref = shift;
+		if ($pref eq 'auto_update_ytdlp') {
+			if ($prefs->get('auto_update_ytdlp')) {
+				_scheduleAutoUpdate();
+			} else {
+				_cancelAutoUpdate();
+			}
+		} elsif ($pref eq 'auto_update_check_hour') {
+			_scheduleAutoUpdate() if $prefs->get('auto_update_ytdlp');
+		}
+	}, 'auto_update_ytdlp', 'auto_update_check_hour');
+	
+	return 1;
 }
 
 sub shutdown {
@@ -120,6 +116,12 @@ sub get_last_auto_update {
 
 # --- Private methods ---
 
+sub _allowed_binaries {
+    %ALLOWED_BINARIES = map { $_ => 1 } ('', Plugins::YouTube::Utils::yt_dlp_binaries())
+        unless %ALLOWED_BINARIES;
+    return \%ALLOWED_BINARIES;
+}
+
 sub _scheduleAutoUpdate {
 	Slim::Utils::Timers::killTimers(undef, \&_performAutoUpdate);
 
@@ -141,15 +143,16 @@ sub _cancelAutoUpdate {
 sub _calculateNextUpdateTime {
 	my $target_hour = shift;
 	my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time);
-	my $today_target = POSIX::mktime(0, 56, $target_hour, $mday, $mon, $year);
+	my $today_target = POSIX::mktime(0, AUTO_UPDATE_MINUTE, $target_hour, $mday, $mon, $year);
 
 	if (time >= $today_target) {
-		return POSIX::mktime(0, 56, $target_hour, $mday + 1, $mon, $year);
+		return POSIX::mktime(0, AUTO_UPDATE_MINUTE, $target_hour, $mday + 1, $mon, $year);
 	}
 	return $today_target;
 }
 
 sub _performAutoUpdate {
+	return if ($cache->get('yt:update_status') || '') eq 'in_progress';
 	my $binary = $prefs->get('yt_dlp') || Plugins::YouTube::Utils::yt_dlp_binary();
 
 	$log->info("Starting automatic update for $binary");
@@ -164,7 +167,7 @@ sub _performAutoUpdate {
 
 sub _isValidBinary {
 	my ($binary, $params) = @_;
-	if (exists $ALLOWED_BINARIES{$binary // ''}) {
+	if (exists _allowed_binaries()->{$binary // ''}) {
 		return 1;
 	}
 	my $msg = (Slim::Utils::Strings::string('PLUGIN_YOUTUBE_INVALID_BINARY') || 'Invalid binary') . ": $binary";
@@ -282,6 +285,9 @@ sub _startYtDlpUpdate {
 			$escaped_out =~ s/'/'\\''/g;
 			my $cmd = "'$escaped_bin' -U > '$escaped_out' 2>&1";
 			$log->debug("Unix command: $cmd");
+
+			eval { require Proc::Background };
+			if ($@) {die "Proc::Background module required but not available: $@";}
 
 			$proc = Proc::Background->new($cmd) or die "Failed to start background process";
 			$log->info("yt-dlp update started (PID: " . $proc->pid . "), output to: $temp_output");
@@ -402,7 +408,7 @@ sub _handleYtDlpUpdateResult {
 	}
 
 	# exit code not conclusive
-	if ($exit_code != 0 || $output =~ /(?:permission\s+denied|fatal\s+error|cannot\s+update|not\s+found|no\s+such\s+file)/i) {
+	if ((defined $exit_code && $exit_code != 0) || $output =~ /(?:permission\s+denied|fatal\s+error|cannot\s+update|not\s+found|no\s+such\s+file)/i) {
 		$output =~ s/\s+$//;
 		$status = (Slim::Utils::Strings::string('PLUGIN_YOUTUBE_UPDATE_FAILED') || 'Update failed') . ": " . ($output || "Unknown error");
 		$error = 1;
@@ -437,7 +443,6 @@ sub _handleYtDlpUpdateResult {
 		# For auto-updates: clear any update status cache to prevent duplicate display
 		$cache->remove('yt:update_status');
 		$cache->remove('yt:update_error');
-		$cache->set('yt:update_in_progress', 0, 300);
 	} else {
 		_setUpdateStatus(undef, $status, $error, 0); # for web UI
 	}

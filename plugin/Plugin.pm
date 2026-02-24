@@ -133,8 +133,8 @@ sub shutdownPlugin {
 	$prefs->set('recent', \@played);
 
 	if ( main::WEBUI ) {
-        require Plugins::YouTube::Update_yt_dlp;
-        Plugins::YouTube::Update_yt_dlp->shutdown();
+		require Plugins::YouTube::Update_yt_dlp;
+		Plugins::YouTube::Update_yt_dlp::shutdown();
 	}
 }
 

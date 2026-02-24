@@ -36,6 +36,15 @@ sub init {
 
 sub handler {
 	my ($class, $client, $params, $callback, @args) = @_;
+
+=comment	
+if ($params->{flushcache}) {
+	$log->info('flushing cache');
+	Plugins::YouTube::API::flushCache();
+	Plugins::YouTube::ProtocolHandler::flushCache();
+}
+=cut
+
 	my $current_binary = $params->{binary} || $prefs->get('yt_dlp') || Plugins::YouTube::Utils::yt_dlp_binary();
 
 	# Clear version cache if binary selection changed

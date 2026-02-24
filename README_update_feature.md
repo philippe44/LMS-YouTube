@@ -509,3 +509,4 @@ Strings available in 4 languages (CS, DA, DE, EN):
 5. **Temp file cleanup**: May leave temp files on abrupt process termination
 6. **Time drift**: Server time changes may affect scheduled updates
 7. **Single binary**: Only one binary can be auto-updated at a time
+8. **Pathes unprotected**: Single(double)-quote escaping is the only protection for binary path

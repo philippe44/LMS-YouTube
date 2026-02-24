@@ -106,17 +106,6 @@ sub yt_dlp_binaries {
 
 # Set writable permissions on yt-dlp binary (needed for self-update)
 # Returns: 1 on success, 0 on failure
-sub _set_bin_mode {
-	my ($file, $mode) = @_;
-	return 1 if main::ISWINDOWS;
-
-	if ($file && -e $file) {
-		return chmod(oct($mode), $file);
-	}
-	return 0;
-}
-
-sub set_yt_dlp_writable { return _set_bin_mode(shift, '0755'); }
-sub set_yt_dlp_readonly { return _set_bin_mode(shift, '0555'); }
-
+sub set_yt_dlp_writable { return main::ISWINDOWS || (-e $_[0] && chmod(0755, $_[0])) }
+sub set_yt_dlp_readonly { return main::ISWINDOWS || (-e $_[0] && chmod(0555, $_[0])) }
 1;
