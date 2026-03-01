@@ -600,3 +600,111 @@ PLUGIN_YOUTUBE_YTDLPBINARY
 PLUGIN_YOUTUBE_YTDLPBINARY_DESC
 	CS	Kvůli rostoucí složitosti extrakce adres URL používá tento plugin yt-dlp.
 	EN	Due to increasing complexity in url extraction, this plugin uses yt-dlp.
+
+PLUGIN_YOUTUBE_UPDATE_YTDLP
+	CS	Aktualizovat yt-dlp
+	DA	Opdater yt-dlp
+	DE	yt-dlp aktualisieren
+	EN	Update yt-dlp
+
+PLUGIN_YOUTUBE_UPDATE_YTDLP_HELP
+	CS	yt-dlp je velmi často aktualizován. Pokud YouTube plugin přestane fungovat, aktualizujte yt-dlp.
+	DA	yt-dlp opdateres meget ofte. Hvis YouTube-pluginet holder op med at fungere, skal du opdatere yt-dlp.
+	DE	yt-dlp wird sehr oft aktualisiert. Wenn das YouTube Plugin nicht mehr funktioniert, aktualisieren Sie yt-dlp.
+	EN	yt-dlp is updated very frequently. If the YouTube plugin stops working, update yt-dlp.
+
+PLUGIN_YOUTUBE_UPDATING
+	CS	Aktualizuji...
+	DA	Opdaterer...
+	DE	Aktualisiere...
+	EN	Updating...
+
+PLUGIN_YOUTUBE_UPDATE_SUCCESS
+	CS	Aktualizace yt-dlp byla úspěšná
+	DA	yt-dlp opdatering lykkedes
+	DE	yt-dlp Aktualisierung erfolgreich
+	EN	yt-dlp update successful
+
+PLUGIN_YOUTUBE_VERSION_UP_TO_DATE
+	CS	yt-dlp je aktuální
+	DA	yt-dlp er opdateret
+	EN	yt-dlp already up to date
+	DE	yt-dlp bereits aktuell
+
+PLUGIN_YOUTUBE_UPDATE_FAILED
+	CS	Aktualizace yt-dlp se nezdařila
+	DA	yt-dlp opdatering mislykkedes
+	DE	yt-dlp Aktualisierung fehlgeschlagen
+	EN	yt-dlp update failed
+
+PLUGIN_YOUTUBE_UPDATE_ERROR
+	CS	Chyba aktualizace yt-dlp
+	DA	yt-dlp opdateringsfejl
+	DE	yt-dlp Aktualisierungsfehler
+	EN	yt-dlp update error
+
+PLUGIN_YOUTUBE_UPDATE_BINARY_NOT_FOUND
+	CS	Binární soubor yt-dlp nenalezen
+	DA	yt-dlp binær ikke fundet
+	DE	yt-dlp Binärdatei nicht gefunden
+	EN	yt-dlp binary not found
+
+PLUGIN_YOUTUBE_CURRENT_VERSION
+	CS	Aktuální verze
+	DA	Nuværende version
+	DE	Aktuelle Version
+	EN	Current version
+
+PLUGIN_YOUTUBE_INVALID_BINARY
+	EN	Invalid binary selection
+	CS	Neplatný výběr binárního souboru
+	DA	Ugyldigt valg af binær fil
+	DE	Ungültige Binärdatei ausgewählt
+
+PLUGIN_YOUTUBE_UNEXPECTED_RESPONSE
+	EN	Unexpected response from binary
+	CS	Neočekávaná odpověď z binárního souboru
+	DA	Uventet svar fra binær fil
+	DE	Unerwartete Antwort von der Binärdatei
+
+PLUGIN_YOUTUBE_RESTORE_PERMISSION_WARNING
+	EN	WARNING: Could not restore file permissions!
+	CS	VAROVÁNÍ: Nepodařilo se obnovit oprávnění k souboru!
+	DA	ADVARSEL: Kunne ikke gendanne filtilladelser!
+	DE	WARNUNG: Dateiberechtigungen konnten nicht wiederhergestellt werden!
+
+PLUGIN_YOUTUBE_UPDATE_TIMEOUT
+	CS	Aktualizace trvá déle, než se očekávalo, zkontrolujte protokol.
+	DA	Opdateringen tager længere tid end forventet, tjek loggen.
+	DE	Die Aktualisierung dauert länger als erwartet, bitte Log überprüfen.
+	EN	Update is taking longer than expected, check log.
+
+PLUGIN_YOUTUBE_AUTO_UPDATE
+	EN	Automatic Updates
+	CS	Automatické aktualizace
+	DA	Automatiske opdateringer
+	DE	Automatische Updates
+
+PLUGIN_YOUTUBE_AUTO_UPDATE_DESC
+	EN	Automatically check for and install yt-dlp updates daily
+	CS	Automaticky kontrolovat a instalovat aktualizace yt-dlp denně
+	DA	Tjek automatisk for og installer yt-dlp opdateringer dagligt
+	DE	Automatisch täglich nach yt-dlp Updates suchen und installieren
+
+PLUGIN_YOUTUBE_ENABLE_AUTO_UPDATE
+	EN	Enable automatic daily updates
+	CS	Povolit automatické denní aktualizace
+	DA	Aktiver automatiske daglige opdateringer
+	DE	Automatische tägliche Updates aktivieren
+
+PLUGIN_YOUTUBE_AUTO_UPDATE_HOUR
+	EN	Update time
+	CS	Čas aktualizace
+	DA	Opdateringstidspunkt
+	DE	Aktualisierungszeit
+
+PLUGIN_YOUTUBE_LAST_AUTO_UPDATE
+	EN	Last automatic update
+	CS	Poslední automatická aktualizace
+	DA	Sidste automatiske opdatering
+	DE	Letzte automatische Aktualisierung

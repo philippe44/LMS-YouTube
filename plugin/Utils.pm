@@ -104,5 +104,8 @@ sub yt_dlp_binaries {
 	return qw ( yt-dlp_linux yt-dlp_linux_aarch64 yt-dlp_linux_armv7l yt-dlp_freebsd14 yt-dlp_macos yt-dlp.exe yt-dlp);
 }
 
-
+# Set writable permissions on yt-dlp binary (needed for self-update)
+# Returns: 1 on success, 0 on failure
+sub set_yt_dlp_writable { return main::ISWINDOWS || (-e $_[0] && chmod(0755, $_[0])) }
+sub set_yt_dlp_readonly { return main::ISWINDOWS || (-e $_[0] && chmod(0555, $_[0])) }
 1;
