@@ -1,3 +1,6 @@
+0.410.0
+ - add yt-dlp update (credits @https://github.com/ElFishi)
+ 
 0.400.12
  - optimize socket management (keep-alive)
  - hide some un-needed settings
