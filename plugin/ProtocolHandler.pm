@@ -73,6 +73,7 @@ my @audioId = (
 	{ id => 251, codec => 'ops', rate => 160_000 }, { id => 250, codec => 'ops', rate => 70_000 }, { id => 249, codec => 'ops', rate => 50_000 },
 	{ id => 171, codec => 'ogg', rate => 128_000 },
 	{ id => 141, codec => 'aac', rate => 256_000 }, { id => 140, codec => 'aac', rate => 128_000 }, { id => 139, codec => 'aac', rate => 48_000 },
+    { id => 22,  codec => 'aac', rate => 128_000 }, { id => 18,  codec => 'aac', rate => 96_000 },
 );
 
 my @videoId = (
@@ -602,12 +603,33 @@ sub getId {
 	return undef;
 }
 
-sub getNextTrack {
-	my ($class, $song, $successCb, $errorCb,) = @_;
+sub getNextTrack {	
+	my ($class, $song, $successCb, $errorCb, $_retries) = @_;
+
+	my $MAX_RETRIES = 3;
+	my $RETRY_DELAY = 2;  # seconds between retries
+
+	$_retries //= $MAX_RETRIES;
+
+	my $retryOrFail = sub {
+		my $reason = shift;
+		if ($_retries > 0) {
+			$_retries--;
+			$log->warn("getNextTrack failed ($reason), retrying in ${RETRY_DELAY}s ($_retries retries left)");
+			Slim::Utils::Timers::setTimer(
+				undef,
+				Time::HiRes::time() + $RETRY_DELAY,
+				sub { $class->getNextTrack($song, $successCb, $errorCb, $_retries) }
+			);
+		} else {
+			$log->error("getNextTrack failed ($reason), no retries left");
+			$errorCb->($reason);
+		}
+	};
 
 	my $yt_dlp = Plugins::YouTube::Utils::yt_dlp_bin($prefs->get('yt_dlp'));
 	$log->info("Using yt_dlp $yt_dlp");
-	return $_[3]->("cannot find yt-dlp") unless $yt_dlp;
+	return $retryOrFail->("cannot find yt-dlp") unless $yt_dlp;
 
 	my $masterUrl = $song->track()->url;
 
@@ -650,12 +672,15 @@ sub getNextTrack {
 			main::INFOLOG && $log->is_info && $log->info("yt-dlp finished with $exitcode in ", time() - $now, " seconds");
 			$tracks = eval { decode_json($tracks) };
 
-			$log->error("yt-dlp failed") && $errorCb->($@) && return if $@ || !$tracks;
+			return $retryOrFail->($@ || "yt-dlp returned no tracks") if $@ || !$tracks;
 
 			# duration is at the top level
 			$song->track->secs( $tracks->{'duration'} );
 
-			_getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats}));
+			my $selected = _selectTracks($tracks->{formats});
+			return $retryOrFail->("no matching track") unless @$selected;
+
+			_getNextTrack($class, $song, $successCb, sub { $retryOrFail->(shift) }, $selected);
 		};
 
 		Slim::Utils::Timers::setTimer($pid, Time::HiRes::time() + 0.25, $lambda);
@@ -672,12 +697,15 @@ sub getNextTrack {
 			main::INFOLOG && $log->is_info && $log->info("yt-dlp finished in ", time() - $now, " seconds");
 			$tracks = eval { decode_json($tracks) };
 
-			$log->error("yt-dlp failed $err") && $errorCb->($@) && return if $@ || !$tracks;
+			return $retryOrFail->($@ || "yt-dlp returned no tracks") if $@ || !$tracks;
 
 			# duration is at the top level
 			$song->track->secs( $tracks->{'duration'} );
 
-			_getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats}));
+			my $selected = _selectTracks($tracks->{formats});
+			return $retryOrFail->("no matching track") unless @$selected;
+
+			_getNextTrack($class, $song, $successCb, sub { $retryOrFail->(shift) }, $selected);
 		});
 	}
 }
@@ -707,16 +735,19 @@ sub _selectTracks{
 	foreach my $item (@audioId) {
 		next unless $codecs =~ /$item->{codec}/;
 		my ($track) = grep { $_->{format_id} =~ /^$item->{id}/ } @$tracks;
-		push @selected, $track if $track;
-		$track->{_id} = $item;
+        if ($track) {
+            $track->{_id} = $item;
+            push @selected, $track;
+        }
 	}
-
 	# add video if allowed
 	if ($prefs->get('use_video')) {
 		foreach my $item (@videoId) {
 			my ($track) = grep { $_->{format_id} =~ /^$item->{id}/ } @$tracks;
-			push @selected, $track if $track;
-			$track->{_id} = $item;
+			if ($track) {
+				$track->{_id} = $item;
+				push @selected, $track;
+			}
 		}
 	}
 
