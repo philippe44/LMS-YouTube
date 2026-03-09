@@ -408,7 +408,7 @@ sub _handleYtDlpUpdateResult {
 	}
 
 	# exit code not conclusive
-	if ((defined $exit_code && $exit_code != 0) || $output =~ /(?:permission\s+denied|fatal\s+error|cannot\s+update|not\s+found|no\s+such\s+file)/i) {
+	if ((defined $exit_code && $exit_code != 0) || $output =~ /(?:permission\s+denied|cannot\s+update|not\s+found|no\s+such\s+file|error)/i) {
 		$output =~ s/\s+$//;
 		$status = (Slim::Utils::Strings::string('PLUGIN_YOUTUBE_UPDATE_FAILED') || 'Update failed') . ": " . ($output || "Unknown error");
 		$error = 1;

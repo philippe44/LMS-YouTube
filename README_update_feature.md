@@ -219,45 +219,60 @@ Win32::Process::Create(
 
 ```javascript
 [% IF update_in_progress %]
-var pollInterval = setInterval(function() {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', window.location.href + '&t=' + Date.now(), true);
-    xhr.onload = function() {
-        var doc = new DOMParser().parseFromString(this.responseText, "text/html");
-        var newStatus = doc.getElementById('update_status_message');
-        var currentStatus = document.getElementById('update_status_message');
+(function() {
+    document.documentElement.classList.add('wait');
+    var isPolling = false;
 
-        if (newStatus && currentStatus) {
-            currentStatus.innerHTML = newStatus.innerHTML;
+    var pollInterval = setInterval(function() {
+        if (isPolling) return; // Skip if previous request is still out
+        isPolling = true;
+        var xhr = new XMLHttpRequest();
+        var url = window.location.href;
+        var separator = url.indexOf('?') !== -1 ? '&' : '?';
+        xhr.open('GET', url + separator + 't=' + new Date().getTime(), true);
 
-            // Check if still running
-            var isRunning = newStatus.innerHTML.indexOf('status-running') !== -1 ||
-                            newStatus.innerHTML.indexOf('[% "PLUGIN_YOUTUBE_UPDATING" | string %]') !== -1;
+        xhr.onload = function() {
+            isPolling = false; // Reset flag
+            if (this.status >= 200 && this.status < 400) {
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(this.responseText, "text/html");
 
-            if (!isRunning) {
-                clearInterval(pollInterval);
-                document.documentElement.classList.remove('wait');
+                var newStatus = doc.getElementById('update_status_message');
+                var currentStatus = document.getElementById('update_status_message');
 
-                // Update version number
-                var newVersion = doc.getElementById('ytdlp_current_version');
-                var currentVersion = document.getElementById('ytdlp_current_version');
-                if (newVersion && currentVersion) {
-                    currentVersion.innerHTML = newVersion.innerHTML;
-                }
+                if (newStatus && currentStatus) {
+                    currentStatus.innerHTML = newStatus.innerHTML;
 
-                // Re-enable button
-                var btn = document.querySelector('input[name="update_ytdlp"]');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.style.cursor = '';
-                    btn.value = "[% 'PLUGIN_YOUTUBE_UPDATE_YTDLP' | string %]";
+                    // Check if still running
+                    var isRunning = newStatus.innerHTML.indexOf('status-running') !== -1 ||
+                                    newStatus.innerHTML.indexOf('[% "PLUGIN_YOUTUBE_UPDATING" | string %]') !== -1;
+
+                    if (!isRunning) {
+                        document.documentElement.classList.remove('wait');
+                        clearInterval(pollInterval);
+
+                        // Update version number
+                        var newVersion = doc.getElementById('ytdlp_current_version');
+                        var currentVersion = document.getElementById('ytdlp_current_version');
+                        if (newVersion && currentVersion) {
+                            currentVersion.innerHTML = newVersion.innerHTML;
+                        }
+
+                        // Re-enable button
+                        var btn = document.querySelector('input[name="update_ytdlp"]');
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.style.cursor = '';
+                            btn.value = "[% 'PLUGIN_YOUTUBE_UPDATE_YTDLP' | string %]";
+                        }
+                    }
                 }
             }
-        }
-    };
-    xhr.onerror = function() { isPolling = false; };
-    xhr.send();
-}, 2000);
+        };
+        xhr.onerror = function() { isPolling = false; };
+        xhr.send();
+    }, 2000);
+})();
 [% END %]
 ```
 
@@ -370,7 +385,7 @@ Strings available in 4 languages (CS, DA, DE, EN):
 - `PLUGIN_YOUTUBE_AUTO_UPDATE` - "Automatic Updates"
 - `PLUGIN_YOUTUBE_AUTO_UPDATE_DESC` - "Automatically check for and install yt-dlp updates daily"
 - `PLUGIN_YOUTUBE_ENABLE_AUTO_UPDATE` - "Enable automatic daily updates"
-- `PLUGIN_YOUTUBE_AUTO_UPDATE_HOUR` - "Update check time"
+- `PLUGIN_YOUTUBE_AUTO_UPDATE_HOUR` - "Update time"
 - `PLUGIN_YOUTUBE_LAST_AUTO_UPDATE` - "Last automatic update"
 - `NOT_AVAILABLE` - "N/A"
 
@@ -404,9 +419,9 @@ Strings available in 4 languages (CS, DA, DE, EN):
 - `plugins/YouTube/Plugin.pm` - Plugin initialization with auto-update support via new module
 - `plugins/YouTube/strings.txt` - Localized strings for new features
 
-
 ### Renamed Files (case change)
 - `plugin/bin/*` → `plugin/Bin/*` - Standardized directory name capitalization
+
 
 ## Performance Considerations
 
@@ -510,3 +525,4 @@ Strings available in 4 languages (CS, DA, DE, EN):
 6. **Time drift**: Server time changes may affect scheduled updates
 7. **Single binary**: Only one binary can be auto-updated at a time
 8. **Pathes unprotected**: Single(double)-quote escaping is the only protection for binary path
+
