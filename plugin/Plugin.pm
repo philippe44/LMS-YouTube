@@ -366,20 +366,24 @@ sub myPlaylistHandler {
 
 	delete $params->{count};
 
-	# need to passthrough the personal account items
-	my $account = {
-		_cache_ttl 		=> 60,
+	# mine=true is for playlists.list only. dont put it in the per-item
+	# passthrough or playlistItems.list will get it later and load the
+	# wrong playlist.
+	my $token = $cache->get('yt:access_token');
+	my $itemPassthrough = {
 		_noKey			=> 1,
-		mine			=> 'true',
-		access_token 	=> $cache->get('yt:access_token'),
+		access_token 	=> $token,
 	};
 
 	Plugins::YouTube::API->searchDirect('playlists', sub {
-		$cb->( _renderList($_[0], 'title', $account) );
+		$cb->( _renderList($_[0], 'title', $itemPassthrough) );
 	}, {
-		%$account,
-		_index  	=> $args->{index},
-		_quantity 	=> $args->{quantity},
+		_cache_ttl 		=> 60,
+		_noKey			=> 1,
+		mine			=> 'true',
+		access_token 	=> $token,
+		_index  		=> $args->{index},
+		_quantity 		=> $args->{quantity},
 	});
 }
 
@@ -389,6 +393,10 @@ sub playlistHandler {
 	$params->{_index} = $args->{index};
 	$params->{_quantity} = $args->{quantity};
 	$params->{_cache_ttl} = $prefs->get('cache_ttl');
+
+	# extra paranoia. mine belongs to playlists.list, never to playlistItems.list.
+	# if it slips in here YT returns the wrong playlist.
+	delete $params->{mine};
 
 	Plugins::YouTube::API->searchDirect('playlistItems', sub {
 		$cb->( _renderList($_[0], $prefs->get('playlist_sort')) );
