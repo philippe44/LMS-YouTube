@@ -49,7 +49,7 @@ PLUGIN_YOUTUBE_MISSINGKEY
 	DE	- klicke "Enable"
 	DE	- füge den Schlüssel in den YouTube Plugin Einstellungen ein
 	EN	Missing YouTube API key (see settings). To get a key:
-	EN	- Goto https://console.cloud.google.com/apis/dashboard
+	EN	- Go to https://console.cloud.google.com/apis/dashboard
 	EN	- Click: Create Project
 	EN	- Name the project. Example: YouTube-API-Key-Project
 	EN	- Leave Location Blank
@@ -62,10 +62,10 @@ PLUGIN_YOUTUBE_MISSINGKEY
 	EN	- Under "API restriction" choose: Restrict key, and check "YouTube Data API v3"
 	EN	- Click Create
 	EN	- You should now see your API key. Copy it to your clipboard.
-	EN	- Return to the YouTube plugin and paste your key, making sure there are no preceeding or trailing spaces in what you paste.
+	EN	- Return to the YouTube plugin and paste your key, making sure there are no preceding or trailing spaces in what you paste.
 
 PLUGIN_YOUTUBE_MISSINGSSL
-	CS	SSL je vyžadováno (zkuste jej nainstalovat pomocí CPAN a/nebo v Linuxu proveďte „sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl„)
+	CS	SSL je vyžadováno (zkuste jej nainstalovat pomocí CPAN a/nebo v Linuxu proveďte „sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl“)
 	DA	SSL er påkrævet (prøv at installere det ved hjælp af CPAN og/eller på Linux kør "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
 	DE	SSL wird benögtig (installiere mit dem Paket-Manager deines Betriebssystems, z.B. "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
 	EN	SSL required (try to install it using CPAN and/or on Linux do "sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl")
@@ -136,9 +136,9 @@ PLUGIN_YOUTUBE_CODECS
 	EN	Allowed codecs
 
 PLUGIN_YOUTUBE_CODECS_DESC
-	CS	Vyberte zvukové kodeky vyhledaných z videí YouTube (vždy je vybrán vyšší datový tok).
+	CS	Vyberte zvukové kodeky vyhledávané ve videích YouTube (vždy je vybrán vyšší datový tok).
 	DA	Vælg audio codecs søgt fra YouTube-videoer (højere bitrate altid valgt).
-	EN	Select audio codecs searched from YouTube videos (higher bitrate always selected).
+	EN	Select audio codecs searched for in YouTube videos (higher bitrate is always selected).
 
 PLUGIN_YOUTUBE_PLAYLISTID
 	CS	ID seznamu skladeb
@@ -174,13 +174,13 @@ PLUGIN_YOUTUBE_RECENTLYPLAYED
 	EN	Recently Played
 
 PLUGIN_YOUTUBE_URL
-	CS	YouTube URL nebo ID videa
+	CS	YouTube adresa URL nebo ID videa
 	DA	YouTube URL eller video ID
 	DE	YouTube URL oder Video ID
 	EN	YouTube URL or Video id
 
 PLUGIN_YOUTUBE_URLRELATEDSEARCH
-	CS	Související s URL nebo ID videa
+	CS	Související s adresou URL nebo ID videa
 	DA	Relateret URL eller video ID
 	DE	Verwandte URL oder Video ID
 	EN	Related to URL or Video id
@@ -198,7 +198,7 @@ PLUGIN_YOUTUBE_PLAYALL
 	EN	All tracks
 
 PLUGIN_YOUTUBE_BADURL
-	CS	Neplatná adresa YouTube URL
+	CS	Neplatná YouTube adresa URL
 	DA	Ugyldig YouTube URL
 	DE	Ungültige YouTube URL
 	EN	Bad YouTube URL
@@ -229,8 +229,6 @@ PLUGIN_YOUTUBE_BANNER
 
 PLUGIN_YOUTUBE_BANNER_TEXT
 	CS	Vezměte prosím na vědomí, že tento zásuvný modul streamuje celý video soubor YouTube pro přehrávání zvukového proudu.
-	CS	Tím se využije podstatně větší šířka pásma sítě než při pouhém streamování zvuku. Zvažte to prosím,
-	CS	pokud je používání vašeho internetového připojení zpoplatněno.<br>
 	CS	Všimněte si, že je vyžadováno SSL, ale na některých instalacích Linuxu chybí několik knihoven. Pokud zásuvný modul
 	CS	nefunguje, otevřete příkazový řádek a spusťte:
 	CS	„sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl„.
@@ -246,8 +244,8 @@ PLUGIN_YOUTUBE_BANNER_TEXT
 	DE	Beachte auch, dass SSL benötigt wird. Falls das Plugin auf Linux nicht funktioniiert, öffne ein Terminal und
 	DE	führe folgenden Befehl aus:
 	DE	"sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl"
-	EN	Please note that this plugin might streams the entire YouTube video file to playback the audio stream.
-	EN	Note that SSL is required, but on some Linux installation, a few libraries are missing. If the plugin
+	EN	Please note that this plugin may stream the entire YouTube video file to playback the audio stream.
+	EN	Note that SSL is required, but on some Linux installations a few libraries may be missing. If the plugin
 	EN	does not work, open a command line and run:
 	EN	"sudo apt-get install libio-socket-ssl-perl libnet-ssleay-perl"
 
@@ -261,7 +259,7 @@ PLUGIN_YOUTUBE_APIKEY_DESC
 	CS	Rozhraní YouTube API v3 vyžaduje pro přístup klíč. Přejděte na stránku https://console.cloud.google.com/apis/dashboard
 	DA	YouTube API v3 har brug for en nøgle for at få adgang. Gå til https://console.cloud.google.com/apis/dashboard
 	DE	YouTube API v3 braucht einen Access Key. Besuche https://console.cloud.google.com/apis/dashboard
-	EN	YouTube API v3 needs a key to access. Goto https://console.cloud.google.com/apis/dashboard
+	EN	YouTube API v3 requires a key for access. Go to https://console.cloud.google.com/apis/dashboard
 
 PLUGIN_YOUTUBE_MAXITEMS
 	CS	Položek na vyhledávání
@@ -281,12 +279,12 @@ PLUGIN_YOUTUBE_SORTING
 	EN	Sorting options
 
 PLUGIN_YOUTUBE_SORTING_DESC
-	CS	Při vyhledávání na YouTube serverech existují často tisíce odpovídajících výsledků. Ty jsou hodnocené
+	CS	Při vyhledávání na YouTube serverech existují často tisíce odpovídajících výsledků. Ty jsou hodnoceny
 	CS	a pouze první „položky na vyhledávání“ jsou vráceny. Seřazení použité pro jejich zobrazení se může lišit
 	CS	od kritérií hodnocení. Například můžete chtít hodnocení podle „relevance“, ale seřazení podle „názvu“ pro snadné
 	CS	procházení a to je to, co tyto možnosti umožňují. Hodnocení podle „názvu“ je pravděpodobně špatný nápad,
-	CS	protože pravděpodobně dostanete irelevantní výsledky. Všimněte si, že obsah kanálu může mít vlastní kritéria hodnocení/seřazení,
-	CS	zatímco seznamy skladeb mají pouze lokální seřazení. Plugin navíc normálně nezískává všechny „položky na vyhledávání“ najednou,
+	CS	protože dostanete irelevantní výsledky. Všimněte si, že obsah kanálu může mít vlastní kritéria hodnocení/seřazení,
+	CS	zatímco seznamy skladeb mají pouze lokální seřazení. Zásuvný modul navíc normálně nezískává všechny „položky na vyhledávání“ najednou,
 	CS	ale pokračuje v dávkách po 50, když procházíte výsledky. To šetří čas a API kvótu, která má denní limit.
 	CS	To bohužel koliduje s požadavkem na seřazení, protože budete řadit pouze to, co jste již obdrželi.
 	CS	Opět, pokud použijete „relevanci“ jako hodnocení a seřazení podle „názvu“, zpočátku dostanete pouze abecední
@@ -304,17 +302,17 @@ PLUGIN_YOUTUBE_SORTING_DESC
 	DA	sortering af de første 50 (det stiger, mens du browser, men kan føles en smule mærkelig). Du kan tvinge batchene til at
 	DA	blive større ved at bruge "query batch size", men vær opmærksom på, at det vil være langsommere og vil forbruge flere API credits.
 	EN	When a search is done on YouTube servers, there are often 10,000's of matching results. These are ranked and
-	EN	only the first "items per search" are returned. Then the sorting used for displaying them is different from 
-	EN	the ranking criteria. For example, you might want ranking by "relevance" but sorting by "title" for easy 
-	EN	browsing and that's what these option do. Ranking by 'title' is probably a bad idea as you are likely to get 
-	EN	non-relevant results. Note that channel content can have its own ranking/sorting criteria while playlist only
+	EN	only the first "items per search" are returned. The sorting used for displaying them can be different from
+	EN	the ranking criteria. For example, you might want ranking by "relevance" but sorting by "title" for easy
+	EN	browsing, and that's what these options do. Ranking by 'title' is probably a bad idea as you are likely to get
+	EN	non-relevant results. Note that channel content can have its own ranking/sorting criteria while playlists only
 	EN	have local sorting. In addition, the plugin normally does not get all the "items per search" at once but proceeds
-	EN	by batches of 50 when you browse though results. That saves time and API quota which has a limit per day. 
-	EN	Unfortuntely, that conflicts with sorting requirement as you would only sort what you have already received. 
-	EN	Again, if you use 'relevance' as ranking and sort by 'title', you initially only will get the alphabetical 
+	EN	by batches of 50 when you browse through results. That saves time and API quota which has a limit per day.
+	EN	Unfortunately, that conflicts with the sorting requirement, as you would only sort what you have already received.
+	EN	Again, if you use 'relevance' as ranking and sort by 'title', you will initially only get the alphabetical
 	EN	sorting of the first 50 (it will increase while you browse but can feel a bit odd). You can force the batches to
-	EN	larger using the "query batch size" but be aware that it will be slower and will consume more API credits.
-	
+	EN	be larger using the "query batch size", but be aware that it will be slower and will consume more API credits.
+
 PLUGIN_YOUTUBE_SEARCHRANK
 	CS	Obecné vyhledávání hodnocené podle
 	DA	Generel søgning rangeret efter
@@ -409,13 +407,13 @@ PLUGIN_YOUTUBE_PLAYLISTTAGS_DESC
 	CS	Chcete-li ve výsledcích hledání identifikovat položky seznamů skladeb, nastavte řetězec nebo modifikátor písma (např. &ltb&gt a &lt/b&gt pro tučné písmo), který se přidá před a za název.
 	DA	For at fremhæve afspillelister i søgeresultater, benyt en streng eller formateringsinstruktion (f.eks. &ltb&gt og &lt/b&gt for fed skrift), der skal indsættes før og efter titlen.
 	DE	Um Wiedergabelisten in Suchresultaten hervorzuheben, verwende Zeichenkette oder Formatierungsanweisung (z.B. &ltb&gt...&lt/b&gt für fett) die vor und nach dem Titel eingefügt werden sollen.
-	EN	To identify playlists items in a search result, set string or font modifier (eg &ltb&gt and &lt/b&gt for bold) to be added before and after then title.
+	EN	To identify playlist items in a search result, set a string or font modifier (eg &ltb&gt and &lt/b&gt for bold) to be added before and after the title.
 
 PLUGIN_YOUTUBE_CHANNELTAGS_DESC
 	CS	Chcete-li ve výsledcích hledání identifikovat položky kanálů, nastavte řetězec nebo modifikátor písma (např. &ltb&gt a &lt/b&gt pro tučné písmo), který se přidá před a za název.
 	DA	For at fremhæve kanaler i søgeresultater, benyt en streng eller formateringsinstruktion (f.eks. &ltb&gt og &lt/b&gt for fed skrift), der skal indsættes før og efter titlen.
 	DE	Um Kanäle in Suchresultaten hervorzuheben, verwende Zeichenkette oder Formatierungsanweisung (z.B. &ltb&gt...&lt/b&gt für fett) die vor und nach dem Titel eingefügt werden sollen.
-	EN	To identify channels items in a search result, set string or font modifier (eg &ltb&gt and &lt/b&gt for bold) to be added before and after then title.
+	EN	To identify channel items in a search result, set a string or font modifier (eg &ltb&gt and &lt/b&gt for bold) to be added before and after the title.
 
 PLUGIN_YOUTUBE_CACHETTL
 	CS	Doba trvání mezipaměti kanálů a seznamů skladeb
@@ -449,7 +447,7 @@ PLUGIN_YOUTUBE_LIVEOPTIONS_DESC
 	DA	Muligheder for livestreams. Sæt 'Play live edge' for at afspille live edge og indstil en forsinkelse for korrekt buffering (>30s).
 	DA	Når du trykker på 'rew', vil afspilningen genstarte fra den ældste bufferposition (timeshift).
 	EN	Options for live streams. Set 'Play live edge' to play the live edge and set a delay for proper buffering (>30s). When pressing 'rew', playback
-	EN	wil restart from oldest buffered position (timeshift).
+	EN	will restart from the oldest buffered position (timeshift).
 
 PLUGIN_YOUTUBE_LIVEEDGE
 	CS	Přehrát živý okraj s
@@ -588,17 +586,17 @@ PLUGIN_YOUTUBE_PLAY_FROM_POSITION_X
 	DA	Afspil fra seneste position (%s)
 	DE	Von der letzten Position wiedergeben (%s)
 	EN	Play from last position (%s)
-	
+
 PLUGIN_YOUTUBE_USE_VIDEO
 	CS	Extrahovat z videa
 	EN	Extract from video
-	
+
 PLUGIN_YOUTUBE_YTDLPBINARY
 	CS	YT-dlp extraktor adres URL
-	EN	YT-dlp url extractor
-	
+	EN	YT-dlp URL extractor
+
 PLUGIN_YOUTUBE_YTDLPBINARY_DESC
-	CS	Kvůli rostoucí složitosti extrakce adres URL používá tento plugin yt-dlp.
+	CS	Kvůli rostoucí složitosti extrakce adres URL používá tento zásuvný modul yt-dlp.
 	EN	Due to increasing complexity in url extraction, this plugin uses yt-dlp.
 
 PLUGIN_YOUTUBE_UPDATE_YTDLP
@@ -608,7 +606,7 @@ PLUGIN_YOUTUBE_UPDATE_YTDLP
 	EN	Update yt-dlp
 
 PLUGIN_YOUTUBE_UPDATE_YTDLP_HELP
-	CS	yt-dlp je velmi často aktualizován. Pokud YouTube plugin přestane fungovat, aktualizujte yt-dlp.
+	CS	yt-dlp je velmi často aktualizován. Pokud YouTube zásuvný modul přestane fungovat, aktualizujte yt-dlp.
 	DA	yt-dlp opdateres meget ofte. Hvis YouTube-pluginet holder op med at fungere, skal du opdatere yt-dlp.
 	DE	yt-dlp wird sehr oft aktualisiert. Wenn das YouTube Plugin nicht mehr funktioniert, aktualisieren Sie yt-dlp.
 	EN	yt-dlp is updated very frequently. If the YouTube plugin stops working, update yt-dlp.
@@ -656,20 +654,20 @@ PLUGIN_YOUTUBE_CURRENT_VERSION
 	EN	Current version
 
 PLUGIN_YOUTUBE_INVALID_BINARY
-	EN	Invalid binary selection
 	CS	Neplatný výběr binárního souboru
+	EN	Invalid binary selection
 	DA	Ugyldigt valg af binær fil
 	DE	Ungültige Binärdatei ausgewählt
 
 PLUGIN_YOUTUBE_UNEXPECTED_RESPONSE
-	EN	Unexpected response from binary
 	CS	Neočekávaná odpověď z binárního souboru
+	EN	Unexpected response from binary
 	DA	Uventet svar fra binær fil
 	DE	Unerwartete Antwort von der Binärdatei
 
 PLUGIN_YOUTUBE_RESTORE_PERMISSION_WARNING
-	EN	WARNING: Could not restore file permissions!
 	CS	VAROVÁNÍ: Nepodařilo se obnovit oprávnění k souboru!
+	EN	WARNING: Could not restore file permissions!
 	DA	ADVARSEL: Kunne ikke gendanne filtilladelser!
 	DE	WARNUNG: Dateiberechtigungen konnten nicht wiederhergestellt werden!
 
@@ -680,31 +678,31 @@ PLUGIN_YOUTUBE_UPDATE_TIMEOUT
 	EN	Update is taking longer than expected, check log.
 
 PLUGIN_YOUTUBE_AUTO_UPDATE
-	EN	Automatic Updates
 	CS	Automatické aktualizace
+	EN	Automatic Updates
 	DA	Automatiske opdateringer
 	DE	Automatische Updates
 
 PLUGIN_YOUTUBE_AUTO_UPDATE_DESC
+	CS	Denně automaticky kontrolovat a instalovat aktualizace yt-dlp
 	EN	Automatically check for and install yt-dlp updates daily
-	CS	Automaticky kontrolovat a instalovat aktualizace yt-dlp denně
 	DA	Tjek automatisk for og installer yt-dlp opdateringer dagligt
 	DE	Automatisch täglich nach yt-dlp Updates suchen und installieren
 
 PLUGIN_YOUTUBE_ENABLE_AUTO_UPDATE
-	EN	Enable automatic daily updates
 	CS	Povolit automatické denní aktualizace
+	EN	Enable automatic daily updates
 	DA	Aktiver automatiske daglige opdateringer
 	DE	Automatische tägliche Updates aktivieren
 
 PLUGIN_YOUTUBE_AUTO_UPDATE_HOUR
-	EN	Update time
 	CS	Čas aktualizace
+	EN	Update time
 	DA	Opdateringstidspunkt
 	DE	Aktualisierungszeit
 
 PLUGIN_YOUTUBE_LAST_AUTO_UPDATE
-	EN	Last automatic update
 	CS	Poslední automatická aktualizace
+	EN	Last automatic update
 	DA	Sidste automatiske opdatering
 	DE	Letzte automatische Aktualisierung
