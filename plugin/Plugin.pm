@@ -376,12 +376,114 @@ sub myPlaylistHandler {
 	};
 
 	Plugins::YouTube::API->searchDirect('playlists', sub {
-		$cb->( _renderList($_[0], 'title', $account) );
+		my $result = $_[0];
+		_filterMusicPlaylists($result, sub {
+			$cb->( _renderList($_[0], 'title', $account) );
+		});
 	}, {
 		%$account,
 		_index  	=> $args->{index},
 		_quantity 	=> $args->{quantity},
 	});
+}
+
+# keep only playlists where the first item is in Music category (10).
+# this is what the YouTube Music / Android app does. result for each
+# playlist id is cached so back-navigation is free.
+sub _filterMusicPlaylists {
+	my ($result, $cb) = @_;
+
+	return $cb->($result) unless $prefs->get('music_playlists_only');
+	return $cb->($result) unless $result && ref $result->{items} eq 'ARRAY';
+
+	my @items = @{$result->{items}};
+	my @unknown;
+	for my $entry (@items) {
+		my $pid = $entry->{id} or next;
+		my $hit = $cache->get("yt:plmusic-$pid");
+		$entry->{_musicScore} = $hit if defined $hit;
+		push @unknown, $entry unless defined $hit;
+	}
+
+	my $finalize = sub {
+		my @kept = grep { ($_->{_musicScore} || 0) > 0 } @items;
+		delete $_->{_musicScore} for @items;
+		$result->{items} = \@kept;
+		$result->{total} = scalar @kept if defined $result->{total};
+		$cb->($result);
+	};
+
+	return $finalize->() unless @unknown;
+
+	_probeMusicPlaylists(\@unknown, $finalize);
+}
+
+sub _probeMusicPlaylists {
+	my ($entries, $done) = @_;
+	my $remaining = scalar @$entries;
+	my %firstVideoForPlaylist;
+	my @videoIds;
+
+	my $afterAllFirsts = sub {
+		unless (@videoIds) {
+			# nothing playable. mark them non-music for a bit and move on
+			for my $e (@$entries) {
+				$cache->set("yt:plmusic-" . $e->{id}, 0, 3600);
+				$e->{_musicScore} = 0;
+			}
+			return $done->();
+		}
+
+		Plugins::YouTube::API->getVideoDetails( sub {
+			my $vresult = shift;
+
+			# api call died (bad key, quota, ...). dont silently hide every
+			# playlist. show them all and dont cache the decision.
+			if (!$vresult || $vresult->{error} || !ref $vresult->{items}) {
+				$log->warn("music filter: video lookup failed, showing all playlists");
+				$_->{_musicScore} = 1 for @$entries;
+				return $done->();
+			}
+
+			my %catFor;
+			for my $v (@{$vresult->{items}}) {
+				$catFor{$v->{id}} = $v->{snippet}->{categoryId} || '';
+			}
+
+			for my $e (@$entries) {
+				my $vid = $firstVideoForPlaylist{$e->{id}};
+				my $cat = $vid ? $catFor{$vid} : undef;
+				# 10 is Music. unknown vid (private/removed) counts as
+				# non-music but with shorter ttl so it can recover.
+				my $isMusic = (defined $cat && $cat eq '10') ? 1 : 0;
+				my $ttl = defined $cat ? 86400 : 3600;
+				$cache->set("yt:plmusic-" . $e->{id}, $isMusic, $ttl);
+				$e->{_musicScore} = $isMusic;
+			}
+
+			$done->();
+		}, join(',', @videoIds) );
+	};
+
+	for my $entry (@$entries) {
+		my $pid = $entry->{id};
+		Plugins::YouTube::API->searchDirect('playlistItems', sub {
+			my $items = $_[0]->{items} || [];
+			if (my $first = $items->[0]) {
+				my $vid = $first->{snippet}->{resourceId}->{videoId};
+				if ($vid) {
+					$firstVideoForPlaylist{$pid} = $vid;
+					push @videoIds, $vid;
+				}
+			}
+			$afterAllFirsts->() if --$remaining == 0;
+		}, {
+			playlistId => $pid,
+			maxResults => 1,
+			_quantity  => 1,
+			_cache_ttl => 86400,
+		});
+	}
 }
 
 sub playlistHandler {
