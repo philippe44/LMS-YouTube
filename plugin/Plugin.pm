@@ -63,6 +63,7 @@ $prefs->init({
 	yt_dlp => '',
 	auto_update_ytdlp => 0,
 	auto_update_check_hour => 3,
+	music_playlists_only => 1,
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
