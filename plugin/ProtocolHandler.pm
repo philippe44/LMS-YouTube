@@ -1156,7 +1156,8 @@ sub getMetadataFor {
 			if ( $trackURL =~ m{youtube:/*(.+)} ) {
 				my $trackId = $class->getId($trackURL);
 
-				if ( $trackId && !$cache->get("yt:meta-$trackId") ) {
+				# skip ids we already gave up on, dont hammer the api
+				if ( $trackId && !$cache->get("yt:meta-$trackId") && !$cache->get("yt:meta-fail-$trackId") ) {
 					push @need, $trackId;
 				} elsif (!$trackId) {
 					$log->warn("No id found: $trackURL");
@@ -1170,7 +1171,7 @@ sub getMetadataFor {
 		if (scalar @need && !$abort) {
 			my $list = join( ',', @need );
 			main::INFOLOG && $log->is_info && $log->info( "Need to fetch metadata for: $list");
-			_getBulkMetadata($client, $pageCall, $list);
+			_getBulkMetadata($client, $pageCall, $list, \@need);
 		} else {
 			$client->master->pluginData(fetchingYTMeta => 0);
 			unless ($abort) {
@@ -1198,13 +1199,19 @@ sub getMetadataFor {
 }
 
 sub _getBulkMetadata {
-	my ($client, $cb, $ids) = @_;
+	my ($client, $cb, $ids, $requestedIds) = @_;
 
 	Plugins::YouTube::API->getVideoDetails( sub {
 		my $result = shift;
 
 		if ( !$result || $result->{error} || !$result->{pageInfo}->{totalResults} || !scalar @{$result->{items}} ) {
 			$log->error($result->{error} || 'Failed to grab track information');
+			# mark these failed for 5 min. enough to break the request storm,
+			# short enough that a fixed api key or transient blip recovers
+			# soon after.
+			if ($requestedIds) {
+				$cache->set("yt:meta-fail-$_", 1, 300) for @$requestedIds;
+			}
 			$cb->(1) if defined $cb;
 			return;
 		}
@@ -1239,6 +1246,15 @@ sub _getBulkMetadata {
 			};
 
 			$cache->set("yt:meta-" . $item->{id}, $meta, 86400);
+		}
+
+		# ids we asked for but didnt get back are usually deleted or private.
+		# cache as failed for a day so the UI poll stops asking.
+		if ($requestedIds) {
+			my %got = map { $_->{id} => 1 } @{$result->{items}};
+			for my $id (@$requestedIds) {
+				$cache->set("yt:meta-fail-$id", 1, 86400) unless $got{$id};
+			}
 		}
 
 		$cb->() if defined $cb;
