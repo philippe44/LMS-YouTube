@@ -23,6 +23,19 @@ use constant ENDPOINT_BASE => 'https://music.youtube.com/youtubei/v1/';
 use constant INNERTUBE_KEY => 'AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30';
 use constant CACHE_TTL     => 7 * 86400;
 use constant FAIL_TTL      => 600;
+# cap so we dont starve the shared async http pool, playback needs it too
+use constant MAX_PARALLEL  => 4;
+
+my %inFlight;
+my @queue;
+my $running = 0;
+
+sub _kickQueue {
+	while ($running < MAX_PARALLEL && @queue) {
+		my $next = shift @queue;
+		_run(@$next);
+	}
+}
 
 sub _context {
 	my @t = gmtime;
@@ -87,7 +100,27 @@ sub getMusicMetadata {
 		return;
 	}
 
-	main::INFOLOG && $log->is_info && $log->info("ytm: fetch $videoId");
+	# in flight already, next bulk poll will pick it up
+	if ($inFlight{$videoId}) {
+		$cb->(undef);
+		return;
+	}
+
+	if ($running >= MAX_PARALLEL) {
+		push @queue, [ $videoId, $cb ];
+		return;
+	}
+	_run($videoId, $cb);
+}
+
+sub _run {
+	my ($videoId, $cb) = @_;
+	my $failKey  = "ytm:fail-$videoId";
+	my $cacheKey = "ytm:meta-$videoId";
+
+	$inFlight{$videoId} = 1;
+	$running++;
+	main::INFOLOG && $log->is_info && $log->info("ytm: fetch $videoId ($running in flight, " . scalar(@queue) . " queued)");
 
 	_post('next', {
 		videoId    => $videoId,
@@ -96,21 +129,24 @@ sub getMusicMetadata {
 		isAudioOnly                    => JSON::XS::true,
 	}, sub {
 		my $resp = shift;
-		unless ($resp) {
+		delete $inFlight{$videoId};
+		$running--;
+
+		my $result;
+		if (!$resp) {
 			$cache->set($failKey, 1, FAIL_TTL);
-			$cb->(undef);
-			return;
+		} else {
+			my $parsed = Plugins::YouTube::YTMusic::Parser::parseWatchResponse($resp, $videoId);
+			if ($parsed && %$parsed) {
+				$cache->set($cacheKey, $parsed, CACHE_TTL);
+				$result = $parsed;
+			} else {
+				$cache->set($failKey, 1, FAIL_TTL);
+			}
 		}
 
-		my $parsed = Plugins::YouTube::YTMusic::Parser::parseWatchResponse($resp, $videoId);
-		unless ($parsed && %$parsed) {
-			$cache->set($failKey, 1, FAIL_TTL);
-			$cb->(undef);
-			return;
-		}
-
-		$cache->set($cacheKey, $parsed, CACHE_TTL);
-		$cb->($parsed);
+		$cb->($result);
+		_kickQueue();
 	});
 }
 
