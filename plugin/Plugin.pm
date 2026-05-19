@@ -63,6 +63,7 @@ $prefs->init({
 	yt_dlp => '',
 	auto_update_ytdlp => 0,
 	auto_update_check_hour => 3,
+	music_playlists_only => 1,
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
@@ -374,13 +375,153 @@ sub myPlaylistHandler {
 		access_token 	=> $cache->get('yt:access_token'),
 	};
 
+	# auth bits the sample probe needs to see private playlists
+	my $probeAuth = {
+		_noKey       => 1,
+		access_token => $cache->get('yt:access_token'),
+	};
+
+	# when the filter is on we have to grab the full set up front.
+	# OPML level-2 calls us with quantity=1, index=N. if we only fetch
+	# the first page, then filter, the row at index N points at a
+	# different playlist than what the menu showed, or just falls off
+	# the end (looks empty). override index and quantity in that case.
+	my $filterOn = $prefs->get('music_playlists_only');
+	my $fetchIndex    = $filterOn ? 0 : $args->{index};
+	my $fetchQuantity = $filterOn ? $prefs->get('max_items') : $args->{quantity};
+
 	Plugins::YouTube::API->searchDirect('playlists', sub {
-		$cb->( _renderList($_[0], 'title', $account) );
+		my $result = $_[0];
+		_filterMusicPlaylists($result, $probeAuth, sub {
+			$cb->( _renderList($_[0], 'title', $account) );
+		});
 	}, {
 		%$account,
-		_index  	=> $args->{index},
-		_quantity 	=> $args->{quantity},
+		_index  	=> $fetchIndex,
+		_quantity 	=> $fetchQuantity,
 	});
+}
+
+# keep playlists where any of the sampled items is in Music category
+# (10). same idea as the YouTube Music / Android app menu. we look at
+# more than one item because the first one is often an intro, ad, or
+# just badly tagged. decision per playlist id goes into the cache so
+# we dont re-probe on every navigation.
+sub _filterMusicPlaylists {
+	my ($result, $probeAuth, $cb) = @_;
+
+	return $cb->($result) unless $prefs->get('music_playlists_only');
+	return $cb->($result) unless $result && ref $result->{items} eq 'ARRAY';
+
+	my @items = @{$result->{items}};
+	my @unknown;
+	for my $entry (@items) {
+		my $pid = $entry->{id} or next;
+		my $hit = $cache->get("yt:plmusic4-$pid");
+		$entry->{_musicScore} = $hit if defined $hit;
+		push @unknown, $entry unless defined $hit;
+	}
+
+	main::INFOLOG && $log->is_info && $log->info("music filter: " . scalar(@items) . " playlists, " . scalar(@unknown) . " to probe");
+
+	my $finalize = sub {
+		my @kept = grep { ($_->{_musicScore} || 0) > 0 } @items;
+		main::INFOLOG && $log->is_info && $log->info("music filter: kept " . scalar(@kept) . "/" . scalar(@items));
+		delete $_->{_musicScore} for @items;
+		$result->{items} = \@kept;
+		$result->{total} = scalar @kept if defined $result->{total};
+		$cb->($result);
+	};
+
+	return $finalize->() unless @unknown;
+
+	_probeMusicPlaylists(\@unknown, $probeAuth, $finalize);
+}
+
+use constant MUSIC_SAMPLE_SIZE => 5;
+
+sub _probeMusicPlaylists {
+	my ($entries, $probeAuth, $done) = @_;
+	my $remaining = scalar @$entries;
+	my %vidsForPlaylist;
+	my %seenVid;
+	my @allVideoIds;
+
+	my $afterAllSamples = sub {
+		unless (@allVideoIds) {
+			# nothing playable. mark them non-music for a bit and move on
+			for my $e (@$entries) {
+				$cache->set("yt:plmusic4-" . $e->{id}, 0, 3600);
+				$e->{_musicScore} = 0;
+			}
+			return $done->();
+		}
+
+		# videos.list caps at 50 ids per call. chunk and fan out.
+		my @chunks;
+		push @chunks, [ splice(@allVideoIds, 0, 50) ] while @allVideoIds;
+		my $pending = scalar @chunks;
+		my %catFor;
+		my $hadError = 0;
+
+		my $finish = sub {
+			if ($hadError && !keys %catFor) {
+				# every chunk died. dont silently hide all playlists, show them.
+				$log->warn("music filter: video lookup failed, showing all playlists");
+				$_->{_musicScore} = 1 for @$entries;
+				return $done->();
+			}
+
+			for my $e (@$entries) {
+				my $vids = $vidsForPlaylist{$e->{id}} || [];
+				my $known = 0;
+				my $isMusic = 0;
+				for my $vid (@$vids) {
+					my $cat = $catFor{$vid};
+					next unless defined $cat;
+					$known++;
+					if ($cat eq '10') { $isMusic = 1 }
+				}
+				# at least one music sample = music. all known and none
+				# music = not music. nothing known = short ttl so we recover.
+				my $ttl = $known ? 86400 : 3600;
+				$cache->set("yt:plmusic4-" . $e->{id}, $isMusic, $ttl);
+				$e->{_musicScore} = $isMusic;
+			}
+
+			$done->();
+		};
+
+		for my $chunk (@chunks) {
+			Plugins::YouTube::API->getVideoDetails( sub {
+				my $vresult = shift;
+				if (!$vresult || $vresult->{error} || !ref $vresult->{items}) {
+					$log->warn("music filter: chunk lookup failed");
+					$hadError = 1;
+				} else {
+					for my $v (@{$vresult->{items}}) {
+						$catFor{$v->{id}} = $v->{snippet}->{categoryId} || '';
+					}
+				}
+				$finish->() if --$pending == 0;
+			}, join(',', @$chunk) );
+		}
+	};
+
+	for my $entry (@$entries) {
+		my $pid = $entry->{id};
+		Plugins::YouTube::API->getPlaylistSample( sub {
+			my $items = $_[0]->{items} || [];
+			my @vids;
+			for my $it (@$items) {
+				my $vid = $it->{snippet}->{resourceId}->{videoId} or next;
+				push @vids, $vid;
+				push @allVideoIds, $vid unless $seenVid{$vid}++;
+			}
+			$vidsForPlaylist{$pid} = \@vids;
+			$afterAllSamples->() if --$remaining == 0;
+		}, $pid, MUSIC_SAMPLE_SIZE, $probeAuth );
+	}
 }
 
 sub playlistHandler {

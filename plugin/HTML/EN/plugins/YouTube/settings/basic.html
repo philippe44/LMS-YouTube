@@ -159,6 +159,10 @@
 		<input name="pref_highres_icons" type="checkbox" [% IF prefs.pref_highres_icons %] checked [% END %]>
 	[% END %]
 
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_MUSICONLY" desc="PLUGIN_YOUTUBE_MUSICONLY_DESC" %]
+		<input name="pref_music_playlists_only" type="checkbox" [% IF prefs.pref_music_playlists_only %] checked [% END %]>
+	[% END %]
+
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_MAXITEMS" desc="PLUGIN_YOUTUBE_MAXITEMS_DESC" %]
 		<input type="text" class="stdedit" name="pref_max_items" id="pref_max_items" value="[% prefs.pref_max_items %]" size="5">
 	[% END %]
