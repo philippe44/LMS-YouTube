@@ -1288,9 +1288,14 @@ sub _enrichWithYTMusic {
 			$meta->{_ytmLyricsBrowseId} = $ytm->{lyricsBrowseId} if $ytm->{lyricsBrowseId};
 			$meta->{_ytmVideoType}      = $ytm->{videoType}      if $ytm->{videoType};
 
-			if (($ytm->{videoType} || '') =~ /^MUSIC_VIDEO_TYPE_/) {
-				$meta->{type} = 'YouTube Music';
-			}
+			# ATV = audio track, OMV = official video, UGC = user upload
+			my $vt = $ytm->{videoType} || '';
+			if    ($vt eq 'MUSIC_VIDEO_TYPE_ATV')               { $meta->{type} = 'YouTube Music (Track)' }
+			elsif ($vt eq 'MUSIC_VIDEO_TYPE_OMV'
+			    || $vt eq 'MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC') {
+			                                                      $meta->{type} = 'YouTube Music (Video)' }
+			elsif ($vt eq 'MUSIC_VIDEO_TYPE_UGC')               { $meta->{type} = 'YouTube Music (User)' }
+			elsif ($vt =~ /^MUSIC_VIDEO_TYPE_/)                 { $meta->{type} = 'YouTube Music' }
 
 			$cache->set("yt:meta-$id", $meta, 86400);
 
