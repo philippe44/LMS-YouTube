@@ -23,6 +23,7 @@ use Plugins::YouTube::API;
 use Plugins::YouTube::ProtocolHandler;
 use Plugins::YouTube::ListProtocolHandler;
 use Plugins::YouTube::Oauth2;
+use Plugins::YouTube::YTMusic;
 
 use constant BASE_URL => 'www.youtube.com/v/';
 use constant STREAM_BASE_URL => 'youtube://' . BASE_URL;
@@ -63,6 +64,8 @@ $prefs->init({
 	yt_dlp => '',
 	auto_update_ytdlp => 0,
 	auto_update_check_hour => 3,
+	music_playlists_only => 1,
+	rich_metadata => 1,
 });
 
 tie my %recentlyPlayed, 'Tie::Cache::LRU', 50;
@@ -87,6 +90,11 @@ sub initPlugin {
 	Slim::Menu::TrackInfo->registerInfoProvider( youtube => (
 		after => 'middle',
 		func  => \&trackInfoMenu,
+	) );
+
+	Slim::Menu::TrackInfo->registerInfoProvider( youtubelyrics => (
+		after => 'youtube',
+		func  => \&lyricsInfoMenu,
 	) );
 
 	Slim::Menu::TrackInfo->registerInfoProvider( youtubevideo => (
@@ -366,21 +374,164 @@ sub myPlaylistHandler {
 
 	delete $params->{count};
 
-	# need to passthrough the personal account items
-	my $account = {
+	# mine=true is for playlists.list only. dont put it in the per-item
+	# passthrough or playlistItems.list will get it later and load the
+	# wrong playlist.
+	my $token = $cache->get('yt:access_token');
+	my $itemPassthrough = {
+		_noKey			=> 1,
+		access_token 	=> $token,
+	};
+
+	# auth bits the sample probe needs to see private playlists
+	my $probeAuth = {
+		_noKey       => 1,
+		access_token => $cache->get('yt:access_token'),
+	};
+
+	# when the filter is on we have to grab the full set up front.
+	# OPML level-2 calls us with quantity=1, index=N. if we only fetch
+	# the first page, then filter, the row at index N points at a
+	# different playlist than what the menu showed, or just falls off
+	# the end (looks empty). override index and quantity in that case.
+	my $filterOn = $prefs->get('music_playlists_only');
+	my $fetchIndex    = $filterOn ? 0 : $args->{index};
+	my $fetchQuantity = $filterOn ? $prefs->get('max_items') : $args->{quantity};
+
+	Plugins::YouTube::API->searchDirect('playlists', sub {
+		_filterMusicPlaylists($_[0], $probeAuth, sub {
+			$cb->( _renderList($_[0], 'title', $itemPassthrough) );
+		});
+	}, {
 		_cache_ttl 		=> 60,
 		_noKey			=> 1,
 		mine			=> 'true',
-		access_token 	=> $cache->get('yt:access_token'),
+		access_token 	=> $token,
+		_index  		=> $fetchIndex,
+		_quantity 		=> $fetchQuantity,
+	});
+}
+
+# keep playlists where any of the sampled items is in Music category
+# (10). same idea as the YouTube Music / Android app menu. we look at
+# more than one item because the first one is often an intro, ad, or
+# just badly tagged. decision per playlist id goes into the cache so
+# we dont re-probe on every navigation.
+sub _filterMusicPlaylists {
+	my ($result, $probeAuth, $cb) = @_;
+
+	return $cb->($result) unless $prefs->get('music_playlists_only');
+	return $cb->($result) unless $result && ref $result->{items} eq 'ARRAY';
+
+	my @items = @{$result->{items}};
+	my @unknown;
+	for my $entry (@items) {
+		my $pid = $entry->{id} or next;
+		my $hit = $cache->get("yt:plmusic4-$pid");
+		$entry->{_musicScore} = $hit if defined $hit;
+		push @unknown, $entry unless defined $hit;
+	}
+
+	main::INFOLOG && $log->is_info && $log->info("music filter: " . scalar(@items) . " playlists, " . scalar(@unknown) . " to probe");
+
+	my $finalize = sub {
+		my @kept = grep { ($_->{_musicScore} || 0) > 0 } @items;
+		main::INFOLOG && $log->is_info && $log->info("music filter: kept " . scalar(@kept) . "/" . scalar(@items));
+		delete $_->{_musicScore} for @items;
+		$result->{items} = \@kept;
+		$result->{total} = scalar @kept if defined $result->{total};
+		$cb->($result);
 	};
 
-	Plugins::YouTube::API->searchDirect('playlists', sub {
-		$cb->( _renderList($_[0], 'title', $account) );
-	}, {
-		%$account,
-		_index  	=> $args->{index},
-		_quantity 	=> $args->{quantity},
-	});
+	return $finalize->() unless @unknown;
+
+	_probeMusicPlaylists(\@unknown, $probeAuth, $finalize);
+}
+
+use constant MUSIC_SAMPLE_SIZE => 5;
+
+sub _probeMusicPlaylists {
+	my ($entries, $probeAuth, $done) = @_;
+	my $remaining = scalar @$entries;
+	my %vidsForPlaylist;
+	my %seenVid;
+	my @allVideoIds;
+
+	my $afterAllSamples = sub {
+		unless (@allVideoIds) {
+			# nothing playable. mark them non-music for a bit and move on
+			for my $e (@$entries) {
+				$cache->set("yt:plmusic4-" . $e->{id}, 0, 3600);
+				$e->{_musicScore} = 0;
+			}
+			return $done->();
+		}
+
+		# videos.list caps at 50 ids per call. chunk and fan out.
+		my @chunks;
+		push @chunks, [ splice(@allVideoIds, 0, 50) ] while @allVideoIds;
+		my $pending = scalar @chunks;
+		my %catFor;
+		my $hadError = 0;
+
+		my $finish = sub {
+			if ($hadError && !keys %catFor) {
+				# every chunk died. dont silently hide all playlists, show them.
+				$log->warn("music filter: video lookup failed, showing all playlists");
+				$_->{_musicScore} = 1 for @$entries;
+				return $done->();
+			}
+
+			for my $e (@$entries) {
+				my $vids = $vidsForPlaylist{$e->{id}} || [];
+				my $known = 0;
+				my $isMusic = 0;
+				for my $vid (@$vids) {
+					my $cat = $catFor{$vid};
+					next unless defined $cat;
+					$known++;
+					if ($cat eq '10') { $isMusic = 1 }
+				}
+				# at least one music sample = music. all known and none
+				# music = not music. nothing known = short ttl so we recover.
+				my $ttl = $known ? 86400 : 3600;
+				$cache->set("yt:plmusic4-" . $e->{id}, $isMusic, $ttl);
+				$e->{_musicScore} = $isMusic;
+			}
+
+			$done->();
+		};
+
+		for my $chunk (@chunks) {
+			Plugins::YouTube::API->getVideoDetails( sub {
+				my $vresult = shift;
+				if (!$vresult || $vresult->{error} || !ref $vresult->{items}) {
+					$log->warn("music filter: chunk lookup failed");
+					$hadError = 1;
+				} else {
+					for my $v (@{$vresult->{items}}) {
+						$catFor{$v->{id}} = $v->{snippet}->{categoryId} || '';
+					}
+				}
+				$finish->() if --$pending == 0;
+			}, join(',', @$chunk) );
+		}
+	};
+
+	for my $entry (@$entries) {
+		my $pid = $entry->{id};
+		Plugins::YouTube::API->getPlaylistSample( sub {
+			my $items = $_[0]->{items} || [];
+			my @vids;
+			for my $it (@$items) {
+				my $vid = $it->{snippet}->{resourceId}->{videoId} or next;
+				push @vids, $vid;
+				push @allVideoIds, $vid unless $seenVid{$vid}++;
+			}
+			$vidsForPlaylist{$pid} = \@vids;
+			$afterAllSamples->() if --$remaining == 0;
+		}, $pid, MUSIC_SAMPLE_SIZE, $probeAuth );
+	}
 }
 
 sub playlistHandler {
@@ -389,6 +540,16 @@ sub playlistHandler {
 	$params->{_index} = $args->{index};
 	$params->{_quantity} = $args->{quantity};
 	$params->{_cache_ttl} = $prefs->get('cache_ttl');
+
+	# extra paranoia. mine belongs to playlists.list, never to playlistItems.list.
+	# if it slips in here YT returns the wrong playlist.
+	delete $params->{mine};
+
+	# private playlists 404 without the oauth token
+	if (!$params->{access_token} && (my $token = $cache->get('yt:access_token'))) {
+		$params->{access_token} = $token;
+		$params->{_noKey}       = 1;
+	}
 
 	Plugins::YouTube::API->searchDirect('playlistItems', sub {
 		$cb->( _renderList($_[0], $prefs->get('playlist_sort')) );
@@ -643,6 +804,44 @@ sub trackInfoMenu {
 	}
 
 	return;
+}
+
+sub lyricsInfoMenu {
+	my ($client, $url, $track, $remoteMeta) = @_;
+
+	return unless $client && $url && $url =~ /^youtube:/;
+
+	my $id = Plugins::YouTube::ProtocolHandler->getId($url);
+	return unless $id;
+
+	my $cache = Slim::Utils::Cache->new();
+	my $meta  = $cache->get("yt:meta-$id");
+	my $bid   = $meta && $meta->{_ytmLyricsBrowseId};
+	return unless $bid;
+
+	return {
+		type => 'link',
+		name => cstring($client, 'PLUGIN_YOUTUBE_LYRICS'),
+		url  => \&_lyricsHandler,
+		passthrough => [ { browseId => $bid } ],
+	};
+}
+
+sub _lyricsHandler {
+	my ($client, $cb, $args, $params) = @_;
+	Plugins::YouTube::YTMusic->getLyrics($params->{browseId}, sub {
+		my $text = shift;
+		if (!$text) {
+			$cb->({ items => [{
+				name => cstring($client, 'PLUGIN_YOUTUBE_LYRICS_NONE'),
+				type => 'text',
+			}]});
+			return;
+		}
+		# one menu line per text line, easier to scroll
+		my @lines = split /\r?\n/, $text;
+		$cb->({ items => [ map { { name => $_, type => 'text' } } @lines ] });
+	});
 }
 
 sub albumInfoMenu {

@@ -57,12 +57,31 @@ sub getCategories {
 sub getVideoDetails {
 	my ( $class, $cb, $ids ) = @_;
 
+	# topicDetails for genre
 	_call('videos', {
-		part => 'snippet,contentDetails',
+		part => 'snippet,contentDetails,topicDetails',
 		id   => $ids,
 		# cache video details a bit longer
 		_cache_ttl => 7 * 86400,
 	}, $cb);
+}
+
+# single-shot fetch of the first N items of a playlist, no paging. used by
+# the music-playlist filter where we just want a small sample to classify.
+# pass extra (eg. access_token + _noKey) to read private playlists.
+sub getPlaylistSample {
+	my ( $class, $cb, $playlistId, $max, $extra ) = @_;
+
+	my %args = (
+		part       => 'snippet',
+		playlistId => $playlistId,
+		maxResults => $max || 5,
+		_noRegion  => 1,
+		_cache_ttl => 86400,
+		%{ $extra || {} },
+	);
+
+	_call('playlistItems', \%args, $cb);
 }
 
 sub _pagedCall {

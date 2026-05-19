@@ -209,6 +209,14 @@ PLUGIN_YOUTUBE_ON_YOUTUBE
 	DE	Auf YouTube
 	EN	On YouTube
 
+PLUGIN_YOUTUBE_LYRICS
+	DE	Liedtext
+	EN	Lyrics
+
+PLUGIN_YOUTUBE_LYRICS_NONE
+	DE	Kein Liedtext verfügbar.
+	EN	No lyrics available.
+
 PLUGIN_YOUTUBE_WEBLINK
 	CS	Sledovat video na YouTube
 	DA	Vis YouTube video
@@ -354,6 +362,26 @@ PLUGIN_YOUTUBE_PLAYLISTSORT
 	CS	Položky seznamu skladeb seřadit podle
 	DA	Afspillelisteemner sorteret efter
 	EN	Playlist items sorted by
+
+PLUGIN_YOUTUBE_MUSICONLY
+	CS	Pouze hudební playlisty
+	DA	Kun musik-spillelister
+	DE	Nur Musik-Wiedergabelisten
+	EN	Music playlists only
+
+PLUGIN_YOUTUBE_MUSICONLY_DESC
+	CS	Zobrazit v "Mé playlisty" pouze playlisty s hudbou, stejně jako aplikace YouTube pro Android.
+	DA	Vis kun musik-spillelister i "Mine spillelister", på samme måde som YouTube Android-appen gør.
+	DE	In "Meine Wiedergabelisten" nur Musik-Wiedergabelisten zeigen, so wie es die YouTube Android-App macht.
+	EN	Show only music playlists in "My Playlists", the way the YouTube Android app does.
+
+PLUGIN_YOUTUBE_RICHMETA
+	DE	Reichhaltige Metadaten von YouTube Music
+	EN	Rich metadata from YouTube Music
+
+PLUGIN_YOUTUBE_RICHMETA_DESC
+	DE	Holt Künstler, Album, Jahr und ein quadratisches Cover für Musiktitel über den (inoffiziellen) YouTube-Music-Endpunkt. Wenn der Endpunkt einmal kaputt geht, hier ausschalten.
+	EN	Fetch artist, album, year and a square album cover for music tracks from the (unofficial) YouTube Music endpoint. Turn this off if the endpoint ever breaks.
 
 PLUGIN_YOUTUBE_ICONRES
 	CS	Ikony s vysokým rozlišením

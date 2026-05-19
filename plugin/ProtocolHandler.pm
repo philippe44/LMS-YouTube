@@ -50,6 +50,8 @@ use Plugins::YouTube::M4a;
 use Plugins::YouTube::MPEGTS;
 use Plugins::YouTube::Utils;
 use Plugins::YouTube::HTTP;
+use Plugins::YouTube::Metadata;
+use Plugins::YouTube::YTMusic;
 
 use constant MIN_OUT	=> 8192;
 use constant DATA_CHUNK => 128*1024;
@@ -1156,7 +1158,8 @@ sub getMetadataFor {
 			if ( $trackURL =~ m{youtube:/*(.+)} ) {
 				my $trackId = $class->getId($trackURL);
 
-				if ( $trackId && !$cache->get("yt:meta-$trackId") ) {
+				# skip ids we already gave up on, dont hammer the api
+				if ( $trackId && !$cache->get("yt:meta-$trackId") && !$cache->get("yt:meta-fail-$trackId") ) {
 					push @need, $trackId;
 				} elsif (!$trackId) {
 					$log->warn("No id found: $trackURL");
@@ -1170,7 +1173,7 @@ sub getMetadataFor {
 		if (scalar @need && !$abort) {
 			my $list = join( ',', @need );
 			main::INFOLOG && $log->is_info && $log->info( "Need to fetch metadata for: $list");
-			_getBulkMetadata($client, $pageCall, $list);
+			_getBulkMetadata($client, $pageCall, $list, \@need);
 		} else {
 			$client->master->pluginData(fetchingYTMeta => 0);
 			unless ($abort) {
@@ -1198,52 +1201,110 @@ sub getMetadataFor {
 }
 
 sub _getBulkMetadata {
-	my ($client, $cb, $ids) = @_;
+	my ($client, $cb, $ids, $requestedIds) = @_;
 
 	Plugins::YouTube::API->getVideoDetails( sub {
 		my $result = shift;
 
 		if ( !$result || $result->{error} || !$result->{pageInfo}->{totalResults} || !scalar @{$result->{items}} ) {
 			$log->error($result->{error} || 'Failed to grab track information');
+			# mark these failed for 5 min. enough to break the request storm,
+			# short enough that a fixed api key or transient blip recovers
+			# soon after.
+			if ($requestedIds) {
+				$cache->set("yt:meta-fail-$_", 1, 300) for @$requestedIds;
+			}
 			$cb->(1) if defined $cb;
 			return;
 		}
 
+		my @musicIds;
 		foreach my $item (@{$result->{items}}) {
 			my $snippet = $item->{snippet};
-			my $title   = $snippet->{'title'};
 			my $cover   = my $icon = Plugins::YouTube::Plugin::_getImage($snippet->{thumbnails});
-			my $artist  = "";
-			my $fulltitle;
+			my $built   = Plugins::YouTube::Metadata::buildFromV3Item($item);
 
-			if ($title =~ /(.*) - (.*)/) {
-				$fulltitle = $title;
-				$artist = $1;
-				$title  = $2;
-			}
-
-			my $duration = $item->{contentDetails}->{duration};
-			main::DEBUGLOG && $log->is_debug && $log->debug("Duration: $duration");
-			my ($misc, $hour, $min, $sec) = $duration =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
-			$duration = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
+			main::DEBUGLOG && $log->is_debug && $log->debug("Duration: $item->{contentDetails}->{duration}");
 
 			my $meta = {
-				title    =>	$title || '',
-				artist   => $artist,
-				duration => $duration || 0,
-				icon     => $icon,
-				cover    => $cover || $icon,
-				type     => 'YouTube',
-				_fulltitle => $fulltitle,
+				title       => $built->{title},
+				artist      => $built->{artist},
+				album       => $built->{album},
+				year        => $built->{year},
+				genre       => $built->{genre},
+				duration    => $built->{duration},
+				icon        => $icon,
+				cover       => $cover || $icon,
+				type        => 'YouTube',
+				_fulltitle  => $built->{_fulltitle},
 				_thumbnails => $snippet->{thumbnails},
 			};
 
 			$cache->set("yt:meta-" . $item->{id}, $meta, 86400);
+
+			# only music category gets YTM enrichment
+			push @musicIds, $item->{id} if ($snippet->{categoryId} || 0) == 10;
+		}
+
+		_enrichWithYTMusic($client, \@musicIds) if @musicIds && $prefs->get('rich_metadata');
+
+		# ids we asked for but didnt get back are usually deleted or private.
+		# cache as failed for a day so the UI poll stops asking.
+		if ($requestedIds) {
+			my %got = map { $_->{id} => 1 } @{$result->{items}};
+			for my $id (@$requestedIds) {
+				$cache->set("yt:meta-fail-$id", 1, 86400) unless $got{$id};
+			}
 		}
 
 		$cb->() if defined $cb;
 
 	}, $ids);
+}
+
+# refine yt:meta-$id with YTM data after the v3 baseline lands
+sub _enrichWithYTMusic {
+	my ($client, $ids) = @_;
+	return unless ref($ids) eq 'ARRAY' && @$ids;
+
+	for my $id (@$ids) {
+		next if $cache->get("ytm:enriched-$id");
+
+		Plugins::YouTube::YTMusic->getMusicMetadata($id, sub {
+			my $ytm = shift;
+			# even on no data, dont retry for an hour
+			$cache->set("ytm:enriched-$id", 1, 3600);
+			return unless $ytm && %$ytm;
+
+			my $meta = $cache->get("yt:meta-$id") || {};
+			$meta->{title}  = $ytm->{title}  if $ytm->{title};
+			$meta->{artist} = $ytm->{artist} if $ytm->{artist};
+			$meta->{album}  = $ytm->{album}  if $ytm->{album};
+			$meta->{year}   = $ytm->{year}   if $ytm->{year};
+			if ($ytm->{cover}) {
+				$meta->{cover} = $ytm->{cover};
+				$meta->{icon}  = $ytm->{cover};
+			}
+			$meta->{_ytmLyricsBrowseId} = $ytm->{lyricsBrowseId} if $ytm->{lyricsBrowseId};
+			$meta->{_ytmVideoType}      = $ytm->{videoType}      if $ytm->{videoType};
+
+			# ATV = audio track, OMV = official video, UGC = user upload
+			my $vt = $ytm->{videoType} || '';
+			if    ($vt eq 'MUSIC_VIDEO_TYPE_ATV')               { $meta->{type} = 'YouTube Music (Track)' }
+			elsif ($vt eq 'MUSIC_VIDEO_TYPE_OMV'
+			    || $vt eq 'MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC') {
+			                                                      $meta->{type} = 'YouTube Music (Video)' }
+			elsif ($vt eq 'MUSIC_VIDEO_TYPE_UGC')               { $meta->{type} = 'YouTube Music (User)' }
+			elsif ($vt =~ /^MUSIC_VIDEO_TYPE_/)                 { $meta->{type} = 'YouTube Music' }
+
+			$cache->set("yt:meta-$id", $meta, 86400);
+
+			if ($client) {
+				$client->currentPlaylistUpdateTime( Time::HiRes::time() );
+				Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );
+			}
+		});
+	}
 }
 
 
