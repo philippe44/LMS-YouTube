@@ -381,6 +381,15 @@ sub myPlaylistHandler {
 		access_token => $cache->get('yt:access_token'),
 	};
 
+	# when the filter is on we have to grab the full set up front.
+	# OPML level-2 calls us with quantity=1, index=N. if we only fetch
+	# the first page, then filter, the row at index N points at a
+	# different playlist than what the menu showed, or just falls off
+	# the end (looks empty). override index and quantity in that case.
+	my $filterOn = $prefs->get('music_playlists_only');
+	my $fetchIndex    = $filterOn ? 0 : $args->{index};
+	my $fetchQuantity = $filterOn ? $prefs->get('max_items') : $args->{quantity};
+
 	Plugins::YouTube::API->searchDirect('playlists', sub {
 		my $result = $_[0];
 		_filterMusicPlaylists($result, $probeAuth, sub {
@@ -388,8 +397,8 @@ sub myPlaylistHandler {
 		});
 	}, {
 		%$account,
-		_index  	=> $args->{index},
-		_quantity 	=> $args->{quantity},
+		_index  	=> $fetchIndex,
+		_quantity 	=> $fetchQuantity,
 	});
 }
 
