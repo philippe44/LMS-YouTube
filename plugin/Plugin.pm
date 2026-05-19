@@ -408,13 +408,16 @@ sub _filterMusicPlaylists {
 	my @unknown;
 	for my $entry (@items) {
 		my $pid = $entry->{id} or next;
-		my $hit = $cache->get("yt:plmusic3-$pid");
+		my $hit = $cache->get("yt:plmusic4-$pid");
 		$entry->{_musicScore} = $hit if defined $hit;
 		push @unknown, $entry unless defined $hit;
 	}
 
+	main::INFOLOG && $log->is_info && $log->info("music filter: " . scalar(@items) . " playlists, " . scalar(@unknown) . " to probe");
+
 	my $finalize = sub {
 		my @kept = grep { ($_->{_musicScore} || 0) > 0 } @items;
+		main::INFOLOG && $log->is_info && $log->info("music filter: kept " . scalar(@kept) . "/" . scalar(@items));
 		delete $_->{_musicScore} for @items;
 		$result->{items} = \@kept;
 		$result->{total} = scalar @kept if defined $result->{total};
@@ -439,26 +442,25 @@ sub _probeMusicPlaylists {
 		unless (@allVideoIds) {
 			# nothing playable. mark them non-music for a bit and move on
 			for my $e (@$entries) {
-				$cache->set("yt:plmusic3-" . $e->{id}, 0, 3600);
+				$cache->set("yt:plmusic4-" . $e->{id}, 0, 3600);
 				$e->{_musicScore} = 0;
 			}
 			return $done->();
 		}
 
-		Plugins::YouTube::API->getVideoDetails( sub {
-			my $vresult = shift;
+		# videos.list caps at 50 ids per call. chunk and fan out.
+		my @chunks;
+		push @chunks, [ splice(@allVideoIds, 0, 50) ] while @allVideoIds;
+		my $pending = scalar @chunks;
+		my %catFor;
+		my $hadError = 0;
 
-			# api call died (bad key, quota, ...). dont silently hide every
-			# playlist. show them all and dont cache the decision.
-			if (!$vresult || $vresult->{error} || !ref $vresult->{items}) {
+		my $finish = sub {
+			if ($hadError && !keys %catFor) {
+				# every chunk died. dont silently hide all playlists, show them.
 				$log->warn("music filter: video lookup failed, showing all playlists");
 				$_->{_musicScore} = 1 for @$entries;
 				return $done->();
-			}
-
-			my %catFor;
-			for my $v (@{$vresult->{items}}) {
-				$catFor{$v->{id}} = $v->{snippet}->{categoryId} || '';
 			}
 
 			for my $e (@$entries) {
@@ -469,17 +471,32 @@ sub _probeMusicPlaylists {
 					my $cat = $catFor{$vid};
 					next unless defined $cat;
 					$known++;
-					if ($cat eq '10') { $isMusic = 1; last }
+					if ($cat eq '10') { $isMusic = 1 }
 				}
 				# at least one music sample = music. all known and none
 				# music = not music. nothing known = short ttl so we recover.
 				my $ttl = $known ? 86400 : 3600;
-				$cache->set("yt:plmusic3-" . $e->{id}, $isMusic, $ttl);
+				$cache->set("yt:plmusic4-" . $e->{id}, $isMusic, $ttl);
 				$e->{_musicScore} = $isMusic;
 			}
 
 			$done->();
-		}, join(',', @allVideoIds) );
+		};
+
+		for my $chunk (@chunks) {
+			Plugins::YouTube::API->getVideoDetails( sub {
+				my $vresult = shift;
+				if (!$vresult || $vresult->{error} || !ref $vresult->{items}) {
+					$log->warn("music filter: chunk lookup failed");
+					$hadError = 1;
+				} else {
+					for my $v (@{$vresult->{items}}) {
+						$catFor{$v->{id}} = $v->{snippet}->{categoryId} || '';
+					}
+				}
+				$finish->() if --$pending == 0;
+			}, join(',', @$chunk) );
+		}
 	};
 
 	for my $entry (@$entries) {
