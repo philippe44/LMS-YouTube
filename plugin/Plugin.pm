@@ -375,9 +375,15 @@ sub myPlaylistHandler {
 		access_token 	=> $cache->get('yt:access_token'),
 	};
 
+	# auth bits the sample probe needs to see private playlists
+	my $probeAuth = {
+		_noKey       => 1,
+		access_token => $cache->get('yt:access_token'),
+	};
+
 	Plugins::YouTube::API->searchDirect('playlists', sub {
 		my $result = $_[0];
-		_filterMusicPlaylists($result, sub {
+		_filterMusicPlaylists($result, $probeAuth, sub {
 			$cb->( _renderList($_[0], 'title', $account) );
 		});
 	}, {
@@ -393,7 +399,7 @@ sub myPlaylistHandler {
 # just badly tagged. decision per playlist id goes into the cache so
 # we dont re-probe on every navigation.
 sub _filterMusicPlaylists {
-	my ($result, $cb) = @_;
+	my ($result, $probeAuth, $cb) = @_;
 
 	return $cb->($result) unless $prefs->get('music_playlists_only');
 	return $cb->($result) unless $result && ref $result->{items} eq 'ARRAY';
@@ -402,7 +408,7 @@ sub _filterMusicPlaylists {
 	my @unknown;
 	for my $entry (@items) {
 		my $pid = $entry->{id} or next;
-		my $hit = $cache->get("yt:plmusic2-$pid");
+		my $hit = $cache->get("yt:plmusic3-$pid");
 		$entry->{_musicScore} = $hit if defined $hit;
 		push @unknown, $entry unless defined $hit;
 	}
@@ -417,13 +423,13 @@ sub _filterMusicPlaylists {
 
 	return $finalize->() unless @unknown;
 
-	_probeMusicPlaylists(\@unknown, $finalize);
+	_probeMusicPlaylists(\@unknown, $probeAuth, $finalize);
 }
 
 use constant MUSIC_SAMPLE_SIZE => 5;
 
 sub _probeMusicPlaylists {
-	my ($entries, $done) = @_;
+	my ($entries, $probeAuth, $done) = @_;
 	my $remaining = scalar @$entries;
 	my %vidsForPlaylist;
 	my %seenVid;
@@ -433,7 +439,7 @@ sub _probeMusicPlaylists {
 		unless (@allVideoIds) {
 			# nothing playable. mark them non-music for a bit and move on
 			for my $e (@$entries) {
-				$cache->set("yt:plmusic2-" . $e->{id}, 0, 3600);
+				$cache->set("yt:plmusic3-" . $e->{id}, 0, 3600);
 				$e->{_musicScore} = 0;
 			}
 			return $done->();
@@ -468,7 +474,7 @@ sub _probeMusicPlaylists {
 				# at least one music sample = music. all known and none
 				# music = not music. nothing known = short ttl so we recover.
 				my $ttl = $known ? 86400 : 3600;
-				$cache->set("yt:plmusic2-" . $e->{id}, $isMusic, $ttl);
+				$cache->set("yt:plmusic3-" . $e->{id}, $isMusic, $ttl);
 				$e->{_musicScore} = $isMusic;
 			}
 
@@ -488,7 +494,7 @@ sub _probeMusicPlaylists {
 			}
 			$vidsForPlaylist{$pid} = \@vids;
 			$afterAllSamples->() if --$remaining == 0;
-		}, $pid, MUSIC_SAMPLE_SIZE );
+		}, $pid, MUSIC_SAMPLE_SIZE, $probeAuth );
 	}
 }
 

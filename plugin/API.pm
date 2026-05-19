@@ -67,16 +67,20 @@ sub getVideoDetails {
 
 # single-shot fetch of the first N items of a playlist, no paging. used by
 # the music-playlist filter where we just want a small sample to classify.
+# pass extra (eg. access_token + _noKey) to read private playlists.
 sub getPlaylistSample {
-	my ( $class, $cb, $playlistId, $max ) = @_;
+	my ( $class, $cb, $playlistId, $max, $extra ) = @_;
 
-	_call('playlistItems', {
+	my %args = (
 		part       => 'snippet',
 		playlistId => $playlistId,
 		maxResults => $max || 5,
 		_noRegion  => 1,
 		_cache_ttl => 86400,
-	}, $cb);
+		%{ $extra || {} },
+	);
+
+	_call('playlistItems', \%args, $cb);
 }
 
 sub _pagedCall {
