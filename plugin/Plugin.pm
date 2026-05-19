@@ -23,6 +23,7 @@ use Plugins::YouTube::API;
 use Plugins::YouTube::ProtocolHandler;
 use Plugins::YouTube::ListProtocolHandler;
 use Plugins::YouTube::Oauth2;
+use Plugins::YouTube::YTMusic;
 
 use constant BASE_URL => 'www.youtube.com/v/';
 use constant STREAM_BASE_URL => 'youtube://' . BASE_URL;
@@ -89,6 +90,11 @@ sub initPlugin {
 	Slim::Menu::TrackInfo->registerInfoProvider( youtube => (
 		after => 'middle',
 		func  => \&trackInfoMenu,
+	) );
+
+	Slim::Menu::TrackInfo->registerInfoProvider( youtubelyrics => (
+		after => 'youtube',
+		func  => \&lyricsInfoMenu,
 	) );
 
 	Slim::Menu::TrackInfo->registerInfoProvider( youtubevideo => (
@@ -792,6 +798,44 @@ sub trackInfoMenu {
 	}
 
 	return;
+}
+
+sub lyricsInfoMenu {
+	my ($client, $url, $track, $remoteMeta) = @_;
+
+	return unless $client && $url && $url =~ /^youtube:/;
+
+	my $id = Plugins::YouTube::ProtocolHandler->getId($url);
+	return unless $id;
+
+	my $cache = Slim::Utils::Cache->new();
+	my $meta  = $cache->get("yt:meta-$id");
+	my $bid   = $meta && $meta->{_ytmLyricsBrowseId};
+	return unless $bid;
+
+	return {
+		type => 'link',
+		name => cstring($client, 'PLUGIN_YOUTUBE_LYRICS'),
+		url  => \&_lyricsHandler,
+		passthrough => [ { browseId => $bid } ],
+	};
+}
+
+sub _lyricsHandler {
+	my ($client, $cb, $args, $params) = @_;
+	Plugins::YouTube::YTMusic->getLyrics($params->{browseId}, sub {
+		my $text = shift;
+		if (!$text) {
+			$cb->({ items => [{
+				name => cstring($client, 'PLUGIN_YOUTUBE_LYRICS_NONE'),
+				type => 'text',
+			}]});
+			return;
+		}
+		# one menu line per text line, easier to scroll
+		my @lines = split /\r?\n/, $text;
+		$cb->({ items => [ map { { name => $_, type => 'text' } } @lines ] });
+	});
 }
 
 sub albumInfoMenu {

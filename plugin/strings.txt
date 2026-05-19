@@ -209,6 +209,14 @@ PLUGIN_YOUTUBE_ON_YOUTUBE
 	DE	Auf YouTube
 	EN	On YouTube
 
+PLUGIN_YOUTUBE_LYRICS
+	DE	Liedtext
+	EN	Lyrics
+
+PLUGIN_YOUTUBE_LYRICS_NONE
+	DE	Kein Liedtext verfügbar.
+	EN	No lyrics available.
+
 PLUGIN_YOUTUBE_WEBLINK
 	CS	Sledovat video na YouTube
 	DA	Vis YouTube video
