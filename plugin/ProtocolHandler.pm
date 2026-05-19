@@ -51,6 +51,7 @@ use Plugins::YouTube::MPEGTS;
 use Plugins::YouTube::Utils;
 use Plugins::YouTube::HTTP;
 use Plugins::YouTube::Metadata;
+use Plugins::YouTube::YTMusic;
 
 use constant MIN_OUT	=> 8192;
 use constant DATA_CHUNK => 128*1024;
@@ -1217,6 +1218,7 @@ sub _getBulkMetadata {
 			return;
 		}
 
+		my @musicIds;
 		foreach my $item (@{$result->{items}}) {
 			my $snippet = $item->{snippet};
 			my $cover   = my $icon = Plugins::YouTube::Plugin::_getImage($snippet->{thumbnails});
@@ -1239,7 +1241,12 @@ sub _getBulkMetadata {
 			};
 
 			$cache->set("yt:meta-" . $item->{id}, $meta, 86400);
+
+			# only music category gets YTM enrichment
+			push @musicIds, $item->{id} if ($snippet->{categoryId} || 0) == 10;
 		}
+
+		_enrichWithYTMusic($client, \@musicIds) if @musicIds && $prefs->get('rich_metadata');
 
 		# ids we asked for but didnt get back are usually deleted or private.
 		# cache as failed for a day so the UI poll stops asking.
@@ -1253,6 +1260,46 @@ sub _getBulkMetadata {
 		$cb->() if defined $cb;
 
 	}, $ids);
+}
+
+# refine yt:meta-$id with YTM data after the v3 baseline lands
+sub _enrichWithYTMusic {
+	my ($client, $ids) = @_;
+	return unless ref($ids) eq 'ARRAY' && @$ids;
+
+	for my $id (@$ids) {
+		next if $cache->get("ytm:enriched-$id");
+
+		Plugins::YouTube::YTMusic->getMusicMetadata($id, sub {
+			my $ytm = shift;
+			# even on no data, dont retry for an hour
+			$cache->set("ytm:enriched-$id", 1, 3600);
+			return unless $ytm && %$ytm;
+
+			my $meta = $cache->get("yt:meta-$id") || {};
+			$meta->{title}  = $ytm->{title}  if $ytm->{title};
+			$meta->{artist} = $ytm->{artist} if $ytm->{artist};
+			$meta->{album}  = $ytm->{album}  if $ytm->{album};
+			$meta->{year}   = $ytm->{year}   if $ytm->{year};
+			if ($ytm->{cover}) {
+				$meta->{cover} = $ytm->{cover};
+				$meta->{icon}  = $ytm->{cover};
+			}
+			$meta->{_ytmLyricsBrowseId} = $ytm->{lyricsBrowseId} if $ytm->{lyricsBrowseId};
+			$meta->{_ytmVideoType}      = $ytm->{videoType}      if $ytm->{videoType};
+
+			if (($ytm->{videoType} || '') =~ /^MUSIC_VIDEO_TYPE_/) {
+				$meta->{type} = 'YouTube Music';
+			}
+
+			$cache->set("yt:meta-$id", $meta, 86400);
+
+			if ($client) {
+				$client->currentPlaylistUpdateTime( Time::HiRes::time() );
+				Slim::Control::Request::notifyFromArray( $client, [ 'newmetadata' ] );
+			}
+		});
+	}
 }
 
 
