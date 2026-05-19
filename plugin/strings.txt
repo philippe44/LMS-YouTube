@@ -355,6 +355,18 @@ PLUGIN_YOUTUBE_PLAYLISTSORT
 	DA	Afspillelisteemner sorteret efter
 	EN	Playlist items sorted by
 
+PLUGIN_YOUTUBE_MUSICONLY
+	CS	Pouze hudební playlisty
+	DA	Kun musik-spillelister
+	DE	Nur Musik-Wiedergabelisten
+	EN	Music playlists only
+
+PLUGIN_YOUTUBE_MUSICONLY_DESC
+	CS	Zobrazit v "Mé playlisty" pouze playlisty s hudbou, stejně jako aplikace YouTube pro Android.
+	DA	Vis kun musik-spillelister i "Mine spillelister", på samme måde som YouTube Android-appen gør.
+	DE	In "Meine Wiedergabelisten" nur Musik-Wiedergabelisten zeigen, so wie es die YouTube Android-App macht.
+	EN	Show only music playlists in "My Playlists", the way the YouTube Android app does.
+
 PLUGIN_YOUTUBE_ICONRES
 	CS	Ikony s vysokým rozlišením
 	DA	Højopløste ikoner

@@ -228,22 +228,41 @@ sub getAudio {
 		my $id;
 		my $size;
 			
-		# first need to acquired an ID	
+		# first need to acquired an ID
 		if ( !defined $v->{id} ) {
 			$v->{position} += getEBML(\$v->{inBuf}, \$id, \$size);
-						
+
 			# skip id that are not CLUSTER *except* the SEGMENT !
 			main::DEBUGLOG && $log->is_debug && $log->debug("cluster of $size byte (last audio $v->{timecode} ms)") if ($id eq ID_CLUSTER);
 			next if $id eq ID_CLUSTER || $id eq ID_SEGMENT;
-			
-			$v->{need} = $size;	
+
+			$v->{need} = $size;
 			$v->{id} = $id;
-										
+
+			# parser desync. YT sometimes drops garbage in the stream.
+			# look for next CLUSTER id and continue from there. better
+			# than killing the whole song.
 			if ($size > MAX_EBML) {
-				$log->error("EBML too large: $size");
-				return WEBM_ERROR;
+				$log->warn("EBML too large: $size, attempting resync");
+				my $sync = index($v->{inBuf}, ID_CLUSTER);
+				if ($sync >= 0) {
+					substr($v->{inBuf}, 0, $sync, '');
+					$v->{position} += $sync;
+					$v->{need} = EBML_NEED;
+					undef $v->{id};
+					next;
+				}
+				# no cluster in buffer yet. drop most of it, ask for more
+				my $drop = length($v->{inBuf}) - length(ID_CLUSTER) + 1;
+				if ($drop > 0) {
+					substr($v->{inBuf}, 0, $drop, '');
+					$v->{position} += $drop;
+				}
+				$v->{need} = EBML_NEED;
+				undef $v->{id};
+				return WEBM_MORE;
 			}
-					
+
 			next;
 		}
 		
