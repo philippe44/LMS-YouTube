@@ -57,8 +57,9 @@ sub getCategories {
 sub getVideoDetails {
 	my ( $class, $cb, $ids ) = @_;
 
+	# topicDetails for genre
 	_call('videos', {
-		part => 'snippet,contentDetails',
+		part => 'snippet,contentDetails,topicDetails',
 		id   => $ids,
 		# cache video details a bit longer
 		_cache_ttl => 7 * 86400,
