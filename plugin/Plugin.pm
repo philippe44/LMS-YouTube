@@ -387,9 +387,11 @@ sub myPlaylistHandler {
 	});
 }
 
-# keep only playlists where the first item is in Music category (10).
-# this is what the YouTube Music / Android app does. result for each
-# playlist id is cached so back-navigation is free.
+# keep playlists where any of the sampled items is in Music category
+# (10). same idea as the YouTube Music / Android app menu. we look at
+# more than one item because the first one is often an intro, ad, or
+# just badly tagged. decision per playlist id goes into the cache so
+# we dont re-probe on every navigation.
 sub _filterMusicPlaylists {
 	my ($result, $cb) = @_;
 
@@ -400,7 +402,7 @@ sub _filterMusicPlaylists {
 	my @unknown;
 	for my $entry (@items) {
 		my $pid = $entry->{id} or next;
-		my $hit = $cache->get("yt:plmusic-$pid");
+		my $hit = $cache->get("yt:plmusic2-$pid");
 		$entry->{_musicScore} = $hit if defined $hit;
 		push @unknown, $entry unless defined $hit;
 	}
@@ -418,17 +420,20 @@ sub _filterMusicPlaylists {
 	_probeMusicPlaylists(\@unknown, $finalize);
 }
 
+use constant MUSIC_SAMPLE_SIZE => 5;
+
 sub _probeMusicPlaylists {
 	my ($entries, $done) = @_;
 	my $remaining = scalar @$entries;
-	my %firstVideoForPlaylist;
-	my @videoIds;
+	my %vidsForPlaylist;
+	my %seenVid;
+	my @allVideoIds;
 
-	my $afterAllFirsts = sub {
-		unless (@videoIds) {
+	my $afterAllSamples = sub {
+		unless (@allVideoIds) {
 			# nothing playable. mark them non-music for a bit and move on
 			for my $e (@$entries) {
-				$cache->set("yt:plmusic-" . $e->{id}, 0, 3600);
+				$cache->set("yt:plmusic2-" . $e->{id}, 0, 3600);
 				$e->{_musicScore} = 0;
 			}
 			return $done->();
@@ -451,38 +456,39 @@ sub _probeMusicPlaylists {
 			}
 
 			for my $e (@$entries) {
-				my $vid = $firstVideoForPlaylist{$e->{id}};
-				my $cat = $vid ? $catFor{$vid} : undef;
-				# 10 is Music. unknown vid (private/removed) counts as
-				# non-music but with shorter ttl so it can recover.
-				my $isMusic = (defined $cat && $cat eq '10') ? 1 : 0;
-				my $ttl = defined $cat ? 86400 : 3600;
-				$cache->set("yt:plmusic-" . $e->{id}, $isMusic, $ttl);
+				my $vids = $vidsForPlaylist{$e->{id}} || [];
+				my $known = 0;
+				my $isMusic = 0;
+				for my $vid (@$vids) {
+					my $cat = $catFor{$vid};
+					next unless defined $cat;
+					$known++;
+					if ($cat eq '10') { $isMusic = 1; last }
+				}
+				# at least one music sample = music. all known and none
+				# music = not music. nothing known = short ttl so we recover.
+				my $ttl = $known ? 86400 : 3600;
+				$cache->set("yt:plmusic2-" . $e->{id}, $isMusic, $ttl);
 				$e->{_musicScore} = $isMusic;
 			}
 
 			$done->();
-		}, join(',', @videoIds) );
+		}, join(',', @allVideoIds) );
 	};
 
 	for my $entry (@$entries) {
 		my $pid = $entry->{id};
-		Plugins::YouTube::API->searchDirect('playlistItems', sub {
+		Plugins::YouTube::API->getPlaylistSample( sub {
 			my $items = $_[0]->{items} || [];
-			if (my $first = $items->[0]) {
-				my $vid = $first->{snippet}->{resourceId}->{videoId};
-				if ($vid) {
-					$firstVideoForPlaylist{$pid} = $vid;
-					push @videoIds, $vid;
-				}
+			my @vids;
+			for my $it (@$items) {
+				my $vid = $it->{snippet}->{resourceId}->{videoId} or next;
+				push @vids, $vid;
+				push @allVideoIds, $vid unless $seenVid{$vid}++;
 			}
-			$afterAllFirsts->() if --$remaining == 0;
-		}, {
-			playlistId => $pid,
-			maxResults => 1,
-			_quantity  => 1,
-			_cache_ttl => 86400,
-		});
+			$vidsForPlaylist{$pid} = \@vids;
+			$afterAllSamples->() if --$remaining == 0;
+		}, $pid, MUSIC_SAMPLE_SIZE );
 	}
 }
 
