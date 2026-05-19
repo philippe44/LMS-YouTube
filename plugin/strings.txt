@@ -367,6 +367,14 @@ PLUGIN_YOUTUBE_MUSICONLY_DESC
 	DE	In "Meine Wiedergabelisten" nur Musik-Wiedergabelisten zeigen, so wie es die YouTube Android-App macht.
 	EN	Show only music playlists in "My Playlists", the way the YouTube Android app does.
 
+PLUGIN_YOUTUBE_RICHMETA
+	DE	Reichhaltige Metadaten von YouTube Music
+	EN	Rich metadata from YouTube Music
+
+PLUGIN_YOUTUBE_RICHMETA_DESC
+	DE	Holt Künstler, Album, Jahr und ein quadratisches Cover für Musiktitel über den (inoffiziellen) YouTube-Music-Endpunkt. Wenn der Endpunkt einmal kaputt geht, hier ausschalten.
+	EN	Fetch artist, album, year and a square album cover for music tracks from the (unofficial) YouTube Music endpoint. Turn this off if the endpoint ever breaks.
+
 PLUGIN_YOUTUBE_ICONRES
 	CS	Ikony s vysokým rozlišením
 	DA	Højopløste ikoner

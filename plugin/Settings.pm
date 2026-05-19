@@ -14,7 +14,7 @@ my $log   = logger('plugin.youtube');
 my $cache = Slim::Utils::Cache->new();
 my $prefs = preferences('plugin.youtube');
 
-my @bool = qw(live_edge aac vorbis opus use_video highres_icons auto_update_ytdlp music_playlists_only);
+my @bool = qw(live_edge aac vorbis opus use_video highres_icons auto_update_ytdlp music_playlists_only rich_metadata);
 
 sub name {
 	return 'PLUGIN_YOUTUBE';
