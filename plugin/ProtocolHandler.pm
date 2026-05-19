@@ -50,6 +50,7 @@ use Plugins::YouTube::M4a;
 use Plugins::YouTube::MPEGTS;
 use Plugins::YouTube::Utils;
 use Plugins::YouTube::HTTP;
+use Plugins::YouTube::Metadata;
 
 use constant MIN_OUT	=> 8192;
 use constant DATA_CHUNK => 128*1024;
@@ -1218,30 +1219,22 @@ sub _getBulkMetadata {
 
 		foreach my $item (@{$result->{items}}) {
 			my $snippet = $item->{snippet};
-			my $title   = $snippet->{'title'};
 			my $cover   = my $icon = Plugins::YouTube::Plugin::_getImage($snippet->{thumbnails});
-			my $artist  = "";
-			my $fulltitle;
+			my $built   = Plugins::YouTube::Metadata::buildFromV3Item($item);
 
-			if ($title =~ /(.*) - (.*)/) {
-				$fulltitle = $title;
-				$artist = $1;
-				$title  = $2;
-			}
-
-			my $duration = $item->{contentDetails}->{duration};
-			main::DEBUGLOG && $log->is_debug && $log->debug("Duration: $duration");
-			my ($misc, $hour, $min, $sec) = $duration =~ /P(?:([^T]*))T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/;
-			$duration = ($sec || 0) + (($min || 0) * 60) + (($hour || 0) * 3600);
+			main::DEBUGLOG && $log->is_debug && $log->debug("Duration: $item->{contentDetails}->{duration}");
 
 			my $meta = {
-				title    =>	$title || '',
-				artist   => $artist,
-				duration => $duration || 0,
-				icon     => $icon,
-				cover    => $cover || $icon,
-				type     => 'YouTube',
-				_fulltitle => $fulltitle,
+				title       => $built->{title},
+				artist      => $built->{artist},
+				album       => $built->{album},
+				year        => $built->{year},
+				genre       => $built->{genre},
+				duration    => $built->{duration},
+				icon        => $icon,
+				cover       => $cover || $icon,
+				type        => 'YouTube',
+				_fulltitle  => $built->{_fulltitle},
 				_thumbnails => $snippet->{thumbnails},
 			};
 
