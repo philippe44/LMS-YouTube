@@ -545,6 +545,12 @@ sub playlistHandler {
 	# if it slips in here YT returns the wrong playlist.
 	delete $params->{mine};
 
+	# private playlists 404 without the oauth token
+	if (!$params->{access_token} && (my $token = $cache->get('yt:access_token'))) {
+		$params->{access_token} = $token;
+		$params->{_noKey}       = 1;
+	}
+
 	Plugins::YouTube::API->searchDirect('playlistItems', sub {
 		$cb->( _renderList($_[0], $prefs->get('playlist_sort')) );
 	}, $params);
