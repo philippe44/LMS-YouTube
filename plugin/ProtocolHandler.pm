@@ -602,12 +602,54 @@ sub getId {
 	return undef;
 }
 
+sub _classifyYtDlpErr {
+	my ($err) = @_;
+	return ('age_restricted', 'PLUGIN_YOUTUBE_VIDEO_AGE_RESTRICTED')
+		if $err =~ /age[- ]restricted|confirm your age/i;
+	return ('private', 'PLUGIN_YOUTUBE_VIDEO_PRIVATE')
+		if $err =~ /Private video|Sign in to confirm/i;
+	return ('unavailable', 'PLUGIN_YOUTUBE_VIDEO_UNAVAILABLE')
+		if $err =~ /Video unavailable|This video is not available|Video not available/i;
+	return ('unknown', undef);
+}
+
+sub _ytDlpExtraArgs {
+	my $raw = $prefs->get('yt_dlp_extra_args');
+	return () unless defined $raw && $raw =~ /\S/;
+	# whitespace split. simple. people who need quoted args can edit
+	# the pref to use them but the common case (--js-runtimes foo:bar)
+	# does not need quoting.
+	$raw =~ s/^\s+|\s+$//g;
+	return split /\s+/, $raw;
+}
+
+sub _reportYtDlpFailure {
+	my ($song, $id, $err) = @_;
+	my ($kind, $stringKey) = _classifyYtDlpErr($err || '');
+	my $meta  = $cache->get("yt:meta-$id") || {};
+	my $title = $meta->{_fulltitle} || $meta->{title} || $song->track->title || $id;
+	my $oneline = ($err // '') =~ s/\s+/ /gr;
+
+	if ($kind ne 'unknown') {
+		$log->warn("yt-dlp $kind for $id ($title): $oneline");
+	} else {
+		$log->error("yt-dlp failed for $id ($title): $oneline");
+	}
+
+	if ($stringKey && eval { $song->master && $song->master->can('showBriefly') }) {
+		my $msg = string($stringKey);
+		$song->master->showBriefly({ line => [ $title, $msg ] }, { duration => 3, block => 0 });
+	}
+}
+
 sub getNextTrack {
 	my ($class, $song, $successCb, $errorCb,) = @_;
 
 	my $yt_dlp = Plugins::YouTube::Utils::yt_dlp_bin($prefs->get('yt_dlp'));
 	$log->info("Using yt_dlp $yt_dlp");
 	return $_[3]->("cannot find yt-dlp") unless $yt_dlp;
+
+	my @extra = _ytDlpExtraArgs();
 
 	my $masterUrl = $song->track()->url;
 
@@ -627,7 +669,8 @@ sub getNextTrack {
 		my $pid = 0;
 		my $lambda;
 		my $out = tmpnam();
-		my $cmd = qq{$yt_dlp -j $url >$out};
+		my $extra_str = @extra ? ' ' . join(' ', @extra) : '';
+		my $cmd = qq{$yt_dlp -j$extra_str $url >$out 2>${out}.err};
 
 		$log->info("Get tracks with $cmd");
 
@@ -646,11 +689,17 @@ sub getNextTrack {
 			# response is on 1st line
 			local @ARGV = ($out);
 			my $tracks = <>;
+			my $err = '';
+			if (open my $fh, '<', "${out}.err") { local $/; $err = <$fh>; close $fh; unlink "${out}.err"; }
 
 			main::INFOLOG && $log->is_info && $log->info("yt-dlp finished with $exitcode in ", time() - $now, " seconds");
 			$tracks = eval { decode_json($tracks) };
 
-			$log->error("yt-dlp failed") && $errorCb->($@) && return if $@ || !$tracks;
+			if ($@ || !$tracks) {
+				_reportYtDlpFailure($song, $id, $err);
+				$errorCb->($@);
+				return;
+			}
 
 			# duration is at the top level
 			$song->track->secs( $tracks->{'duration'} );
@@ -662,7 +711,7 @@ sub getNextTrack {
 	} else {
 
 		my $cv = AnyEvent::Util::run_cmd(
-			[ $yt_dlp, '-j', $url],
+			[ $yt_dlp, '-j', @extra, $url],
 			"<", "/dev/null",
 			">" , \my $tracks,
 			"2>", \my $err,
@@ -672,7 +721,11 @@ sub getNextTrack {
 			main::INFOLOG && $log->is_info && $log->info("yt-dlp finished in ", time() - $now, " seconds");
 			$tracks = eval { decode_json($tracks) };
 
-			$log->error("yt-dlp failed $err") && $errorCb->($@) && return if $@ || !$tracks;
+			if ($@ || !$tracks) {
+				_reportYtDlpFailure($song, $id, $err);
+				$errorCb->($@);
+				return;
+			}
 
 			# duration is at the top level
 			$song->track->secs( $tracks->{'duration'} );
