@@ -575,11 +575,17 @@ sub getEBML {
 	for ($len = 1; !($c & 0x80) && $len <= 4; $len++) { $c <<= 1 }
 	
 	if ($len == 5) {
-		$log->error("wrong len: $len, $c");
-		# arbitrary, but at least won't get stuck in the an infinite loop and will not go beyond available data
-		$len = EBML_NEED; 	
-		substr($$in, 0, $len, '');
-		return $len;
+		# desync. element_id length walk fell off the end, the first byte
+		# does not look like an EBML id. drop just one byte and let the
+		# caller try again. earlier we used to drop EBML_NEED (12) which
+		# threw away around 3s of audio every desync. now we lose one
+		# byte and the cluster resync in getAudio normally picks up
+		# within a packet or two.
+		main::INFOLOG && $log->is_info && $log->info("getEBML desync, dropping 1 byte");
+		substr($$in, 0, 1, '');
+		$$id   = undef;
+		$$size = 0;
+		return 1;
 	}
 	
 	$$id = substr($$in, 0, $len, '');
