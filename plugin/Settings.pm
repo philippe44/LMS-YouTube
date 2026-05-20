@@ -25,9 +25,10 @@ sub page {
 }
 
 sub prefs {
-	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix 
-			playlist_suffix country max_items APIkey client_id client_secret live_delay 
-			cache_ttl search_rank search_sort channel_rank channel_sort playlist_sort query_size auto_update_check_hour), @bool);
+	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix
+			playlist_suffix country max_items APIkey client_id client_secret live_delay
+			cache_ttl search_rank search_sort channel_rank channel_sort playlist_sort query_size auto_update_check_hour
+			yt_dlp_extra_args), @bool);
 }
 
 sub init {
