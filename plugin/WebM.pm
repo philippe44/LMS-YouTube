@@ -76,19 +76,19 @@ my $log = logger('plugin.youtube');
 }
 
 sub new {
-	my ($class, $url) = @_;
+	my ($class, $url, $videoId) = @_;
 	my $self = $class->SUPER::new;
-	
+
 	# _context is to be flushed/initialized each time the getAudio is restarted
-	# but _webm is to be used for the duration of the objects, i.e. when seeking	
+	# but _webm is to be used for the duration of the objects, i.e. when seeking
 	$self->init_accessor(
 		url => $url,
 		_context => {},
-		_webm => {},
-	);	
-	
+		_webm => { videoId => $videoId },
+	);
+
 	return bless $self, $class;
-}	
+}
 
 sub flush {
 	$_[0]->_context( { } );

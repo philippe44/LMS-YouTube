@@ -757,9 +757,10 @@ sub _getNextTrack {
 
 	# What type of stream do we have?
 	if (!$track->{manifest_url}) {
+		my $videoId = $class->getId($masterUrl);
 		my $handler = $config->{'format'} =~ /aac/ ?
 							Plugins::YouTube::M4a->new($track->{url}) :
-							Plugins::YouTube::WebM->new($track->{url});
+							Plugins::YouTube::WebM->new($track->{url}, $videoId);
 
 		$config->{'handler'} = $handler;
 		$config->{'sysread'} = \&sysread_URL;
