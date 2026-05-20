@@ -31,8 +31,11 @@ my $cache = Slim::Utils::Cache->new;
 
 use constant HEADER_CHUNK => 8192;
 
-use constant MAX_EBML  => 128*1024;
-use constant EBML_NEED  => 12;
+use constant MAX_EBML        => 128*1024;
+use constant EBML_NEED       => 12;
+# give up resync after this many dropped bytes. prebuffer empties
+# around here anyway so further searching just delays the skip.
+use constant MAX_RESYNC_DROP => 4 * 1024 * 1024;
 
 use constant WEBM_ERROR => 0;
 use constant WEBM_DONE  => 1;
@@ -246,20 +249,31 @@ sub getAudio {
 			# look for next CLUSTER id and continue from there. better
 			# than killing the whole song.
 			if ($size > MAX_EBML) {
-				$log->warn("${tag}EBML too large: $size, attempting resync");
+				$v->{resyncDropped} //= 0;
+				$log->warn("${tag}EBML too large: $size, attempting resync (dropped so far: $v->{resyncDropped})");
 				my $sync = index($v->{inBuf}, ID_CLUSTER);
 				if ($sync >= 0) {
 					substr($v->{inBuf}, 0, $sync, '');
 					$v->{position} += $sync;
+					$v->{resyncDropped} += $sync;
 					$v->{need} = EBML_NEED;
 					undef $v->{id};
+					main::INFOLOG && $log->is_info && $log->info("${tag}resync ok, dropped $v->{resyncDropped} bytes total");
+					$v->{resyncDropped} = 0;
 					next;
 				}
-				# no cluster in buffer yet. drop most of it, ask for more
+				# no cluster in buffer yet. drop most of it, ask for more.
+				# but if we have already dropped a lot give up so the
+				# player can move on instead of stalling silently.
 				my $drop = length($v->{inBuf}) - length(ID_CLUSTER) + 1;
 				if ($drop > 0) {
 					substr($v->{inBuf}, 0, $drop, '');
 					$v->{position} += $drop;
+					$v->{resyncDropped} += $drop;
+				}
+				if ($v->{resyncDropped} > MAX_RESYNC_DROP) {
+					$log->error("${tag}resync failed after $v->{resyncDropped} bytes, giving up");
+					return WEBM_ERROR;
 				}
 				$v->{need} = EBML_NEED;
 				undef $v->{id};
