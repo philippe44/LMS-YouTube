@@ -708,3 +708,23 @@ PLUGIN_YOUTUBE_LAST_AUTO_UPDATE
 	CS	Poslední automatická aktualizace
 	DA	Sidste automatiske opdatering
 	DE	Letzte automatische Aktualisierung
+
+PLUGIN_YOUTUBE_YTDLP_EXTRA_ARGS
+	EN	Extra yt-dlp arguments
+	DE	Zusätzliche yt-dlp-Argumente
+
+PLUGIN_YOUTUBE_YTDLP_EXTRA_ARGS_DESC
+	EN	Optional extra args appended to every yt-dlp call. Useful for --js-runtimes node:/usr/bin/node when a JS runtime is installed but not on the default search path. Leave empty for the default behaviour.
+	DE	Optionale zusätzliche Argumente, die an jeden yt-dlp Aufruf angehängt werden. Hilfreich für --js-runtimes node:/usr/bin/node, wenn eine JS Laufzeit installiert, aber nicht im Standardpfad ist. Leer lassen für Standardverhalten.
+
+PLUGIN_YOUTUBE_VIDEO_UNAVAILABLE
+	EN	Video unavailable, skipping
+	DE	Video nicht verfügbar, überspringe
+
+PLUGIN_YOUTUBE_VIDEO_PRIVATE
+	EN	Private video, skipping
+	DE	Privates Video, überspringe
+
+PLUGIN_YOUTUBE_VIDEO_AGE_RESTRICTED
+	EN	Age restricted, skipping
+	DE	Altersbeschränkung, überspringe
