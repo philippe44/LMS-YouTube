@@ -238,6 +238,45 @@ sub getAudio {
 		if ( !defined $v->{id} ) {
 			$v->{position} += getEBML(\$v->{inBuf}, \$id, \$size);
 
+			# getEBML returns id=undef when the first byte does not look
+			# like an EBML id (desync). it has already dropped 1 byte.
+			# treat the same way we do for "EBML too large": try to find
+			# the next CLUSTER, yield if we cant, bail if we have been
+			# burning bytes for a long time. without this we spin on
+			# garbage and lock the LMS event loop.
+			if (!defined $id) {
+				$v->{resyncDropped} //= 0;
+				$v->{resyncDropped}++;
+				if ($v->{resyncDropped} > MAX_RESYNC_DROP) {
+					$log->error("${tag}getEBML desync, gave up after $v->{resyncDropped} bytes");
+					return WEBM_ERROR;
+				}
+				my $sync = index($v->{inBuf}, ID_CLUSTER);
+				if ($sync >= 0) {
+					substr($v->{inBuf}, 0, $sync, '');
+					$v->{position} += $sync;
+					$v->{resyncDropped} += $sync;
+					$v->{need} = EBML_NEED;
+					undef $v->{id};
+					main::INFOLOG && $log->is_info && $log->info("${tag}getEBML resync ok, dropped $v->{resyncDropped} bytes total");
+					$v->{resyncDropped} = 0;
+					next;
+				}
+				# no cluster yet. drop most of the buffer (keep the tail
+				# in case CLUSTER spans the boundary) and yield so we
+				# refill from the network instead of spinning here.
+				my $keep = length(ID_CLUSTER) - 1;
+				my $drop = length($v->{inBuf}) - $keep;
+				if ($drop > 0) {
+					substr($v->{inBuf}, 0, $drop, '');
+					$v->{position} += $drop;
+					$v->{resyncDropped} += $drop;
+				}
+				$v->{need} = EBML_NEED;
+				undef $v->{id};
+				return WEBM_MORE;
+			}
+
 			# skip id that are not CLUSTER *except* the SEGMENT !
 			main::DEBUGLOG && $log->is_debug && $log->debug("cluster of $size byte (last audio $v->{timecode} ms)") if ($id eq ID_CLUSTER);
 			next if $id eq ID_CLUSTER || $id eq ID_SEGMENT;
@@ -581,7 +620,10 @@ sub getEBML {
 		# threw away around 3s of audio every desync. now we lose one
 		# byte and the cluster resync in getAudio normally picks up
 		# within a packet or two.
-		main::INFOLOG && $log->is_info && $log->info("getEBML desync, dropping 1 byte");
+		# getAudio counts the dropped byte and logs the summary. avoid
+		# logging once per byte here, that floods the log on long garbage
+		# stretches.
+		main::DEBUGLOG && $log->is_debug && $log->debug("getEBML desync, dropping 1 byte");
 		substr($$in, 0, 1, '');
 		$$id   = undef;
 		$$size = 0;
