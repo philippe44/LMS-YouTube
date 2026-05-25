@@ -708,3 +708,31 @@ PLUGIN_YOUTUBE_LAST_AUTO_UPDATE
 	CS	Poslední automatická aktualizace
 	DA	Sidste automatiske opdatering
 	DE	Letzte automatische Aktualisierung
+
+PLUGIN_YOUTUBE_YTDLP_EXTRA_ARGS
+	EN	Extra yt-dlp arguments
+	DE	Zusätzliche yt-dlp-Argumente
+
+PLUGIN_YOUTUBE_YTDLP_EXTRA_ARGS_DESC
+	EN	Optional extra args appended to every yt-dlp call. Whitespace separated. Common case when only node is installed: "--no-js-runtimes --js-runtimes node:/usr/bin/node". The --no-js-runtimes part clears the deno default so node actually gets used. Leave empty for default behaviour.
+	DE	Optionale zusätzliche Argumente, die an jeden yt-dlp Aufruf angehängt werden. Durch Leerzeichen getrennt. Üblicher Fall, wenn nur node installiert ist: "--no-js-runtimes --js-runtimes node:/usr/bin/node". Der Teil --no-js-runtimes löscht den deno Standard, damit node tatsächlich verwendet wird. Leer lassen für Standardverhalten.
+
+PLUGIN_YOUTUBE_YTDLP_COOKIES
+	EN	YouTube cookies (cookies.txt)
+	DE	YouTube-Cookies (cookies.txt)
+
+PLUGIN_YOUTUBE_YTDLP_COOKIES_DESC
+	EN	Paste a Netscape format cookies.txt exported from a browser where you are logged in to YouTube. When YouTube starts asking "Sign in to confirm you're not a bot" for this server's IP, cookies are the fix. Plugin writes the content to disk and passes --cookies to yt-dlp on every call. Leave empty to disable. Treat the content as a password, anyone with it can act as you on YouTube.
+	DE	Hier eine im Netscape-Format exportierte cookies.txt einfügen, aus einem Browser, in dem Sie bei YouTube angemeldet sind. Wenn YouTube für diese Server-IP "Bestätigen, dass Sie kein Bot sind" verlangt, sind Cookies die Lösung. Das Plugin schreibt den Inhalt auf die Festplatte und übergibt --cookies bei jedem yt-dlp Aufruf. Leer lassen zum Deaktivieren. Inhalt wie ein Passwort behandeln, jeder mit Zugriff kann in Ihrem Namen auf YouTube agieren.
+
+PLUGIN_YOUTUBE_VIDEO_UNAVAILABLE
+	EN	Video unavailable, skipping
+	DE	Video nicht verfügbar, überspringe
+
+PLUGIN_YOUTUBE_VIDEO_PRIVATE
+	EN	Private video, skipping
+	DE	Privates Video, überspringe
+
+PLUGIN_YOUTUBE_VIDEO_AGE_RESTRICTED
+	EN	Age restricted, skipping
+	DE	Altersbeschränkung, überspringe

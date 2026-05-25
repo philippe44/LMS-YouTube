@@ -25,9 +25,10 @@ sub page {
 }
 
 sub prefs {
-	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix 
-			playlist_suffix country max_items APIkey client_id client_secret live_delay 
-			cache_ttl search_rank search_sort channel_rank channel_sort playlist_sort query_size auto_update_check_hour), @bool);
+	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix
+			playlist_suffix country max_items APIkey client_id client_secret live_delay
+			cache_ttl search_rank search_sort channel_rank channel_sort playlist_sort query_size auto_update_check_hour
+			yt_dlp_extra_args yt_dlp_cookies), @bool);
 }
 
 sub init {
@@ -75,6 +76,14 @@ if ($params->{flushcache}) {
 	$params->{pref_max_items} = min($params->{pref_max_items}, 500);
 	$params->{pref_live_delay} = max($params->{pref_live_delay}, 30);
 	$params->{pref_APIkey} =~ s/^\s+|\s+$//g;
+
+	# normalise pasted cookies.txt before save. browsers export with CRLF
+	# and stray whitespace around the edges, neither of which yt-dlp likes.
+	if (defined $params->{pref_yt_dlp_cookies}) {
+		$params->{pref_yt_dlp_cookies} =~ s/\r\n/\n/g;
+		$params->{pref_yt_dlp_cookies} =~ s/\A\s+//;
+		$params->{pref_yt_dlp_cookies} =~ s/\s+\z//;
+	}
 		
 	$cache->remove('yt:access_token') if $params->{clear_token};
 	
