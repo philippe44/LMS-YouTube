@@ -614,13 +614,28 @@ sub _classifyYtDlpErr {
 }
 
 sub _ytDlpExtraArgs {
+	my @args;
+
+	# if the user pasted cookies into the textarea pref, materialise
+	# them and add --cookies. happens before the free form extra args
+	# so the user can still override with their own --cookies if they
+	# want a different path.
+	my $cookies = $prefs->get('yt_dlp_cookies');
+	if (defined $cookies && $cookies =~ /\S/) {
+		my $path = Plugins::YouTube::Utils::yt_dlp_cookies_file($cookies);
+		push @args, '--cookies', $path if $path;
+	}
+
 	my $raw = $prefs->get('yt_dlp_extra_args');
-	return () unless defined $raw && $raw =~ /\S/;
-	# whitespace split. simple. people who need quoted args can edit
-	# the pref to use them but the common case (--js-runtimes foo:bar)
-	# does not need quoting.
-	$raw =~ s/^\s+|\s+$//g;
-	return split /\s+/, $raw;
+	if (defined $raw && $raw =~ /\S/) {
+		# whitespace split. simple. people who need quoted args can edit
+		# the pref to use them but the common case (--js-runtimes foo:bar)
+		# does not need quoting.
+		$raw =~ s/^\s+|\s+$//g;
+		push @args, split /\s+/, $raw;
+	}
+
+	return @args;
 }
 
 sub _reportYtDlpFailure {

@@ -10,6 +10,7 @@ use Config;
 use File::Spec::Functions;
 
 use Slim::Utils::Log;
+use Slim::Utils::Prefs;
 
 my $log = logger('plugin.youtube');
 
@@ -108,4 +109,46 @@ sub yt_dlp_binaries {
 # Returns: 1 on success, 0 on failure
 sub set_yt_dlp_writable { return main::ISWINDOWS || (-e $_[0] && chmod(0755, $_[0])) }
 sub set_yt_dlp_readonly { return main::ISWINDOWS || (-e $_[0] && chmod(0555, $_[0])) }
+
+# materialize the yt_dlp_cookies pref into a cookies.txt file under the
+# LMS cachedir. yt-dlp wants a path, not content, so the textarea pref
+# gets written to disk before each invocation. file is recreated when
+# the pref content changes so we don't leave stale cookies around.
+#
+# returns the path if a cookies file exists and is non-empty,
+# otherwise undef so the caller knows to skip --cookies entirely.
+sub yt_dlp_cookies_file {
+	my $raw = shift;
+	return undef unless defined $raw && $raw =~ /\S/;
+
+	# strip leading/trailing whitespace but keep the inner newlines.
+	# also normalise CRLF since browser exports often have them.
+	$raw =~ s/\r\n/\n/g;
+	$raw =~ s/\A\s+//;
+	$raw =~ s/\s+\z//;
+	$raw .= "\n";
+
+	my $dir = Slim::Utils::Prefs::preferences('server')->get('cachedir')
+		|| File::Spec::Functions::tmpdir()
+		|| '/tmp';
+	my $path = catdir($dir, 'youtube-cookies.txt');
+
+	# only rewrite if content changed. avoids touching the file on every
+	# track and avoids tripping any future inotify watcher.
+	my $existing = '';
+	if (open my $fh, '<', $path) { local $/; $existing = <$fh>; close $fh; }
+	if ($existing ne $raw) {
+		if (open my $fh, '>', $path) {
+			print $fh $raw;
+			close $fh;
+			chmod 0600, $path;
+		} else {
+			$log->warn("could not write $path: $!");
+			return undef;
+		}
+	}
+
+	return $path;
+}
+
 1;
