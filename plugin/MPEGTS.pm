@@ -32,22 +32,23 @@ use constant TABLE_SYNTAX_OFS 	=> TABLE_OFS + 3;
 use constant TABLE_DATA_OFS 	=> TABLE_SYNTAX_OFS + 5;
 
 {
-	__PACKAGE__->mk_accessor('rw', qw(bitrate samplerate channels format url));
+	__PACKAGE__->mk_accessor('rw', qw(bitrate samplerate channels format url http_headers));
 	__PACKAGE__->mk_accessor('rw', qw( _context));
 }
 
 sub new {
-	my ($class, $url) = @_;
+	my ($class, $url, $headers) = @_;
 	my $self = $class->SUPER::new;
-	
+
 	# _context is to be flushed/initialized each time the getAudio is restarted
-		$self->init_accessor(
+	$self->init_accessor(
 		url => $url,
+		http_headers => $headers || {},
 		_context => {},
-	);	
-	
+	);
+
 	return bless $self, $class;
-}	
+}
 
 sub flush {
 	$_[0]->_context( { } );
@@ -69,9 +70,11 @@ sub getStartOffset {
 
 sub initialize {
 	my ($self, $cb, $ecb, $fragment) = @_;
-	
+
+	my %hdrs = %{ $self->http_headers || {} };
+
 	# let's get a bit of 1st fragment to get AAC params
-	Slim::Networking::SimpleAsyncHTTP->new ( 
+	Slim::Networking::SimpleAsyncHTTP->new (
 		sub {
 			my $outBuf ='';
 			
@@ -120,7 +123,7 @@ sub initialize {
 			$ecb->();
 		},
 		
-	)->get( $fragment, Range => 'bytes=0-128000' );
+	)->get( $fragment, %hdrs, Range => 'bytes=0-128000' );
 }	
 
 sub getAudio {

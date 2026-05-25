@@ -45,25 +45,26 @@ use constant PARSING  => 2;
 use constant DATA	  => 3;
 
 {
-	__PACKAGE__->mk_accessor('rw', qw(bitrate samplerate channels format url));
+	__PACKAGE__->mk_accessor('rw', qw(bitrate samplerate channels format url http_headers));
 	__PACKAGE__->mk_accessor('rw', qw(_mp4a _context));
 }
 
 sub new {
-	my ($class, $url) = @_;
+	my ($class, $url, $headers) = @_;
 	my $self = $class->SUPER::new;
 
 	# _context is to be flushed/initialized each time the getAudio is restarted
-	# but _mp4a is to be used for the duration of the objects, i.e. when seeking	
+	# but _mp4a is to be used for the duration of the objects, i.e. when seeking
 	$self->init_accessor(
 		format => 'aac',
 		url => $url,
+		http_headers => $headers || {},
 		_context => {},
 		_mp4a => {},
-	);	
-	
+	);
+
 	return bless $self, $class;
-}	
+}
 
 sub flush {
 	$_[0]->_context( { } );
@@ -87,13 +88,15 @@ sub getStartOffset {
 	
 	my $http = Slim::Networking::Async::HTTP->new;
 	my $args = { startTime => $startTime };
-		
+
+	my %hdrs = %{ $self->http_headers || {} };
+
 	$http->send_request( {
-		request     => HTTP::Request->new( GET => $url ),
-		
+		request     => HTTP::Request->new( GET => $url, [ %hdrs ] ),
+
 		onStream  	=> sub {
 			my ($http, $dataref) = @_;
-			
+
 			if (my $atom = parseAtoms('sidx', $dataref, $args)) {
 				my $offset = $args->{offset} || 0;
 				$startTime -= $atom->{time};
@@ -128,12 +131,14 @@ sub initialize {
 	my ($self, $cb, $ecb, $url) = @_;
 	my $http = Slim::Networking::Async::HTTP->new;
 	my $args = {};
-	
+
 	# we might have received an initialize url
 	$url ||= $self->url;
-	
+
+	my %hdrs = %{ $self->http_headers || {} };
+
 	$http->send_request( {
-		request     => HTTP::Request->new( GET => $url ),
+		request     => HTTP::Request->new( GET => $url, [ %hdrs ] ),
 		onStream  	=> sub {
 			my ($http, $dataref) = @_;
 						

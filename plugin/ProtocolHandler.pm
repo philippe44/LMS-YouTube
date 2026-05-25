@@ -301,11 +301,11 @@ sub sysread_URL {
 		# we only use one session in that mode
 		my $session = $v->{sessions}->[0] ||= Slim::Networking::Async::HTTP->new;
 
-		my $request = HTTP::Request->new( GET => $url, 
-							[ 'Connection', 'keep-alive',
-							  'Range', "bytes=$v->{offset}-" . ($v->{offset} + DATA_CHUNK - 1),
-							]
-		);
+		my %hdrs = %{ $config->{headers} || {} };
+		$hdrs{Connection} = 'keep-alive';
+		$hdrs{Range} = "bytes=$v->{offset}-" . ($v->{offset} + DATA_CHUNK - 1);
+
+		my $request = HTTP::Request->new( GET => $url, [ %hdrs ] );
 		
 		$request->protocol( 'HTTP/1.1' );
 		
@@ -539,8 +539,12 @@ AUDIO:
 sub sendRequest {
 	my ($self, $url, $level, $onBody, $onError) = @_;
 	my $v = ${*$self}{vars};
-		
-	my $request = HTTP::Request->new( GET => $url, [ 'Connection', 'keep-alive' ] );
+	my $config = ${*$self}{config};
+
+	my %hdrs = %{ ($config && $config->{headers}) || {} };
+	$hdrs{Connection} = 'keep-alive';
+
+	my $request = HTTP::Request->new( GET => $url, [ %hdrs ] );
 	# my $request = HTTP::Request->new( GET => $url );
 	$request->protocol( 'HTTP/1.1' );
 	
@@ -758,8 +762,8 @@ sub _getNextTrack {
 	# What type of stream do we have?
 	if (!$track->{manifest_url}) {
 		my $handler = $config->{'format'} =~ /aac/ ?
-							Plugins::YouTube::M4a->new($track->{url}) :
-							Plugins::YouTube::WebM->new($track->{url});
+							Plugins::YouTube::M4a->new($track->{url}, $track->{http_headers}) :
+							Plugins::YouTube::WebM->new($track->{url}, $track->{http_headers});
 
 		$config->{'handler'} = $handler;
 		$config->{'sysread'} = \&sysread_URL;
@@ -816,7 +820,7 @@ sub _getNextTrack {
 						# stash that into pluginData to retrieve it later
 						$song->pluginData(stash => $mpeg);
 
-						my $handler = Plugins::YouTube::MPEGTS->new( $track->{url} );
+						my $handler = Plugins::YouTube::MPEGTS->new( $track->{url}, $track->{http_headers} );
 
 						$config->{source} = 'hls-mpeg';
 						$config->{handler} = $handler;
