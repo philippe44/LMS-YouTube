@@ -75,30 +75,31 @@ sub yt_dlp_binary {
 sub yt_dlp_bin {
 	my $bin = shift || yt_dlp_binary();
 	state $init;
-	
-	# add extra path
+	state $base;
+
+	# add extra path. the plugin ships its yt-dlp binaries in Bin/,
+	# which LMS doesn't include in getBinPaths by default, so add it.
 	unless ($init) {
-		my $base = catdir(Slim::Utils::PluginManager->allPlugins->{'YouTube'}->{'basedir'}, 'Bin');
-		Slim::Utils::Misc::addFindBinPaths(
-			# catdir($base, 'armv7l'),
-		);
+		$base = catdir(Slim::Utils::PluginManager->allPlugins->{'YouTube'}->{'basedir'}, 'Bin');
+		Slim::Utils::Misc::addFindBinPaths($base);
 		$init = 1;
-	}	
-	
-	my ($exec) = grep { -e "$_/$bin" } Slim::Utils::Misc::getBinPaths;
-	$exec = catdir($exec, $bin);
-		
-	if (!-x $exec) {
-		$log->warn("$exec not executable - correcting");
-		chmod (0555, $exec);
+	}
+
+	# self heal: if the shipped binary lost its exec bit (unpacking with
+	# unzip etc. drops permissions) findbin wont return it, and the old
+	# code chmod'd the wrong path. resolve against the Bin/ dir first.
+	my $shipped = catdir($base, $bin);
+	if (-e $shipped && !-x $shipped) {
+		$log->warn("$shipped not executable, fixing");
+		chmod(0555, $shipped);
 	}
 
 	# use findbin in case there are other places
 	$bin = Slim::Utils::Misc::findbin($bin);
 	$bin = Slim::Utils::OSDetect::getOS->decodeExternalHelperPath($bin);
-			
+
 	return $bin;
-}	
+}
 
 sub yt_dlp_binaries {
 	return qw ( yt-dlp_linux yt-dlp_linux_aarch64 yt-dlp_linux_armv7l yt-dlp_freebsd14 yt-dlp_macos yt-dlp.exe yt-dlp);
