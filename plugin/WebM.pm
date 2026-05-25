@@ -71,24 +71,25 @@ use constant ID_CUE_CLUSTER_POS	=> "\xF1";
 my $log = logger('plugin.youtube');
 
 {
-	__PACKAGE__->mk_accessor('rw', qw(bitrate samplerate channels format url));
+	__PACKAGE__->mk_accessor('rw', qw(bitrate samplerate channels format url http_headers));
 	__PACKAGE__->mk_accessor('rw', qw(_webm _context));
 }
 
 sub new {
-	my ($class, $url) = @_;
+	my ($class, $url, $headers) = @_;
 	my $self = $class->SUPER::new;
-	
+
 	# _context is to be flushed/initialized each time the getAudio is restarted
-	# but _webm is to be used for the duration of the objects, i.e. when seeking	
+	# but _webm is to be used for the duration of the objects, i.e. when seeking
 	$self->init_accessor(
 		url => $url,
+		http_headers => $headers || {},
 		_context => {},
 		_webm => {},
-	);	
-	
+	);
+
 	return bless $self, $class;
-}	
+}
 
 sub flush {
 	$_[0]->_context( { } );
@@ -655,12 +656,15 @@ sub getStartOffset {
 				'need'        => EBML_NEED,  
 	};
 				
+	my %hdrs = %{ $self->http_headers || {} };
+	$hdrs{Range} = "bytes=$webm->{offset}->{cues}-";
+
 	$http->send_request( {
-		request     => HTTP::Request->new( GET => $url, [ 'Range' => "bytes=$webm->{offset}->{cues}-" ] ),
-		onStream  	=> sub {		
+		request     => HTTP::Request->new( GET => $url, [ %hdrs ] ),
+		onStream  	=> sub {
 				my ($http, $dataref) = @_;
-												
-				$var->{'inBuf'} .= $$dataref;		
+
+				$var->{'inBuf'} .= $$dataref;
 				my $res = getCues($var);
 				
 				if ( $res eq WEBM_MORE ) {
@@ -693,12 +697,14 @@ sub initialize {
 		};
 		
 	my $http = Slim::Networking::Async::HTTP->new;
-			
+
+	my %hdrs = %{ $self->http_headers || {} };
+
 	$http->send_request( {
-		request     => HTTP::Request->new( GET => $self->url ),
-		onStream  	=> sub {		
+		request     => HTTP::Request->new( GET => $self->url, [ %hdrs ] ),
+		onStream  	=> sub {
 				my ($http, $dataref) = @_;
-												
+
 				$var->{'inBuf'} .= $$dataref;
 				my $res = $self->getHeaders($var);
 				
