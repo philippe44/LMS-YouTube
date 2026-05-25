@@ -346,11 +346,16 @@ sub sysread_URL {
 	}
 
 	# process all available data
-	$handler->getAudio(\$v->{outBuf}) if $handler->bufferLength;
+	my $audioRes = $handler->bufferLength ? $handler->getAudio(\$v->{outBuf}) : undef;
 
 	if ( my $bytes = min(length $v->{outBuf}, $_[2]) ) {
 		$_[1] = substr($v->{outBuf}, 0, $bytes, '');
 		return $bytes;
+	} elsif ( defined $audioRes && $audioRes eq Plugins::YouTube::WebM::WEBM_ERROR() ) {
+		# parser gave up. end the stream so LMS skips to next track
+		# instead of stalling on an empty buffer
+		$log->warn("parser error, ending stream early");
+		return 0;
 	} elsif ( $v->{streaming} && $v->{retry} > 0 ) {
 		$! = EINTR;
 		return undef;
@@ -757,9 +762,10 @@ sub _getNextTrack {
 
 	# What type of stream do we have?
 	if (!$track->{manifest_url}) {
+		my $videoId = $class->getId($masterUrl);
 		my $handler = $config->{'format'} =~ /aac/ ?
 							Plugins::YouTube::M4a->new($track->{url}) :
-							Plugins::YouTube::WebM->new($track->{url});
+							Plugins::YouTube::WebM->new($track->{url}, $videoId);
 
 		$config->{'handler'} = $handler;
 		$config->{'sysread'} = \&sysread_URL;

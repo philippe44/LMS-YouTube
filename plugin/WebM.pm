@@ -31,8 +31,11 @@ my $cache = Slim::Utils::Cache->new;
 
 use constant HEADER_CHUNK => 8192;
 
-use constant MAX_EBML  => 128*1024;
-use constant EBML_NEED  => 12;
+use constant MAX_EBML        => 128*1024;
+use constant EBML_NEED       => 12;
+# give up resync after this many dropped bytes. prebuffer empties
+# around here anyway so further searching just delays the skip.
+use constant MAX_RESYNC_DROP => 4 * 1024 * 1024;
 
 use constant WEBM_ERROR => 0;
 use constant WEBM_DONE  => 1;
@@ -76,19 +79,19 @@ my $log = logger('plugin.youtube');
 }
 
 sub new {
-	my ($class, $url) = @_;
+	my ($class, $url, $videoId) = @_;
 	my $self = $class->SUPER::new;
-	
+
 	# _context is to be flushed/initialized each time the getAudio is restarted
-	# but _webm is to be used for the duration of the objects, i.e. when seeking	
+	# but _webm is to be used for the duration of the objects, i.e. when seeking
 	$self->init_accessor(
 		url => $url,
 		_context => {},
-		_webm => {},
-	);	
-	
+		_webm => { videoId => $videoId },
+	);
+
 	return bless $self, $class;
-}	
+}
 
 sub flush {
 	$_[0]->_context( { } );
@@ -108,30 +111,31 @@ sub duration {
 }	
 
 sub getCues {
-	my ($v) = @_;
-	
+	my ($v, $videoId) = @_;
+	my $tag = $videoId ? "[$videoId] " : "";
+
 	# just in case caller sends less than EBML_NEED at first call ... stupid but who knows
 	return WEBM_MORE if ($v->{need} > length $v->{inBuf});
-					
+
 	if ( !defined $v->{id} ) {
 		my $id;
 		my $size;
-		
+
 		getEBML(\$v->{inBuf}, \$id, \$size);
-					
+
 		if ($id ne ID_CUES) {
-			$log->error("wrong cues offset" );
-			return WEBM_ERROR;
-		}	
-						
-		$v->{id} = $id;
-		$v->{need} = $size;
-				
-		if ($size > MAX_EBML) {
-			$log->error("EBML too large: $size");
+			$log->error("${tag}wrong cues offset" );
 			return WEBM_ERROR;
 		}
-	}	
+
+		$v->{id} = $id;
+		$v->{need} = $size;
+
+		if ($size > MAX_EBML) {
+			$log->error("${tag}EBML too large in cues: $size");
+			return WEBM_ERROR;
+		}
+	}
 	
 	if ( $v->{need} <= length $v->{inBuf} ) {
 		$v->{outBuf} = substr( $v->{inBuf}, 0, $v->{need} );
@@ -144,18 +148,19 @@ sub getCues {
 sub getHeaders {
 	my ($self, $v) = @_;
 	my $webm = $self->_webm;
-	
+	my $tag = $webm->{videoId} ? "[$webm->{videoId}] " : "";
+
 	# process all we can
 	while ($v->{need} <= length $v->{inBuf}) {
 		my $id;
 		my $size;
-			
-		# first need to acquired an ID	
+
+		# first need to acquired an ID
 		if ( !defined $v->{id} ) {
 			$v->{position} += getEBML(\$v->{inBuf}, \$id, \$size);
-					
+
 			if ($id eq ID_CLUSTER) {
-				$log->error("no info found");
+				$log->error("${tag}no info found");
 				return WEBM_ERROR;
 			} elsif ($id eq ID_SEGMENT) {
 				$webm->{segment_offset} = $v->{position};
@@ -163,15 +168,15 @@ sub getHeaders {
 			} elsif ($id eq ID_TRACKS) {
 				next;
 			}
-			
+
 			$v->{id} = $id;
 			$v->{need} = $size;
-				
+
 			if ($size > MAX_EBML) {
-				$log->error("EBML too large: $size");
+				$log->error("${tag}EBML too large in headers: $size");
 				return WEBM_ERROR;
 			}
-					
+
 			next;
 		}
 		
@@ -212,7 +217,8 @@ sub getAudio {
 	my ($self, $outBuf) = @_;
 	my $v = $self->_context;
 	my $webm = $self->_webm;
-	
+	my $tag = $webm->{videoId} ? "[$webm->{videoId}] " : "";
+
 	$v->{need}		//= EBML_NEED;		# number of bytes in buffr to allow processing
 	$v->{position}	//= 0;      		# number of bytes processed from buffer since 1st call
 		
@@ -228,22 +234,91 @@ sub getAudio {
 		my $id;
 		my $size;
 			
-		# first need to acquired an ID	
+		# first need to acquired an ID
 		if ( !defined $v->{id} ) {
 			$v->{position} += getEBML(\$v->{inBuf}, \$id, \$size);
-						
+
+			# getEBML returns id=undef when the first byte does not look
+			# like an EBML id (desync). it has already dropped 1 byte.
+			# treat the same way we do for "EBML too large": try to find
+			# the next CLUSTER, yield if we cant, bail if we have been
+			# burning bytes for a long time. without this we spin on
+			# garbage and lock the LMS event loop.
+			if (!defined $id) {
+				$v->{resyncDropped} //= 0;
+				$v->{resyncDropped}++;
+				if ($v->{resyncDropped} > MAX_RESYNC_DROP) {
+					$log->error("${tag}getEBML desync, gave up after $v->{resyncDropped} bytes");
+					return WEBM_ERROR;
+				}
+				my $sync = index($v->{inBuf}, ID_CLUSTER);
+				if ($sync >= 0) {
+					substr($v->{inBuf}, 0, $sync, '');
+					$v->{position} += $sync;
+					$v->{resyncDropped} += $sync;
+					$v->{need} = EBML_NEED;
+					undef $v->{id};
+					main::INFOLOG && $log->is_info && $log->info("${tag}getEBML resync ok, dropped $v->{resyncDropped} bytes total");
+					$v->{resyncDropped} = 0;
+					next;
+				}
+				# no cluster yet. drop most of the buffer (keep the tail
+				# in case CLUSTER spans the boundary) and yield so we
+				# refill from the network instead of spinning here.
+				my $keep = length(ID_CLUSTER) - 1;
+				my $drop = length($v->{inBuf}) - $keep;
+				if ($drop > 0) {
+					substr($v->{inBuf}, 0, $drop, '');
+					$v->{position} += $drop;
+					$v->{resyncDropped} += $drop;
+				}
+				$v->{need} = EBML_NEED;
+				undef $v->{id};
+				return WEBM_MORE;
+			}
+
 			# skip id that are not CLUSTER *except* the SEGMENT !
 			main::DEBUGLOG && $log->is_debug && $log->debug("cluster of $size byte (last audio $v->{timecode} ms)") if ($id eq ID_CLUSTER);
 			next if $id eq ID_CLUSTER || $id eq ID_SEGMENT;
-			
-			$v->{need} = $size;	
+
+			$v->{need} = $size;
 			$v->{id} = $id;
-										
+
+			# parser desync. YT sometimes drops garbage in the stream.
+			# look for next CLUSTER id and continue from there. better
+			# than killing the whole song.
 			if ($size > MAX_EBML) {
-				$log->error("EBML too large: $size");
-				return WEBM_ERROR;
+				$v->{resyncDropped} //= 0;
+				$log->warn("${tag}EBML too large: $size, attempting resync (dropped so far: $v->{resyncDropped})");
+				my $sync = index($v->{inBuf}, ID_CLUSTER);
+				if ($sync >= 0) {
+					substr($v->{inBuf}, 0, $sync, '');
+					$v->{position} += $sync;
+					$v->{resyncDropped} += $sync;
+					$v->{need} = EBML_NEED;
+					undef $v->{id};
+					main::INFOLOG && $log->is_info && $log->info("${tag}resync ok, dropped $v->{resyncDropped} bytes total");
+					$v->{resyncDropped} = 0;
+					next;
+				}
+				# no cluster in buffer yet. drop most of it, ask for more.
+				# but if we have already dropped a lot give up so the
+				# player can move on instead of stalling silently.
+				my $drop = length($v->{inBuf}) - length(ID_CLUSTER) + 1;
+				if ($drop > 0) {
+					substr($v->{inBuf}, 0, $drop, '');
+					$v->{position} += $drop;
+					$v->{resyncDropped} += $drop;
+				}
+				if ($v->{resyncDropped} > MAX_RESYNC_DROP) {
+					$log->error("${tag}resync failed after $v->{resyncDropped} bytes, giving up");
+					return WEBM_ERROR;
+				}
+				$v->{need} = EBML_NEED;
+				undef $v->{id};
+				return WEBM_MORE;
 			}
-					
+
 			next;
 		}
 		
@@ -539,11 +614,20 @@ sub getEBML {
 	for ($len = 1; !($c & 0x80) && $len <= 4; $len++) { $c <<= 1 }
 	
 	if ($len == 5) {
-		$log->error("wrong len: $len, $c");
-		# arbitrary, but at least won't get stuck in the an infinite loop and will not go beyond available data
-		$len = EBML_NEED; 	
-		substr($$in, 0, $len, '');
-		return $len;
+		# desync. element_id length walk fell off the end, the first byte
+		# does not look like an EBML id. drop just one byte and let the
+		# caller try again. earlier we used to drop EBML_NEED (12) which
+		# threw away around 3s of audio every desync. now we lose one
+		# byte and the cluster resync in getAudio normally picks up
+		# within a packet or two.
+		# getAudio counts the dropped byte and logs the summary. avoid
+		# logging once per byte here, that floods the log on long garbage
+		# stretches.
+		main::DEBUGLOG && $log->is_debug && $log->debug("getEBML desync, dropping 1 byte");
+		substr($$in, 0, 1, '');
+		$$id   = undef;
+		$$size = 0;
+		return 1;
 	}
 	
 	$$id = substr($$in, 0, $len, '');
@@ -660,26 +744,28 @@ sub getStartOffset {
 		onStream  	=> sub {		
 				my ($http, $dataref) = @_;
 												
-				$var->{'inBuf'} .= $$dataref;		
-				my $res = getCues($var);
-				
+				$var->{'inBuf'} .= $$dataref;
+				my $res = getCues($var, $webm->{videoId});
+
 				if ( $res eq WEBM_MORE ) {
 					return 1 if $$dataref ne '';
 					$cb->( $webm->{offset}->{clusters} );
-					return 0;		
-				} elsif ( $res eq WEBM_DONE ) {	
+					return 0;
+				} elsif ( $res eq WEBM_DONE ) {
 					my $offset = getCueOffset($var->{outBuf}, $startTime*($webm->{timecode_scale}/1000000)*1000) + $webm->{segment_offset};
 					$cb->($offset);
 					return 0;
 				} elsif ( $res eq WEBM_ERROR ) {
-					$log->warn( "could not find start offset" );
+					my $tag = $webm->{videoId} ? "[$webm->{videoId}] " : "";
+					$log->warn( "${tag}could not find start offset" );
 					$cb->( $webm->{offset}->{clusters} );
 					return 0;
 				}		
 		},
 		onError		=> sub {
 				my ($self, $error) = @_;
-				$log->warn( "could not find start offset $error" );
+				my $tag = $webm->{videoId} ? "[$webm->{videoId}] " : "";
+				$log->warn( "${tag}could not find start offset $error" );
 				$cb->( $webm->{offset}->{clusters} );
 		},
 	} );
@@ -687,26 +773,28 @@ sub getStartOffset {
 
 sub initialize {
 	my ($self, $cb, $ecb) = @_;
+	my $webm = $self->_webm;
+	my $tag = $webm->{videoId} ? "[$webm->{videoId}] " : "";
 	my $var = {	'inBuf'       => '',
-				'id'          => undef,   
-				'need'        => EBML_NEED,  
+				'id'          => undef,
+				'need'        => EBML_NEED,
 		};
-		
+
 	my $http = Slim::Networking::Async::HTTP->new;
-			
+
 	$http->send_request( {
 		request     => HTTP::Request->new( GET => $self->url ),
-		onStream  	=> sub {		
+		onStream  	=> sub {
 				my ($http, $dataref) = @_;
-												
+
 				$var->{'inBuf'} .= $$dataref;
 				my $res = $self->getHeaders($var);
-				
+
 				if ( $res eq WEBM_MORE ) {
 					return 1;
-				} elsif ( $res eq WEBM_DONE ) {	
+				} elsif ( $res eq WEBM_DONE ) {
 					my $info = $self->_webm->{track};
-				
+
 					$self->channels($info->{channels});
 					$self->samplerate($info->{samplerate});
 					$self->bitrate($info->{bitrate});
@@ -718,17 +806,17 @@ sub initialize {
 					$cb->();
 					return 0;
 				} elsif ( $res eq WEBM_ERROR ) {
-					$log->error( "could not get webm headers" );
+					$log->error( "${tag}could not get webm headers" );
 					$ecb->();
 					return 0;
-				}		
+				}
 		},
 		onError	=>	sub {
 				my ($self, $error) = @_;
-				$log->warn("could not get codec info $error");
+				$log->warn("${tag}could not get codec info $error");
 				$ecb->();
 		}
-	 } );	
+	 } );
 }
 
 1;
