@@ -9,7 +9,6 @@ use base qw(Slim::Plugin::OPMLBased);
 
 use List::Util qw(first);
 use Encode qw(encode decode);
-use JSON::XS::VersionOneAndTwo;
 use HTML::Entities;
 use File::Spec;
 use File::Spec::Functions;
