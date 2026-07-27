@@ -8,7 +8,7 @@ use Slim::Utils::Prefs;
 use Slim::Utils::Log;
 use Slim::Utils::Cache;
 use Slim::Utils::Strings qw(string cstring);
-use JSON::XS::VersionOneAndTwo;
+use JSON::XS qw(decode_json);
 
 my $log   = logger('plugin.youtube');
 my $prefs = preferences('plugin.youtube');
@@ -33,7 +33,7 @@ sub getToken {
 	my $http = Slim::Networking::SimpleAsyncHTTP->new(
 		sub { 
 			my $response = shift;
-			my $result = eval { from_json($response->content) };
+			my $result = eval { decode_json($response->content) };
 						
 			if ($@) {
 				$log->error(Data::Dump::dump($response)) unless main::DEBUGLOG && $log->is_debug;
@@ -80,7 +80,7 @@ sub getCode {
 	my $http = Slim::Networking::SimpleAsyncHTTP->new(
 		sub { 
 			my $response = shift;
-			my $result = eval { from_json($response->content) };
+			my $result = eval { decode_json($response->content) };
 						
 			if ($@) {
 				$log->error(Data::Dump::dump($response)) unless main::DEBUGLOG && $log->is_debug;

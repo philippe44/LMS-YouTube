@@ -4,7 +4,7 @@ use strict;
 
 use Digest::MD5 qw(md5_hex);
 use File::Spec::Functions qw(catdir);
-use JSON::XS::VersionOneAndTwo;
+use JSON::XS qw(decode_json);
 use List::Util qw(min max);
 use URI::Escape qw(uri_escape uri_escape_utf8);
 use MIME::Base64 qw(decode_base64);
@@ -148,7 +148,7 @@ sub _call {
 	Slim::Networking::SimpleAsyncHTTP->new(
 		sub {
 			my $response = shift;
-			my $result = eval { from_json($response->content) };
+			my $result = eval { decode_json($response->content) };
 
 			if ($@) {
 				$log->error(Data::Dump::dump($response)) unless main::DEBUGLOG && $log->is_debug;
