@@ -89,7 +89,7 @@ sub getStartOffset {
 	my $args = { startTime => $startTime };
 		
 	$http->send_request( {
-		request     => HTTP::Request->new( GET => $url ),
+		request     => HTTP::Request->new( GET => $url, [ 'Range' => 'bytes=0-131071' ] ),
 		
 		onStream  	=> sub {
 			my ($http, $dataref) = @_;
@@ -133,7 +133,7 @@ sub initialize {
 	$url ||= $self->url;
 	
 	$http->send_request( {
-		request     => HTTP::Request->new( GET => $url ),
+		request     => HTTP::Request->new( GET => $url, [ 'Range' => 'bytes=0-131071' ] ),
 		onStream  	=> sub {
 			my ($http, $dataref) = @_;
 						

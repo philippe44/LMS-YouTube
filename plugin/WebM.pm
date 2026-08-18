@@ -656,7 +656,7 @@ sub getStartOffset {
 	};
 				
 	$http->send_request( {
-		request     => HTTP::Request->new( GET => $url, [ 'Range' => "bytes=$webm->{offset}->{cues}-" ] ),
+		request     => HTTP::Request->new( GET => $url, [ 'Range' => "bytes=$webm->{offset}->{cues}-" . ($webm->{offset}->{cues} + 1048575) ] ),
 		onStream  	=> sub {		
 				my ($http, $dataref) = @_;
 												
@@ -695,7 +695,7 @@ sub initialize {
 	my $http = Slim::Networking::Async::HTTP->new;
 			
 	$http->send_request( {
-		request     => HTTP::Request->new( GET => $self->url ),
+		request     => HTTP::Request->new( GET => $self->url, [ 'Range' => 'bytes=0-262143' ] ),
 		onStream  	=> sub {		
 				my ($http, $dataref) = @_;
 												
