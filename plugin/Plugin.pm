@@ -338,12 +338,13 @@ sub subscriptionsHandler {
 	delete $params->{count};
 
 	Plugins::YouTube::API->searchDirect('subscriptions', sub {
-		$cb->( _renderList($_[0], 'title') );
+		$cb->( _renderList($_[0], '') );
 	}, {
 		_cache_ttl 		=> 60,
 		_noKey			=> 1,
 		_index  		=> $args->{index},
 		_quantity		=> $args->{quantity},
+                order                   => 'alphabetical',
 		mine			=> 'true',
 		access_token 	=> $cache->get('yt:access_token'),
 	});
