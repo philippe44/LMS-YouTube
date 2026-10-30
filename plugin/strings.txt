@@ -708,3 +708,15 @@ PLUGIN_YOUTUBE_LAST_AUTO_UPDATE
 	CS	Poslední automatická aktualizace
 	DA	Sidste automatiske opdatering
 	DE	Letzte automatische Aktualisierung
+
+PLUGIN_YOUTUBE_PLAYBACK_WAIT
+	EN	Playback delay (s)
+	DE	Wiedergabe-Verzögerung (s)
+	CS	Zpoždění přehrávání (s)
+	DA	Afspilningsforsinkelse (s)
+
+PLUGIN_YOUTUBE_PLAYBACK_WAIT_DESC
+	EN	Seconds to wait before requesting freshly signed stream URLs (0 disables)
+	DE	Sekunden Wartezeit vor dem ersten Abruf frisch signierter Stream-URLs (0 = aus)
+	CS	Počet sekund čekání před vyžádáním čerstvě podepsaných adres URL streamu (0 = vypnuto)
+	DA	Antal sekunders ventetid før anmodning om nyligt signerede stream-URL'er (0 = deaktiveret)

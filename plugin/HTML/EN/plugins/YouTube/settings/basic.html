@@ -235,6 +235,9 @@
 		<input type="text" class="stdedit" name="pref_live_delay" id="pref_live_delay" value="[% prefs.pref_live_delay %]" size="2">
 		[% "PLUGIN_YOUTUBE_LIVEDELAY" | string %]
 	[% END %] -->
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_PLAYBACK_WAIT" desc="PLUGIN_YOUTUBE_PLAYBACK_WAIT_DESC" %]
+		<input type="text" class="stdedit" name="pref_playback_wait" id="pref_playback_wait" value="[% prefs.pref_playback_wait %]" size="2"> s
+	[% END %]
 
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_CHANNELTAGS" desc="PLUGIN_YOUTUBE_CHANNELTAGS_DESC" %]
 

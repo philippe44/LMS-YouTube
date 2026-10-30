@@ -52,7 +52,6 @@ use Plugins::YouTube::Utils;
 use Plugins::YouTube::HTTP;
 
 use constant MIN_OUT	=> 8192;
-use constant PLAYBACK_WAIT => 3; # 3[s] worked for me. According https://github.com/yt-dlp/yt-dlp/issues/14097 -> 6s implemented in yt-dlp (but not for extracting json)
 use constant DATA_CHUNK => 128*1024;
 use constant PAGE_URL_REGEXP => qr{^https?://(?:(?:www|m|music)\.youtube\.com/(?:watch\?|playlist\?|channel/)|youtu\.be/)}i;
 
@@ -656,8 +655,15 @@ sub getNextTrack {
 			# duration is at the top level
 			$song->track->secs( $tracks->{'duration'} );
 
-			Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + PLAYBACK_WAIT,
-				sub { _getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats})) });
+			my $wait = $prefs->get('playback_wait') // PLAYBACK_WAIT;
+
+			if ($wait) {
+				Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + $wait,
+					sub { _getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats})) });
+			} else {
+				_getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats}));
+			}
+
 		};
 
 		Slim::Utils::Timers::setTimer($pid, Time::HiRes::time() + 0.25, $lambda);
@@ -679,8 +685,13 @@ sub getNextTrack {
 			# duration is at the top level
 			$song->track->secs( $tracks->{'duration'} );
 
-			Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + PLAYBACK_WAIT,
-				sub { _getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats})) });
+			if ($wait) {
+				Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + $wait,
+					sub { _getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats})) });
+			} else {
+				_getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats}));
+			}
+
 		});
 	}
 }
