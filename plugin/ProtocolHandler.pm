@@ -619,6 +619,8 @@ sub getNextTrack {
 	my $url = "http://www.youtube.com/watch?v=$id";
 	main::INFOLOG && $log->is_info && $log->info("next track id: $id url: $url master: $masterUrl");
 
+	my $wait = $prefs->get('playback_wait');
+
 	if (main::ISWINDOWS) {
 		# this is all bad but IPC::open2/3 or AnyEvent::run_cmd, or any other solution do not work under
 		# Windows because 1/ Windows cannot do select() on handles and 2/ LMS has a tie on stdio and all
@@ -654,8 +656,6 @@ sub getNextTrack {
 
 			# duration is at the top level
 			$song->track->secs( $tracks->{'duration'} );
-
-			my $wait = $prefs->get('playback_wait') // PLAYBACK_WAIT;
 
 			if ($wait) {
 				Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + $wait,
