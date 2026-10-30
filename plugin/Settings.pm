@@ -27,7 +27,7 @@ sub page {
 sub prefs {
 	return (preferences('plugin.youtube'), qw(channel_prefix channel_suffix playlist_prefix 
 			playlist_suffix country max_items APIkey client_id client_secret live_delay 
-			cache_ttl search_rank search_sort channel_rank channel_sort playlist_sort query_size auto_update_check_hour), @bool);
+			cache_ttl search_rank search_sort channel_rank channel_sort playlist_sort query_size auto_update_check_hour playback_wait), @bool);
 }
 
 sub init {
@@ -74,6 +74,7 @@ if ($params->{flushcache}) {
 	
 	$params->{pref_max_items} = min($params->{pref_max_items}, 500);
 	$params->{pref_live_delay} = max($params->{pref_live_delay}, 30);
+	$params->{pref_playback_wait} = max(int($params->{pref_playback_wait} // 3), 0);
 	$params->{pref_APIkey} =~ s/^\s+|\s+$//g;
 		
 	$cache->remove('yt:access_token') if $params->{clear_token};

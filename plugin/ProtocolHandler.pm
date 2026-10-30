@@ -619,6 +619,8 @@ sub getNextTrack {
 	my $url = "http://www.youtube.com/watch?v=$id";
 	main::INFOLOG && $log->is_info && $log->info("next track id: $id url: $url master: $masterUrl");
 
+	my $wait = $prefs->get('playback_wait');
+
 	if (main::ISWINDOWS) {
 		# this is all bad but IPC::open2/3 or AnyEvent::run_cmd, or any other solution do not work under
 		# Windows because 1/ Windows cannot do select() on handles and 2/ LMS has a tie on stdio and all
@@ -655,7 +657,13 @@ sub getNextTrack {
 			# duration is at the top level
 			$song->track->secs( $tracks->{'duration'} );
 
-			_getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats}));
+			if ($wait) {
+				Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + $wait,
+					sub { _getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats})) });
+			} else {
+				_getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats}));
+			}
+
 		};
 
 		Slim::Utils::Timers::setTimer($pid, Time::HiRes::time() + 0.25, $lambda);
@@ -677,7 +685,13 @@ sub getNextTrack {
 			# duration is at the top level
 			$song->track->secs( $tracks->{'duration'} );
 
-			_getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats}));
+			if ($wait) {
+				Slim::Utils::Timers::setTimer(undef, Time::HiRes::time() + $wait,
+					sub { _getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats})) });
+			} else {
+				_getNextTrack($class, $song, $successCb, $errorCb, _selectTracks($tracks->{formats}));
+			}
+
 		});
 	}
 }

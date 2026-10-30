@@ -28,6 +28,8 @@ use constant BASE_URL => 'www.youtube.com/v/';
 use constant STREAM_BASE_URL => 'youtube://' . BASE_URL;
 use constant VIDEO_BASE_URL  => 'http://www.youtube.com/watch?v=%s';
 
+
+
 my $WEBLINK_SUPPORTED_UA_RE = qr/iPeng|SqueezePad|OrangeSqueeze/i;
 
 my	$log = Slim::Utils::Log->addLogCategory({
@@ -48,6 +50,7 @@ $prefs->init({
 	cache => 1,
 	highres_icons => 1,
 	live_delay => 60,
+	playback_wait => 3,
 	live_edge => 1,
 	aac => 1,
 	vorbis => 1,
