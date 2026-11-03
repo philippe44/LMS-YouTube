@@ -108,4 +108,35 @@ sub yt_dlp_binaries {
 # Returns: 1 on success, 0 on failure
 sub set_yt_dlp_writable { return main::ISWINDOWS || (-e $_[0] && chmod(0755, $_[0])) }
 sub set_yt_dlp_readonly { return main::ISWINDOWS || (-e $_[0] && chmod(0555, $_[0])) }
+
+# cookies.txt (Netscape format) handed to yt-dlp with --cookies
+sub cookies_file { return catfile(Slim::Utils::OSDetect::dirsFor('prefs'), 'youtube-cookies.txt') }
+
+# returns the path if a usable cookies file exists, undef otherwise
+sub cookies_bin {
+	my $file = cookies_file();
+	return (-s $file && -r $file) ? $file : undef;
+}
+
+# store pasted cookies, returns (1) on success or (0, error string)
+sub save_cookies {
+	my $text = shift;
+	$text =~ s/\r\n?/\n/g;
+	$text =~ s/^\s+|\s+$//g;
+	return (0, 'no cookie lines found') unless $text =~ /^[^#\n]*\t[^\n]*\t/m || $text =~ /^#\s*(Netscape )?HTTP Cookie File/m;
+	my $file = cookies_file();
+	my $umask = umask(0077);
+	my $fh;
+	my $ok = open($fh, '>:raw', $file) && print($fh "$text\n") && close($fh);
+	my $err = $!;
+	umask($umask);
+	return (0, "cannot write $file: $err") unless $ok;
+	chmod(0600, $file) unless main::ISWINDOWS;
+	return (1);
+}
+
+sub clear_cookies {
+	my $file = cookies_file();
+	return !-e $file || unlink($file);
+}
 1;

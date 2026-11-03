@@ -601,6 +601,18 @@ PLUGIN_YOUTUBE_YTDLPBINARY_DESC
 	CS	Kvůli rostoucí složitosti extrakce adres URL používá tento plugin yt-dlp.
 	EN	Due to increasing complexity in url extraction, this plugin uses yt-dlp.
 
+PLUGIN_YOUTUBE_COOKIES
+	EN	yt-dlp cookies
+
+PLUGIN_YOUTUBE_COOKIES_DESC
+	EN	Optional. Paste the content of a cookies.txt file (Netscape format) exported from a browser. It is passed to yt-dlp with --cookies and helps with HTTP 429 / "sign in to confirm you're not a bot" errors. The text is stored in a file and is not shown again.
+
+PLUGIN_YOUTUBE_COOKIES_SAVED
+	EN	Cookies are stored
+
+PLUGIN_YOUTUBE_COOKIES_CLEAR
+	EN	Remove stored cookies
+
 PLUGIN_YOUTUBE_UPDATE_YTDLP
 	CS	Aktualizovat yt-dlp
 	DA	Opdater yt-dlp

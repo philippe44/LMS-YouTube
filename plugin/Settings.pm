@@ -4,6 +4,7 @@ use base qw(Slim::Web::Settings);
 use strict;
 
 use List::Util qw(min max);
+use POSIX qw(strftime);
 
 use Slim::Utils::Prefs;
 use Slim::Utils::Log;
@@ -75,6 +76,20 @@ if ($params->{flushcache}) {
 	$params->{pref_max_items} = min($params->{pref_max_items}, 500);
 	$params->{pref_live_delay} = max($params->{pref_live_delay}, 30);
 	$params->{pref_APIkey} =~ s/^\s+|\s+$//g;
+
+	# cookies.txt content is pasted in a textarea and kept in a file, never echoed back
+	if ($params->{saveSettings}) {
+		if ($params->{clear_cookies}) {
+			Plugins::YouTube::Utils::clear_cookies();
+		} elsif (defined $params->{cookies_text} && $params->{cookies_text} =~ /\S/) {
+			my ($ok, $err) = Plugins::YouTube::Utils::save_cookies($params->{cookies_text});
+			$log->error("cookies not saved: $err") unless $ok;
+			$params->{cookies_error} = $err unless $ok;
+		}
+	}
+	if (my $file = Plugins::YouTube::Utils::cookies_bin()) {
+		$params->{cookies_saved} = strftime('%Y-%m-%d %H:%M', localtime((stat $file)[9]));
+	}
 		
 	$cache->remove('yt:access_token') if $params->{clear_token};
 	
