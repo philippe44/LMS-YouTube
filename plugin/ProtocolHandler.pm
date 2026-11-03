@@ -614,6 +614,11 @@ sub getNextTrack {
 	$song->pluginData(lastpos => ($masterUrl =~ /&lastpos=([\d]+)/)[0] || 0);
 	$masterUrl =~ s/&.*//;
 
+	my @cookies;
+	if (my $cookies_file = Plugins::YouTube::Utils::cookies_bin()) {
+		@cookies = ('--cookies', $cookies_file);
+	}
+
 	my $now = time();
 	my $id = $class->getId($masterUrl);
 	my $url = "http://www.youtube.com/watch?v=$id";
@@ -627,7 +632,8 @@ sub getNextTrack {
 		my $pid = 0;
 		my $lambda;
 		my $out = tmpnam();
-		my $cmd = qq{$yt_dlp -j $url >$out};
+		my $cookies_opt = @cookies ? qq{ --cookies "$cookies[1]"} : '';
+		my $cmd = qq{$yt_dlp$cookies_opt -j $url >$out};
 
 		$log->info("Get tracks with $cmd");
 
@@ -662,7 +668,7 @@ sub getNextTrack {
 	} else {
 
 		my $cv = AnyEvent::Util::run_cmd(
-			[ $yt_dlp, '-j', $url],
+			[ $yt_dlp, @cookies, '-j', $url],
 			"<", "/dev/null",
 			">" , \my $tracks,
 			"2>", \my $err,

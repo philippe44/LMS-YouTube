@@ -151,6 +151,15 @@
 		</script>
 	[% END %]
 
+	[% WRAPPER setting title="PLUGIN_YOUTUBE_COOKIES" desc="PLUGIN_YOUTUBE_COOKIES_DESC" %]
+		<textarea class="stdedit" name="cookies_text" id="cookies_text" rows="5" cols="60" spellcheck="false" autocomplete="off"></textarea>
+		[% IF cookies_error %]<br><span class="status-error">[% cookies_error | html %]</span>[% END %]
+		[% IF cookies_saved %]
+			<br><span class="status-success">[% "PLUGIN_YOUTUBE_COOKIES_SAVED" | string %] ([% cookies_saved %])</span>
+			&nbsp;&nbsp;<input name="clear_cookies" type="checkbox">&nbsp;[% "PLUGIN_YOUTUBE_COOKIES_CLEAR" | string %]
+		[% END %]
+	[% END %]
+
 	[% WRAPPER setting title="PLUGIN_YOUTUBE_APIKEY" desc="PLUGIN_YOUTUBE_APIKEY_DESC" %]
 		<input type="text" class="stdedit" name="pref_APIkey" id="pref_APIkey" value="[% prefs.pref_APIkey %]" size="45">
 	[% END %]
